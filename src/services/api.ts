@@ -111,6 +111,11 @@ class ApiClient {
     return this.request<{ year: number; month: number; teamData: TeamMemberOverview[] }>(`/overview/${year}/${month}`);
   }
 
+  // Planner Roster Members
+  async getPlannerMembers() {
+    return this.request<{ members: User[] }>('/planner/members');
+  }
+
   // Admin Portal
   async getAdminStats() {
     return this.request<AdminStats>('/admin/stats');

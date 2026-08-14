@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Calendar, Users, Shield, LogOut, X } from 'lucide-react';
+import { LayoutDashboard, Calendar, Users, Shield, LogOut, X, UserCheck } from 'lucide-react';
 
 interface NavigationProps {
   currentTab: string;
@@ -15,7 +15,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   isMobileNavOpen,
   onCloseMobileNav,
 }) => {
-  const { user, logout, canViewOverview, canEditPlanning, isAdmin } = useAuth();
+  const { user, logout, canViewOverview, canEditPlanning, isPlanner, isAdmin } = useAuth();
 
   const handleTabClick = (tab: string) => {
     onSelectTab(tab);
@@ -34,6 +34,13 @@ export const Navigation: React.FC<NavigationProps> = ({
       label: 'Mijn Planning',
       icon: Calendar,
       show: canEditPlanning || isAdmin,
+    },
+    {
+      id: 'team_planning',
+      label: 'Team Plannen',
+      icon: UserCheck,
+      show: isPlanner || isAdmin || canViewOverview,
+      badge: 'PLANNER',
     },
     {
       id: 'overview',

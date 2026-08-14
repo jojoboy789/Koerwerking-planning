@@ -1,15 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
-import { Calendar, Key, ArrowRight, HelpCircle, AlertCircle, Loader2, Sparkles } from 'lucide-react';
-
-const DEFAULT_PRESETS = [
-  { name: 'Beheerder (Admin)', code: 'ADM-7701-NT', rights: 'Volledige beheerderstoegang' },
-  { name: 'Jan Janssens', code: 'GBR-4829-XK', rights: 'Planning invullen + Teamoverzicht' },
-  { name: 'Sarah De Smet', code: 'SRH-8821-ZP', rights: 'Alleen eigen planning invullen' },
-  { name: 'Peter Peeters', code: 'PTR-4412-KV', rights: 'Alleen teamoverzicht bekijken' },
-];
+import { Key, ArrowRight, HelpCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
@@ -17,39 +9,11 @@ export const LoginPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
-  const [demoPresets, setDemoPresets] = useState<Array<{ name: string; code: string; rights: string }>>(DEFAULT_PRESETS);
-
-  useEffect(() => {
-    api.getSetupInfo().then((info) => {
-      if (info && info.demoPresets && info.demoPresets.length > 0) {
-        setDemoPresets(info.demoPresets);
-      }
-    }).catch(() => {
-      // ignore
-    });
-  }, []);
-
-  const handleQuickLogin = async (code: string) => {
-    setAccessCode(code);
-    setErrorMessage(null);
-    setIsSubmitting(true);
-    try {
-      await login(code);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setErrorMessage(err.message);
-      } else {
-        setErrorMessage('De ingevoerde toegangscode is ongeldig.');
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!accessCode.trim()) {
-      setErrorMessage('Voer een toegangscode in (bijv. ADM-7701-NT of TES-5879-NA).');
+      setErrorMessage('Voer een toegangscode in (bijv. ADM-7701-NT).');
       return;
     }
 
@@ -145,52 +109,15 @@ export const LoginPage: React.FC = () => {
           </form>
 
           {/* Quick Presets Drawer / Helper */}
-          <div className="mt-8 pt-6 border-t border-slate-100 space-y-4">
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => setShowForgotModal(true)}
-                className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors inline-flex items-center gap-1.5"
-              >
-                <HelpCircle className="w-3.5 h-3.5" />
-                <span>Toegangscode vergeten of aanvragen?</span>
-              </button>
-            </div>
-
-            {/* Direct 1-click test selector chips */}
-            {demoPresets.length > 0 && (
-              <div className="pt-2">
-                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2.5">
-                  <span className="flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                    Snelle 1-klik test-inlog (klik om direct in te loggen):
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {demoPresets.map((p) => (
-                    <button
-                      key={p.code}
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => handleQuickLogin(p.code)}
-                      className="text-left p-3 rounded-2xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 transition-all cursor-pointer shadow-2xs group active:scale-98 disabled:opacity-50"
-                      title={`Klik om direct in te loggen als ${p.name}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-800 group-hover:text-indigo-700 truncate">
-                          {p.name}
-                        </span>
-                        <ArrowRight className="w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-transform group-hover:translate-x-0.5" />
-                      </div>
-                      <div className="text-xs font-mono font-bold text-indigo-700 tracking-wider mt-1">
-                        {p.code}
-                      </div>
-                      <div className="text-[9px] text-slate-500 mt-0.5 truncate">{p.rights}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+          <div className="mt-8 pt-6 border-t border-slate-100 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setShowForgotModal(true)}
+              className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors inline-flex items-center gap-1.5"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              <span>Toegangscode vergeten of aanvragen?</span>
+            </button>
           </div>
         </div>
       </main>
@@ -206,11 +133,6 @@ export const LoginPage: React.FC = () => {
       <ForgotPasswordModal
         isOpen={showForgotModal}
         onClose={() => setShowForgotModal(false)}
-        demoPresets={demoPresets}
-        onSelectPreset={(code) => {
-          setAccessCode(code);
-          setErrorMessage(null);
-        }}
       />
     </div>
   );

@@ -11,6 +11,7 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
   canViewOverview: boolean;
   canEditPlanning: boolean;
+  isPlanner: boolean;
   isAdmin: boolean;
 }
 
@@ -76,6 +77,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const canViewOverview = Boolean(user?.canViewOverview || user?.isAdmin);
   const canEditPlanning = Boolean(user?.canEditPlanning || user?.isAdmin);
   const isAdmin = Boolean(user?.isAdmin);
+  const roleName = (user?.role || '').toLowerCase().trim();
+  const isPlanner = Boolean(isAdmin || roleName === 'planning' || roleName === 'planner' || (canEditPlanning && canViewOverview));
 
   return (
     <AuthContext.Provider
@@ -88,6 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshUser,
         canViewOverview,
         canEditPlanning,
+        isPlanner,
         isAdmin,
       }}
     >

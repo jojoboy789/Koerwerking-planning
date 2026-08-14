@@ -400,6 +400,18 @@ function requireAdminMiddleware(req: AuthenticatedRequest, res: Response, next: 
   next();
 }
 
+function requirePlannerOrAdminMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Niet geauthenticeerd.' });
+  }
+  const role = (req.user.role || '').toLowerCase().trim();
+  const isPlanner = role === 'planning' || role === 'planner';
+  if (!req.user.isAdmin && !isPlanner && !(req.user.canEditPlanning && req.user.canViewOverview)) {
+    return res.status(403).json({ error: 'Je hebt geen rechten om planningen van teamleden te beheren.' });
+  }
+  next();
+}
+
 async function startServer() {
   const app = express();
   app.use(express.json());
@@ -891,8 +903,21 @@ async function startServer() {
     });
   });
 
-  // Get specific user's planning (Admin)
-  app.get('/api/admin/users/:id/planning/:year/:month', authMiddleware, requireAdminMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  // Get team members for planner roster overview (Planners & Admins)
+  app.get('/api/planner/members', authMiddleware, requirePlannerOrAdminMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    // Return all active members who are not planners themselves (or all active members)
+    const members = db.users
+      .filter(u => {
+        if (!u.isActive) return false;
+        const r = (u.role || '').trim().toLowerCase();
+        return r !== 'planning' && r !== 'planner';
+      })
+      .map(u => sanitizeUser(u));
+    res.json({ members });
+  });
+
+  // Get specific user's planning (Planner / Admin)
+  app.get('/api/admin/users/:id/planning/:year/:month', authMiddleware, requirePlannerOrAdminMiddleware, (req: AuthenticatedRequest, res: Response) => {
     const { id, year, month } = req.params;
     const y = parseInt(year, 10);
     const m = parseInt(month, 10);
@@ -918,8 +943,8 @@ async function startServer() {
     });
   });
 
-  // Save specific user's planning as Admin
-  app.post('/api/admin/users/:id/planning/:year/:month', authMiddleware, requireAdminMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  // Save specific user's planning as Planner / Admin
+  app.post('/api/admin/users/:id/planning/:year/:month', authMiddleware, requirePlannerOrAdminMiddleware, (req: AuthenticatedRequest, res: Response) => {
     const { id, year, month } = req.params;
     const y = parseInt(year, 10);
     const m = parseInt(month, 10);
@@ -947,7 +972,7 @@ async function startServer() {
     if (existingIndex >= 0) {
       db.plannings[existingIndex].days = cleanDays;
       db.plannings[existingIndex].updatedAt = now;
-      db.plannings[existingIndex].updatedBy = `${req.user!.name} (Admin Wijziging)`;
+      db.plannings[existingIndex].updatedBy = `${req.user!.name} (Planner Wijziging)`;
     } else {
       db.plannings.push({
         id: `pln-${id}-${y}-${m}`,
@@ -957,14 +982,14 @@ async function startServer() {
         month: m,
         days: cleanDays,
         updatedAt: now,
-        updatedBy: `${req.user!.name} (Admin Ingevuld)`,
+        updatedBy: `${req.user!.name} (Planner Ingevuld)`,
       });
     }
 
     saveDatabase(db);
     res.json({
       success: true,
-      message: `Planning voor ${targetUser.name} succesvol opgeslagen door admin.`,
+      message: `Planning voor ${targetUser.name} succesvol opgeslagen.`,
       planning: existingIndex >= 0 ? db.plannings[existingIndex] : db.plannings[db.plannings.length - 1],
     });
   });

@@ -25,6 +25,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         return 'Dashboard';
       case 'planning':
         return 'Mijn Planning';
+      case 'team_planning':
+        return 'Team Plannen & Diensten Beheren';
       case 'overview':
         return 'Overzicht';
       case 'admin':

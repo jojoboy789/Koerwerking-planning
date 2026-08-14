@@ -1,18 +1,14 @@
 import React from 'react';
-import { X, KeyRound, HelpCircle, ShieldAlert, Sparkles } from 'lucide-react';
+import { X, HelpCircle, ShieldAlert } from 'lucide-react';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
-  demoPresets?: Array<{ name: string; code: string; rights: string }>;
-  onSelectPreset?: (code: string) => void;
 }
 
 export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   isOpen,
   onClose,
-  demoPresets = [],
-  onSelectPreset,
 }) => {
   if (!isOpen) return null;
 
@@ -58,48 +54,11 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               Wat moet je doen?
             </h4>
             <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside">
-              <li>Neem contact op met je teamleider of planner.</li>
+              <li>Neem contact op met Jonas.</li>
               <li>De beheerder kan in het Adminportaal jouw toegangscode direct inzien of een nieuwe genereren.</li>
               <li>Zodra een nieuwe code wordt gegenereerd, is je oude code automatisch direct ongeldig.</li>
             </ul>
           </div>
-
-          {/* Quick Demo Presets */}
-          {demoPresets.length > 0 && (
-            <div className="pt-4 border-t border-slate-100">
-              <div className="flex items-center gap-2 mb-2.5">
-                <Sparkles className="w-4 h-4 text-indigo-600" />
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Testaccounts (Direct Inloggen):
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {demoPresets.map((preset) => (
-                  <button
-                    key={preset.code}
-                    onClick={() => {
-                      if (onSelectPreset) {
-                        onSelectPreset(preset.code);
-                      }
-                      onClose();
-                    }}
-                    className="text-left p-3 rounded-2xl bg-slate-50 border border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/50 transition-all group cursor-pointer shadow-xs"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900 group-hover:text-indigo-700">
-                        {preset.name}
-                      </span>
-                      <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
-                    </div>
-                    <div className="text-[11px] font-mono text-indigo-700 mt-0.5 font-bold tracking-wider">
-                      {preset.code}
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-0.5 truncate">{preset.rights}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer */}

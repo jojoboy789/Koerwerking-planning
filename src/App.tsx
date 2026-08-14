@@ -6,11 +6,12 @@ import { TopHeader } from './components/TopHeader';
 import { DashboardView } from './components/DashboardView';
 import { MyPlanningView } from './components/MyPlanningView';
 import { TeamOverviewView } from './components/TeamOverviewView';
+import { TeamPlanningView } from './components/TeamPlanningView';
 import { AdminPortalView } from './components/AdminPortalView';
 import { Loader2 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
-  const { user, isLoading, canViewOverview, canEditPlanning, isAdmin } = useAuth();
+  const { user, isLoading, canViewOverview, canEditPlanning, isPlanner, isAdmin } = useAuth();
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -50,6 +51,8 @@ const MainLayout: React.FC = () => {
   let effectiveTab = currentTab;
   if (effectiveTab === 'planning' && !canEditPlanning && canViewOverview) {
     effectiveTab = 'overview';
+  } else if (effectiveTab === 'team_planning' && !isPlanner && !isAdmin && !canViewOverview) {
+    effectiveTab = canEditPlanning ? 'planning' : 'dashboard';
   } else if (effectiveTab === 'overview' && !canViewOverview) {
     effectiveTab = canEditPlanning ? 'planning' : 'dashboard';
   } else if (effectiveTab === 'admin' && !isAdmin) {
@@ -79,7 +82,8 @@ const MainLayout: React.FC = () => {
         <main className="flex-1">
           {effectiveTab === 'dashboard' && <DashboardView onNavigate={setCurrentTab} />}
           {effectiveTab === 'planning' && <MyPlanningView />}
-          {effectiveTab === 'overview' && canViewOverview && <TeamOverviewView />}
+          {effectiveTab === 'team_planning' && <TeamPlanningView />}
+          {effectiveTab === 'overview' && canViewOverview && <TeamOverviewView onNavigateToTeamPlanning={() => setCurrentTab('team_planning')} />}
           {effectiveTab === 'admin' && isAdmin && <AdminPortalView />}
         </main>
       </div>
