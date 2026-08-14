@@ -11,7 +11,7 @@ import {
   firebaseConfig,
 } from './server/firebaseService';
 
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const HASH_SALT = process.env.ACCESS_CODE_SALT || 'NEON_TOKYO_SALT_v1_99x#';
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
