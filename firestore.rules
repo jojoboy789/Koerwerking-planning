@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if request user is admin
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // Helper function to check if active
+    function isActiveUser() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true;
+    }
+
+    // Users Collection
+    // Individual users can only read their own document. Admins can list and write all documents.
+    match /users/{userId} {
+      allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Access Codes / Hashes Collection (Server-side & Admin only)
+    // Client users never get direct read access to hash documents to prevent hash extraction.
+    match /access_codes/{codeHash} {
+      allow read, write: if isAdmin();
+    }
+
+    // Plannings Collection
+    // Document ID pattern: {userId}_{year}_{month}
+    match /plannings/{planningId} {
+      // Allow read if own planning, or if user has canViewOverview == true, or if admin
+      allow get: if isActiveUser() && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.canViewOverview == true ||
+        isAdmin()
+      );
+
+      // Allow listing of plannings if user has canViewOverview == true or is admin
+      allow list: if isActiveUser() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.canViewOverview == true ||
+        isAdmin()
+      );
+
+      // Allow create/update if own planning and user has canEditPlanning == true, or if admin
+      allow create, update: if isActiveUser() && (
+        (request.resource.data.userId == request.auth.uid && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.canEditPlanning == true) ||
+        isAdmin()
+      );
+
+      // Allow delete only by admin
+      allow delete: if isAdmin();
+    }
+
+    // Default deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

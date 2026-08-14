@@ -1,0 +1,7 @@
+{
+  "name": "Maandplanning Webapp",
+  "description": "Moderne, veilige maandplanning webapplicatie met toegangscode-authenticatie, dienstbeheer (V/D/L/X), teammatrix en compleet adminportaal in Bento Grid design.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "User": {
+      "collection": "users",
+      "fields": {
+        "id": { "type": "string", "description": "Unique user identifier" },
+        "name": { "type": "string", "description": "Full name of the user" },
+        "role": { "type": "string", "description": "Job title or role description" },
+        "avatar": { "type": "string", "description": "Avatar initials" },
+        "accessCodeHash": { "type": "string", "description": "SHA-256 salted hash of access code" },
+        "isActive": { "type": "boolean", "description": "Whether the user account is active" },
+        "canViewOverview": { "type": "boolean", "description": "Permission to view team overview matrix" },
+        "canEditPlanning": { "type": "boolean", "description": "Permission to edit monthly shifts" },
+        "isAdmin": { "type": "boolean", "description": "Administrator privileges" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of creation" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update" },
+        "lastLoginAt": { "type": "string", "description": "ISO timestamp of last login" }
+      },
+      "rules": {
+        "read": "request.auth.uid == resource.data.id || isAdmin()",
+        "write": "isAdmin()"
+      }
+    },
+    "MonthlyPlanning": {
+      "collection": "plannings",
+      "fields": {
+        "id": { "type": "string", "description": "Format: {userId}_{year}_{month}" },
+        "userId": { "type": "string", "description": "Owner user ID" },
+        "userName": { "type": "string", "description": "Owner full name" },
+        "year": { "type": "number", "description": "Planning year e.g. 2026" },
+        "month": { "type": "number", "description": "Planning month 1-12" },
+        "days": { "type": "map", "description": "Day number (1-31) mapped to shift code ('V'|'D'|'L'|'X')" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last modification" },
+        "updatedBy": { "type": "string", "description": "Name of user who last saved this planning" }
+      },
+      "rules": {
+        "read": "resource.data.userId == request.auth.uid || hasPermission('canViewOverview') || isAdmin()",
+        "write": "(resource.data.userId == request.auth.uid && hasPermission('canEditPlanning')) || isAdmin()"
+      }
+    }
+  }
+}

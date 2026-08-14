@@ -1,0 +1,77 @@
+{
+  "users": [
+    {
+      "accessCodeHash": "b3988b52aec08090faff1395fb6ed967ca4cd95eca0f431d55cc966202319051",
+      "id": "usr-1786702886507-595",
+      "canViewOverview": true,
+      "rawCode": "JON-6333-LQ",
+      "canEditPlanning": true,
+      "role": "Beheerder",
+      "createdAt": "2026-08-14T10:21:26.507Z",
+      "isActive": true,
+      "avatar": "J",
+      "isAdmin": true,
+      "lastLoginAt": "2026-08-14T10:42:01.701Z",
+      "updatedAt": "2026-08-14T10:40:34.634Z",
+      "name": "Jonas"
+    },
+    {
+      "createdAt": "2026-08-14T10:26:07.206Z",
+      "role": "planning",
+      "isAdmin": false,
+      "canEditPlanning": false,
+      "accessCodeHash": "4bd50c5b2322e0899bb410cfcbb6ab9c9ed3a886fc1e9a774c7fe095cdc48c42",
+      "canViewOverview": true,
+      "updatedAt": "2026-08-14T10:41:02.546Z",
+      "name": "test",
+      "isActive": true,
+      "lastLoginAt": "2026-08-14T10:47:01.273Z",
+      "rawCode": "TES-5879-NA",
+      "avatar": "T",
+      "id": "usr-1786703167206-375"
+    }
+  ],
+  "plannings": [
+    {
+      "userName": "Jonas",
+      "id": "pln-usr-1786702886507-595-2026-9",
+      "month": 9,
+      "updatedAt": "2026-08-14T10:25:00.239Z",
+      "days": {
+        "1": "X",
+        "2": "X"
+      },
+      "userId": "usr-1786702886507-595",
+      "updatedBy": "Jonas",
+      "year": 2026
+    },
+    {
+      "year": 2026,
+      "month": 8,
+      "userId": "usr-1786702886507-595",
+      "id": "pln-usr-1786702886507-595-2026-8",
+      "days": {
+        "1": "X",
+        "2": "X",
+        "3": "V"
+      },
+      "updatedBy": "Jonas",
+      "updatedAt": "2026-08-14T10:25:31.832Z",
+      "userName": "Jonas"
+    }
+  ],
+  "sessions": {
+    "3c0a575c32470929ad644e1f3f769bb05250f516b5885d2925dcbbfe8760c1a9": {
+      "userId": "usr-1786703167206-375",
+      "createdAt": 1786703989152
+    },
+    "c3f404c51327ccbc05cf1cf25771fc478c3bab8190ec25a43de57db292386f2e": {
+      "userId": "usr-1786703167206-375",
+      "createdAt": 1786704286373
+    },
+    "e8ce647ccac35b6fe1cca6d9e412a0a41f5ff8aa5f492b5408767b4e8a648859": {
+      "userId": "usr-1786703167206-375",
+      "createdAt": 1786704421273
+    }
+  }
+}
