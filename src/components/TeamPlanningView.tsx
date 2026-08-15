@@ -397,6 +397,24 @@ export const TeamPlanningView: React.FC = () => {
 
         {/* Month Selector Controls */}
         <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 self-start md:self-auto">
+          {(isPlanner || isAdmin) && (
+            <button
+              onClick={async () => {
+                if (confirm("Weet je zeker dat je deze planning als definitief wilt markeren?")) {
+                  try {
+                    await api.finalizePlanning(currentYear, currentMonth);
+                    window.location.reload();
+                  } catch (err: any) {
+                    alert('Fout bij afronden planning: ' + err.message);
+                  }
+                }
+              }}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm shadow-emerald-200 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Planning volledig</span>
+            </button>
+          )}
           <button
             onClick={handlePrevMonth}
             className="p-2 hover:bg-white hover:text-indigo-600 rounded-lg text-slate-600 transition-colors shadow-2xs cursor-pointer"

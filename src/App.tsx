@@ -2,18 +2,17 @@ import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './components/LoginPage';
 import { Navigation } from './components/Navigation';
-import { TopHeader } from './components/TopHeader';
 import { DashboardView } from './components/DashboardView';
 import { MyPlanningView } from './components/MyPlanningView';
 import { TeamOverviewView } from './components/TeamOverviewView';
 import { TeamPlanningView } from './components/TeamPlanningView';
 import { AdminPortalView } from './components/AdminPortalView';
+import { FinalPlanningView } from './components/FinalPlanningView';
 import { Loader2 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
-  const { user, isLoading, canViewOverview, canEditPlanning, isPlanner, isAdmin } = useAuth();
+  const { user, isLoading, canViewOverview, canEditPlanning, isAdmin } = useAuth();
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
-  const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
 
   // Automatically select the default landing tab upon login:
@@ -51,7 +50,7 @@ const MainLayout: React.FC = () => {
   let effectiveTab = currentTab;
   if (effectiveTab === 'planning' && !canEditPlanning && canViewOverview) {
     effectiveTab = 'overview';
-  } else if (effectiveTab === 'team_planning' && !isPlanner && !isAdmin && !canViewOverview) {
+  } else if (effectiveTab === 'team_planning' && !user?.canPlannerMode && !isAdmin) {
     effectiveTab = canEditPlanning ? 'planning' : 'dashboard';
   } else if (effectiveTab === 'overview' && !canViewOverview) {
     effectiveTab = canEditPlanning ? 'planning' : 'dashboard';
@@ -60,33 +59,20 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex relative overflow-x-hidden">
-      {/* Navigation Sidebar */}
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
       <Navigation
         currentTab={effectiveTab}
         onSelectTab={setCurrentTab}
-        isMobileNavOpen={isMobileNavOpen}
-        onCloseMobileNav={() => setIsMobileNavOpen(false)}
       />
 
-      {/* Main Content Area */}
-      <div className="flex-1 md:pl-64 flex flex-col min-h-screen relative z-10">
-        <TopHeader
-          currentTab={effectiveTab}
-          onOpenMobileNav={() => setIsMobileNavOpen(true)}
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          showSearch={effectiveTab === 'overview'}
-        />
-
-        <main className="flex-1">
-          {effectiveTab === 'dashboard' && <DashboardView onNavigate={setCurrentTab} />}
-          {effectiveTab === 'planning' && <MyPlanningView />}
-          {effectiveTab === 'team_planning' && <TeamPlanningView />}
-          {effectiveTab === 'overview' && canViewOverview && <TeamOverviewView onNavigateToTeamPlanning={() => setCurrentTab('team_planning')} />}
-          {effectiveTab === 'admin' && isAdmin && <AdminPortalView />}
-        </main>
-      </div>
+      <main className="flex-1 overflow-x-hidden">
+        {effectiveTab === 'dashboard' && <DashboardView onNavigate={setCurrentTab} />}
+        {effectiveTab === 'planning' && <MyPlanningView />}
+        {effectiveTab === 'team_planning' && <TeamPlanningView />}
+        {effectiveTab === 'final_planning' && <FinalPlanningView />}
+        {effectiveTab === 'overview' && canViewOverview && <TeamOverviewView onNavigateToTeamPlanning={() => setCurrentTab('team_planning')} />}
+        {effectiveTab === 'admin' && isAdmin && <AdminPortalView />}
+      </main>
     </div>
   );
 };

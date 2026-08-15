@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const canEditPlanning = Boolean(user?.canEditPlanning || user?.isAdmin);
   const isAdmin = Boolean(user?.isAdmin);
   const roleName = (user?.role || '').toLowerCase().trim();
-  const isPlanner = Boolean(isAdmin || roleName === 'planning' || roleName === 'planner' || (canEditPlanning && canViewOverview));
+  const isPlanner = Boolean(isAdmin || user?.canPlannerMode || roleName === 'planning' || roleName === 'planner' || (canEditPlanning && canViewOverview));
 
   return (
     <AuthContext.Provider

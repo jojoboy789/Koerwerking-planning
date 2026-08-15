@@ -42,6 +42,7 @@ export const AdminPortalView: React.FC = () => {
   const [newAccessCode, setNewAccessCode] = useState('');
   const [newCanViewOverview, setNewCanViewOverview] = useState(true);
   const [newCanEditPlanning, setNewCanEditPlanning] = useState(true);
+  const [newCanPlannerMode, setNewCanPlannerMode] = useState(false);
   const [newIsAdmin, setNewIsAdmin] = useState(false);
   const [newIsActive, setNewIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -146,6 +147,7 @@ export const AdminPortalView: React.FC = () => {
         accessCode: newAccessCode.trim(),
         canViewOverview: newCanViewOverview,
         canEditPlanning: newCanEditPlanning,
+        canPlannerMode: newCanPlannerMode,
         isAdmin: newIsAdmin,
         isActive: newIsActive,
       });
@@ -187,7 +189,7 @@ export const AdminPortalView: React.FC = () => {
   };
 
   // Toggle quick permission
-  const handleTogglePermission = async (targetUser: User, field: 'canViewOverview' | 'canEditPlanning' | 'isAdmin') => {
+  const handleTogglePermission = async (targetUser: User, field: 'canViewOverview' | 'canEditPlanning' | 'canPlannerMode' | 'isAdmin') => {
     const nextVal = !targetUser[field];
     try {
       await api.updateUser(targetUser.id, { [field]: nextVal });
@@ -264,6 +266,7 @@ export const AdminPortalView: React.FC = () => {
         role: editingUser.role,
         canViewOverview: editingUser.canViewOverview,
         canEditPlanning: editingUser.canEditPlanning,
+        canPlannerMode: editingUser.canPlannerMode,
         isAdmin: editingUser.isAdmin,
         isActive: editingUser.isActive,
       });
@@ -516,6 +519,20 @@ export const AdminPortalView: React.FC = () => {
                             <span>Overzicht: {u.canViewOverview || u.isAdmin ? 'Ja' : 'Nee'}</span>
                           </button>
 
+                          {/* Planner Mode */}
+                          <button
+                            onClick={() => handleTogglePermission(u, 'canPlannerMode')}
+                            className={`px-2 py-0.5 rounded-lg border transition-colors flex items-center gap-1 cursor-pointer ${
+                              u.canPlannerMode || u.isAdmin
+                                ? 'bg-amber-50 text-amber-700 border-amber-200 font-medium'
+                                : 'bg-slate-50 text-slate-400 border-slate-200'
+                            }`}
+                            title="Klik om recht 'Planner Mode' te wisselen"
+                          >
+                            <Shield className="w-2.5 h-2.5" />
+                            <span>Planner: {u.canPlannerMode || u.isAdmin ? 'Ja' : 'Nee'}</span>
+                          </button>
+
                           {/* Planning */}
                           <button
                             onClick={() => handleTogglePermission(u, 'canEditPlanning')}
@@ -678,6 +695,19 @@ export const AdminPortalView: React.FC = () => {
                   <div>
                     <span className="font-semibold text-slate-900">Planning invullen</span>
                     <p className="text-[10px] text-slate-500">Gebruiker kan eigen maandshifts selecteren & opslaan</p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={newCanPlannerMode}
+                    onChange={(e) => setNewCanPlannerMode(e.target.checked)}
+                    className="accent-indigo-600 w-4 h-4 rounded"
+                  />
+                  <div>
+                    <span className="font-semibold text-slate-900">Planner Mode</span>
+                    <p className="text-[10px] text-slate-500">Gebruiker kan planningen van collega's aanpassen & 'Team plannen' gebruiken</p>
                   </div>
                 </label>
 
@@ -899,6 +929,16 @@ export const AdminPortalView: React.FC = () => {
                     className="accent-indigo-600 w-4 h-4 rounded"
                   />
                   <span className="font-semibold text-slate-900">Planning invullen</span>
+                </label>
+
+                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={editingUser.canPlannerMode}
+                    onChange={(e) => setEditingUser({ ...editingUser, canPlannerMode: e.target.checked })}
+                    className="accent-indigo-600 w-4 h-4 rounded"
+                  />
+                  <span className="font-semibold text-slate-900">Planner Mode</span>
                 </label>
 
                 <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">

@@ -138,6 +138,7 @@ class ApiClient {
     accessCode: string;
     canViewOverview: boolean;
     canEditPlanning: boolean;
+    canPlannerMode: boolean;
     isAdmin: boolean;
     isActive: boolean;
   }) {
@@ -174,6 +175,13 @@ class ApiClient {
 
   async getUserPlanning(userId: string, year: number, month: number) {
     return this.request<{ user: User; planning: MonthlyPlanning }>(`/admin/users/${userId}/planning/${year}/${month}`);
+  }
+
+  async finalizePlanning(year: number, month: number) {
+    return this.request<{ success: boolean; message: string }>(
+      `/admin/planning/${year}/${month}/finalize`,
+      { method: 'POST' }
+    );
   }
 
   async saveUserPlanningAsAdmin(userId: string, year: number, month: number, days: Record<number, string>) {

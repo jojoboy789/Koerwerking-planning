@@ -58,6 +58,7 @@ export interface User {
   isActive: boolean;
   canViewOverview: boolean;
   canEditPlanning: boolean;
+  canPlannerMode: boolean;
   isAdmin: boolean;
   createdAt: string;
   updatedAt: string;
@@ -76,6 +77,8 @@ export interface MonthlyPlanning {
   year: number;
   month: number; // 1 - 12
   days: Record<number, ShiftCode>;
+  finalDays: Record<number, ShiftCode> | null;
+  isFinal: boolean;
   updatedAt: string;
   updatedBy: string;
 }

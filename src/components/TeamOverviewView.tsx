@@ -311,26 +311,45 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   const monthDisplay = `${MONTH_NAMES[currentMonth - 1]} ${currentYear}`.toUpperCase();
 
   return (
-    <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto w-full font-sans">
+    <div className="p-2 sm:p-4 md:p-8 space-y-8 max-w-7xl mx-auto w-full font-sans overflow-x-hidden">
       {/* Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
+            <h2 className="text-xl md:text-3xl font-bold text-slate-900 tracking-tight">
               Team Overzicht
             </h2>
-            <span className="px-2.5 py-0.5 bg-emerald-100 border border-emerald-200 rounded-full text-[10px] font-mono font-bold text-emerald-800 uppercase tracking-wider">
+            <span className="px-2 py-0.5 bg-emerald-100 border border-emerald-200 rounded-full text-[9px] sm:text-[10px] font-mono font-bold text-emerald-800 uppercase tracking-wider">
               LIVE ROOSTER
             </span>
           </div>
-          <p className="text-xs md:text-sm text-slate-500 mt-1">
-            Volledig maandoverzicht van alle teamleden met automatische bezettings- en shift-controle (1V, 1D, 1L).
+          <p className="text-[11px] md:text-sm text-slate-500 mt-1">
+            Volledig maandoverzicht met automatische bezettings- en shift-controle.
           </p>
         </div>
 
         {/* Action button to Planner Mode & Month Navigation */}
         <div className="flex items-center gap-3">
-          {(isPlanner || isAdmin) && onNavigateToTeamPlanning && (
+          {(user?.canPlannerMode || isAdmin) && (
+            <button
+              onClick={async () => {
+                if (confirm("Weet je zeker dat je deze planning als definitief wilt markeren?")) {
+                  try {
+                    await api.finalizePlanning(currentYear, currentMonth);
+                    fetchOverview();
+                  } catch (err: any) {
+                    alert('Fout bij afronden planning: ' + err.message);
+                  }
+                }
+              }}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm shadow-emerald-200 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Planning volledig</span>
+            </button>
+          )}
+
+          {(user?.canPlannerMode || isAdmin) && onNavigateToTeamPlanning && (
             <button
               onClick={onNavigateToTeamPlanning}
               className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm shadow-indigo-200 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
@@ -435,7 +454,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
               {/* Table Header */}
               <thead className="bg-slate-50/90 backdrop-blur-md sticky top-0 z-20 border-b border-slate-200">
                 <tr>
-                  <th className="sticky left-0 z-30 bg-slate-50 p-4 font-bold text-slate-800 border-r border-slate-200 min-w-[200px] uppercase tracking-wider text-[11px]">
+                  <th className="sticky left-0 z-30 bg-slate-50 p-4 font-bold text-slate-800 border-r border-slate-200 min-w-[120px] sm:min-w-[200px] uppercase tracking-wider text-[11px]">
                     Naam
                   </th>
                   {Array.from({ length: daysInMonth }, (_, idx) => {
@@ -684,19 +703,18 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5">
           {Array.from({ length: daysInMonth }, (_, idx) => {
             const dayNum = idx + 1;
+            const tot = dailyTotals[dayNum];
             const date = new Date(currentYear, currentMonth - 1, dayNum);
             const dayOfWeek = date.getDay();
-            const dayName = DAY_NAMES[dayOfWeek];
+            const dayName = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'][dayOfWeek];
             const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-            const tot = dailyTotals[dayNum];
             const isIdeal = tot.isIdeal;
             const hasConflict = tot.hasConflict;
             const isMissing = tot.isMissing;
 
             // Apply filter
             if (statusFilter === 'ok' && !isIdeal) return null;
-            if (statusFilter === 'conflict' && !hasConflict) return null;
+            if (statusFilter === 'conflict' && (!hasConflict || isMissing)) return null;
             if (statusFilter === 'missing' && (!isMissing || isWeekend)) return null;
 
             return (
@@ -952,24 +970,66 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
 
               {filteredMembers.map((m) => {
                 const currentShift = dayEditState[m.user.id] || '';
+                const shiftCounts = Object.values(dayEditState).reduce((acc, code) => {
+                  if (code && (code === 'V' || code === 'D' || code === 'L')) {
+                    acc[code] = (acc[code] || 0) + 1;
+                  }
+                  return acc;
+                }, {} as Record<string, number>);
+                const isInConflict = currentShift && shiftCounts[currentShift] > 1;
 
                 return (
                   <div
                     key={m.user.id}
-                    className="p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    className={`p-3.5 rounded-2xl transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 border ${
+                      isInConflict
+                        ? 'bg-red-50 border-red-300 ring-1 ring-red-200'
+                        : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200'
+                    }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${
+                        isInConflict ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white'
+                      }`}>
                         {m.user.avatar || m.user.name.substring(0, 2).toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-slate-900">{m.user.name}</p>
+                        <p className={`text-xs font-bold ${isInConflict ? 'text-red-900' : 'text-slate-900'}`}>
+                          {m.user.name}
+                          {isInConflict && <span className="ml-1.5 text-[10px] bg-red-200 text-red-800 px-1.5 py-0.5 rounded-full">Conflict</span>}
+                        </p>
                         <p className="text-[11px] text-slate-500">{m.user.role || 'Medewerker'}</p>
                       </div>
                     </div>
 
                     {/* Shift Selector Buttons */}
                     <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                      {/* Quick remove button if in conflict */}
+                      {(() => {
+                        const shiftCounts = Object.values(dayEditState).reduce((acc, code) => {
+                          if (code && (code === 'V' || code === 'D' || code === 'L')) {
+                            acc[code] = (acc[code] || 0) + 1;
+                          }
+                          return acc;
+                        }, {} as Record<string, number>);
+                        
+                        const isInConflict = currentShift && shiftCounts[currentShift] > 1;
+
+                        if (isInConflict) {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleSetMemberShiftForDay(m.user.id, 'X')}
+                              className="px-3 h-8 rounded-xl bg-red-100 text-red-700 hover:bg-red-200 text-[11px] font-bold transition-all flex items-center justify-center cursor-pointer mr-2"
+                              title="Zet dit teamlid op vrij om het conflict op te lossen"
+                            >
+                              Verwijder uit dienst
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
+
                       {(['V', 'D', 'L', 'X'] as const).map((code) => {
                         const isSelected = currentShift === code;
                         return (
@@ -1033,7 +1093,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                   type="button"
                   onClick={handleSaveDayResolutions}
                   disabled={isSavingDay}
-                  className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-200 transition-all inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-200 transition-all inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 whitespace-nowrap"
                 >
                   {isSavingDay ? (
                     <>

@@ -27,6 +27,7 @@ interface StoredUser {
   isActive: boolean;
   canViewOverview: boolean;
   canEditPlanning: boolean;
+  canPlannerMode: boolean;
   isAdmin: boolean;
   createdAt: string;
   updatedAt: string;
@@ -40,6 +41,8 @@ interface StoredPlanning {
   year: number;
   month: number;
   days: Record<number, string>;
+  finalDays?: Record<number, string>;
+  isFinal: boolean;
   updatedAt: string;
   updatedBy: string;
 }
@@ -169,6 +172,7 @@ function seedInitialDatabase(): DatabaseSchema {
       canViewOverview: true,
       canEditPlanning: true,
       isAdmin: true,
+      canPlannerMode: true,
       createdAt: now,
       updatedAt: now,
     },
@@ -183,6 +187,7 @@ function seedInitialDatabase(): DatabaseSchema {
       canViewOverview: true,
       canEditPlanning: true,
       isAdmin: false,
+      canPlannerMode: false,
       createdAt: now,
       updatedAt: now,
     },
@@ -197,6 +202,7 @@ function seedInitialDatabase(): DatabaseSchema {
       canViewOverview: true,
       canEditPlanning: true,
       isAdmin: false,
+      canPlannerMode: false,
       createdAt: now,
       updatedAt: now,
     },
@@ -211,6 +217,7 @@ function seedInitialDatabase(): DatabaseSchema {
       canViewOverview: true,
       canEditPlanning: true,
       isAdmin: false,
+      canPlannerMode: false,
       createdAt: now,
       updatedAt: now,
     },
@@ -225,6 +232,7 @@ function seedInitialDatabase(): DatabaseSchema {
       canViewOverview: true,
       canEditPlanning: true,
       isAdmin: false,
+      canPlannerMode: false,
       createdAt: now,
       updatedAt: now,
     },
@@ -239,6 +247,7 @@ function seedInitialDatabase(): DatabaseSchema {
       canViewOverview: true,
       canEditPlanning: true,
       isAdmin: false,
+      canPlannerMode: false,
       createdAt: now,
       updatedAt: now,
     },
@@ -253,6 +262,7 @@ function seedInitialDatabase(): DatabaseSchema {
       canViewOverview: false,
       canEditPlanning: true,
       isAdmin: false,
+      canPlannerMode: false,
       createdAt: now,
       updatedAt: now,
     },
@@ -267,6 +277,7 @@ function seedInitialDatabase(): DatabaseSchema {
       canViewOverview: true,
       canEditPlanning: false,
       isAdmin: false,
+      canPlannerMode: false,
       createdAt: now,
       updatedAt: now,
     },
@@ -281,6 +292,7 @@ function seedInitialDatabase(): DatabaseSchema {
       canViewOverview: false,
       canEditPlanning: false,
       isAdmin: false,
+      canPlannerMode: false,
       createdAt: now,
       updatedAt: now,
     },
@@ -315,6 +327,7 @@ function seedInitialDatabase(): DatabaseSchema {
       days,
       updatedAt: now,
       updatedBy: 'Systeem Initialisatie',
+      isFinal: false,
     });
   });
 
@@ -406,7 +419,7 @@ function requirePlannerOrAdminMiddleware(req: AuthenticatedRequest, res: Respons
   }
   const role = (req.user.role || '').toLowerCase().trim();
   const isPlanner = role === 'planning' || role === 'planner';
-  if (!req.user.isAdmin && !isPlanner && !(req.user.canEditPlanning && req.user.canViewOverview)) {
+  if (!req.user.isAdmin && !req.user.canPlannerMode && !isPlanner && !(req.user.canEditPlanning && req.user.canViewOverview)) {
     return res.status(403).json({ error: 'Je hebt geen rechten om planningen van teamleden te beheren.' });
   }
   next();
@@ -636,6 +649,7 @@ async function startServer() {
         days: cleanDays,
         updatedAt: now,
         updatedBy: req.user!.name,
+        isFinal: false,
       });
     }
 
@@ -730,7 +744,7 @@ async function startServer() {
 
   // Create new user (Admin)
   app.post('/api/admin/users', authMiddleware, requireAdminMiddleware, (req: AuthenticatedRequest, res: Response) => {
-    const { name, role, accessCode, canViewOverview, canEditPlanning, isAdmin, isActive } = req.body;
+    const { name, role, accessCode, canViewOverview, canEditPlanning, canPlannerMode, isAdmin, isActive } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({ error: 'Naam is verplicht.' });
@@ -760,6 +774,7 @@ async function startServer() {
       isActive: isActive !== false,
       canViewOverview: Boolean(canViewOverview),
       canEditPlanning: Boolean(canEditPlanning),
+      canPlannerMode: Boolean(canPlannerMode),
       isAdmin: Boolean(isAdmin),
       createdAt: now,
       updatedAt: now,
@@ -785,7 +800,7 @@ async function startServer() {
       return res.status(404).json({ error: 'Gebruiker niet gevonden.' });
     }
 
-    const { name, role, canViewOverview, canEditPlanning, isAdmin, isActive } = req.body;
+    const { name, role, canViewOverview, canEditPlanning, canPlannerMode, isAdmin, isActive } = req.body;
 
     if (name && typeof name === 'string') {
       db.users[userIndex].name = name.trim();
@@ -798,6 +813,9 @@ async function startServer() {
     }
     if (canEditPlanning !== undefined) {
       db.users[userIndex].canEditPlanning = Boolean(canEditPlanning);
+    }
+    if (canPlannerMode !== undefined) {
+      db.users[userIndex].canPlannerMode = Boolean(canPlannerMode);
     }
     if (isAdmin !== undefined) {
       // Prevent removing admin right from the very last admin
@@ -983,6 +1001,7 @@ async function startServer() {
         days: cleanDays,
         updatedAt: now,
         updatedBy: `${req.user!.name} (Planner Ingevuld)`,
+        isFinal: false,
       });
     }
 
@@ -992,6 +1011,26 @@ async function startServer() {
       message: `Planning voor ${targetUser.name} succesvol opgeslagen.`,
       planning: existingIndex >= 0 ? db.plannings[existingIndex] : db.plannings[db.plannings.length - 1],
     });
+  });
+
+  // Finalize all team planning (Planner / Admin)
+  app.post('/api/admin/planning/:year/:month/finalize', authMiddleware, requirePlannerOrAdminMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    const { year, month } = req.params;
+    const y = parseInt(year, 10);
+    const m = parseInt(month, 10);
+
+    db.plannings.forEach(p => {
+        if(p.year === y && p.month === m) {
+            console.log('Finalizing planning for:', p.userId, y, m);
+            p.isFinal = true;
+            p.finalDays = { ...p.days };
+            p.updatedAt = new Date().toISOString();
+            p.updatedBy = `${req.user!.name} (Planner Afgesloten)`;
+        }
+    });
+
+    saveDatabase(db);
+    res.json({ success: true, message: 'Planning voor iedereen succesvol afgesloten als definitief.' });
   });
 
   // Firebase status endpoint
