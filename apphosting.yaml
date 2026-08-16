@@ -5,3 +5,7 @@ runConfig:
   concurrency: 80
   cpu: 1
   memoryMiB: 512
+serving:
+  rewrites:
+    - source: /.*
+      destination: /index.html
