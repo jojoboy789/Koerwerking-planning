@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
+import dotenv from 'dotenv';
 import {
   initFirebase,
   fetchRemoteDatabase,
@@ -10,6 +11,8 @@ import {
   isFirebaseConnected,
   firebaseConfig,
 } from './server/firebaseService';
+
+dotenv.config();
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const HASH_SALT = process.env.ACCESS_CODE_SALT || 'NEON_TOKYO_SALT_v1_99x#';
@@ -423,6 +426,37 @@ function requirePlannerOrAdminMiddleware(req: AuthenticatedRequest, res: Respons
     return res.status(403).json({ error: 'Je hebt geen rechten om planningen van teamleden te beheren.' });
   }
   next();
+}
+
+async function sendTelegramNotification(message: string) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (!botToken || !chatId) {
+    console.warn('Telegram bot token or chat ID not configured in .env file. Skipping notification.');
+    return;
+  }
+
+  const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Failed to send Telegram notification:', errorData);
+    }
+  } catch (error) {
+    console.error('Error sending Telegram notification:', error);
+  }
 }
 
 async function startServer() {
@@ -1030,6 +1064,12 @@ async function startServer() {
     });
 
     saveDatabase(db);
+
+    // Send Telegram notification
+    const monthNames = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
+    const message = `De planning voor ${monthNames[m - 1]} ${y} is zojuist afgerond door ${req.user!.name}.`;
+    sendTelegramNotification(message);
+
     res.json({ success: true, message: 'Planning voor iedereen succesvol afgesloten als definitief.' });
   });
 
