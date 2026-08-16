@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { ShiftCode, SHIFT_DEFINITIONS, MonthlyPlanning } from '../types';
-import { ChevronLeft, ChevronRight, Calendar, AlertTriangle, Loader2 } from 'lucide-react';
+import { TeamMemberOverview, ShiftCode, SHIFT_DEFINITIONS } from '../types';
+import { ChevronLeft, ChevronRight, AlertTriangle, Loader2 } from 'lucide-react';
 
 const MONTH_NAMES = [
   'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
   'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'
 ];
+
+const DAY_NAMES = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
 
 function getWeekNumber(d: Date): number {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -17,70 +18,200 @@ function getWeekNumber(d: Date): number {
   return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
 
+const DayHeader: React.FC<{ day: number, month: number, year: number }> = ({ day, month, year }) => {
+    const date = new Date(year, month - 1, day);
+    const dayName = DAY_NAMES[date.getDay()];
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+    return (
+        <div className={`text-center p-2 rounded-lg ${isWeekend ? 'bg-slate-100/80' : ''}`}>
+            <div className={`text-[10px] uppercase font-bold ${isWeekend ? 'text-amber-700' : 'text-slate-500'}`}>{dayName}</div>
+            <div className="font-bold text-slate-800 text-sm mt-0.5">{day}</div>
+        </div>
+    );
+};
+
+const ShiftCell: React.FC<{shift: ShiftCode | null, memberName: string, day: number}> = ({ shift, memberName, day }) => {
+    if (!shift) {
+      return <div className="w-full h-9 flex items-center justify-center rounded-lg bg-slate-100/70 text-slate-400" title={`${memberName} - Dag ${day}: Niet ingepland`}></div>;
+    }
+
+    const shiftInfo = SHIFT_DEFINITIONS[shift];
+    if (!shiftInfo) {
+        return <div className="w-full h-9 flex items-center justify-center rounded-lg bg-slate-100/70 text-slate-400" title={`${memberName} - Dag ${day}: Onbekend`}>?</div>;
+    }
+    
+    const classNames = `w-full h-9 flex items-center justify-center rounded-lg text-xs font-bold select-none ${shiftInfo.colorClass}`;
+    const title = `${memberName} - Dag ${day}: ${shiftInfo.label}`;
+
+    return (
+        <div className={classNames} title={title}>
+            {shift === 'X' ? '' : shift}
+        </div>
+    );
+}
+
 export const FinalPlanningView: React.FC = () => {
   const [currentYear, setCurrentYear] = useState<number>(() => new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(() => new Date().getMonth() + 1);
-  const [planning, setPlanning] = useState<MonthlyPlanning | null>(null);
+  const [teamData, setTeamData] = useState<TeamMemberOverview[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const fetchPlanning = useCallback(async () => {
+  const fetchTeamOverview = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await api.getPlanning(currentYear, currentMonth);
-      setPlanning(res.planning);
+      const res = await api.getTeamOverview(currentYear, currentMonth);
+      const finalData = res.teamData.filter(member => {
+        if (!member.planning || !member.planning.isFinal || !member.planning.finalDays) {
+          return false;
+        }
+        const shifts = Object.values(member.planning.finalDays);
+        return shifts.some(shift => shift && shift !== 'X');
+      });
+      setTeamData(finalData);
     } catch {
-      setPlanning(null);
+      setTeamData([]);
     } finally {
       setIsLoading(false);
     }
   }, [currentYear, currentMonth]);
 
   useEffect(() => {
-    fetchPlanning();
-  }, [fetchPlanning]);
+    fetchTeamOverview();
+  }, [fetchTeamOverview]);
 
   const daysInMonth = useMemo(() => new Date(currentYear, currentMonth, 0).getDate(), [currentYear, currentMonth]);
 
+  const weeks = useMemo(() => {
+    const weeksMap: { [week: number]: {days: number[], hasWorkday: boolean} } = {};
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentYear, currentMonth - 1, day);
+      const weekNum = getWeekNumber(date);
+      if (!weeksMap[weekNum]) {
+        weeksMap[weekNum] = { days: [], hasWorkday: false };
+      }
+      weeksMap[weekNum].days.push(day);
+    }
+
+    // Check if any member works in a given week
+    teamData.forEach(member => {
+        Object.keys(weeksMap).forEach(weekNum => {
+            const weekInfo = weeksMap[parseInt(weekNum)];
+            const hasWorkDayInWeek = weekInfo.days.some(day => {
+                const shift = member.planning?.finalDays?.[day];
+                return shift && shift !== 'X';
+            });
+            if(hasWorkDayInWeek) {
+                weekInfo.hasWorkday = true;
+            }
+        });
+    });
+
+    return Object.entries(weeksMap)
+      .map(([week, info]) => ({ week: parseInt(week), ...info }))
+      .filter(week => week.hasWorkday)
+      .sort((a,b) => a.week - b.week);
+
+  }, [teamData, currentYear, currentMonth, daysInMonth]);
+
+  const renderWeeklyPlanning = () => (
+    <div className="space-y-6">
+      {weeks.map(({ week, days }) => {
+        const membersForWeek = teamData.filter(member => {
+            const hasWorkDayInWeek = days.some(day => {
+                const shift = member.planning?.finalDays?.[day];
+                return shift && shift !== 'X';
+            });
+            return hasWorkDayInWeek;
+        });
+
+        if (membersForWeek.length === 0) return null;
+
+        return (
+          <div key={week} className="overflow-x-auto bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <h3 className="font-bold text-lg text-indigo-700 mb-3 ml-1">Week {week}</h3>
+              <table className="w-full border-collapse min-w-[600px]">
+                  <thead>
+                      <tr className="border-b border-slate-200">
+                          <th className="sticky left-0 z-10 bg-white p-2 font-bold text-slate-700 text-left text-sm w-48">Teamlid</th>
+                          {days.map(day => (
+                             <th key={day} className="p-1 min-w-[70px]">
+                                 <DayHeader day={day} month={currentMonth} year={currentYear} />
+                             </th>
+                          ))}
+                      </tr>
+                  </thead>
+                  <tbody>
+                      {membersForWeek.map(member => (
+                          <tr key={member.user.id} className="border-t border-slate-100 hover:bg-slate-50/70 transition-colors group">
+                              <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50/70 p-2 font-semibold text-sm text-slate-800 whitespace-nowrap border-r border-slate-100">
+                                  <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 text-xs border border-indigo-200 shrink-0">
+                                          {member.user.avatar || member.user.name.substring(0, 2).toUpperCase()}
+                                      </div>
+                                      <div>
+                                          <div className="font-semibold text-slate-900 text-sm">{member.user.name}</div>
+                                          <div className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">{member.user.role || 'Teamlid'}</div>
+                                      </div>
+                                  </div>
+                              </td>
+                              {days.map(day => {
+                                  const shift = (member.planning?.finalDays?.[day] as ShiftCode | null) || null;
+                                  return (
+                                      <td key={day} className="p-1 text-center border-r border-slate-100">
+                                         <ShiftCell shift={shift} memberName={member.user.name} day={day} />
+                                      </td>
+                                  );
+                              })}
+                          </tr>
+                      ))}
+                  </tbody>
+              </table>
+          </div>
+        )
+      })}
+    </div>
+  );
+
+  const handleMonthChange = (direction: 1 | -1) => {
+    const newDate = new Date(currentYear, currentMonth -1 + direction, 1);
+    setCurrentYear(newDate.getFullYear());
+    setCurrentMonth(newDate.getMonth() + 1);
+  }
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-900">Final Planning</h2>
-        <div className="flex items-center gap-2">
-            <button onClick={() => setCurrentMonth(prev => prev === 1 ? 12 : prev - 1)} className="p-2 border rounded-xl"><ChevronLeft className="w-4 h-4"/></button>
-            <span className="font-bold text-sm">{MONTH_NAMES[currentMonth-1]} {currentYear}</span>
-            <button onClick={() => setCurrentMonth(prev => prev === 12 ? 1 : prev + 1)} className="p-2 border rounded-xl"><ChevronRight className="w-4 h-4"/></button>
+    <div className="max-w-full mx-auto px-4 lg:px-8 py-8 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h2 className="text-2xl font-bold text-slate-900">Definitieve Team Planning</h2>
+                <p className="text-sm text-slate-500 mt-1">Wekelijks overzicht van de goedgekeurde planning voor {MONTH_NAMES[currentMonth-1]} {currentYear}.</p>
+            </div>
+            <div className="flex items-center bg-white rounded-2xl p-1 border border-slate-200 shadow-xs">
+                <button onClick={() => handleMonthChange(-1)} className="p-2.5 text-slate-500 hover:text-indigo-600 transition-colors rounded-xl hover:bg-slate-100"><ChevronLeft className="w-5 h-5"/></button>
+                <span className="font-bold text-sm w-36 text-center tracking-wide text-slate-900 uppercase">{MONTH_NAMES[currentMonth-1]} {currentYear}</span>
+                <button onClick={() => handleMonthChange(1)} className="p-2.5 text-slate-500 hover:text-indigo-600 transition-colors rounded-xl hover:bg-slate-100"><ChevronRight className="w-5 h-5"/></button>
+            </div>
         </div>
-      </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+            {Object.values(SHIFT_DEFINITIONS).map(shift => (
+                <div key={shift.code} className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs">
+                    <span className={`w-4 h-4 rounded-md ${shift.colorClass}`}></span>
+                    <span className="text-slate-600 font-medium text-xs">{shift.shortLabel} ({shift.code})</span>
+                </div>
+            ))}
+        </div>
 
       {isLoading ? (
-        <div className="flex justify-center p-20"><Loader2 className="w-8 h-8 animate-spin" /></div>
-      ) : !planning?.isFinal ? (
-        <div className="p-8 text-center bg-slate-50 rounded-3xl border border-slate-200 text-slate-500">
-           Er is nog geen definitieve planning beschikbaar voor deze maand.
+        <div className="flex justify-center items-center p-20 bg-white rounded-2xl border border-slate-200"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
+      ) : weeks.length === 0 ? (
+        <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 text-slate-500 shadow-sm">
+           <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-slate-400" />
+           <h3 className="font-bold text-slate-800">Geen actieve planning</h3>
+           <p className="text-sm">Er is geen definitieve planning met werkdagen gevonden voor deze maand.</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {Array.from({ length: daysInMonth }, (_, i) => {
-            const day = i + 1;
-            const requested = planning.days[day] || '';
-            const final = planning.finalDays?.[day] || '';
-            const isChanged = requested !== final;
-            const date = new Date(currentYear, currentMonth - 1, day);
-            
-            return (
-                <div key={day} className={`p-4 rounded-xl border flex items-center justify-between ${isChanged ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
-                    <div>
-                        <span className="font-bold text-slate-900">{day} {MONTH_NAMES[currentMonth-1]}</span>
-                        <span className="text-xs text-slate-400 ml-2">Week {getWeekNumber(date)}</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <div className="text-xs text-slate-500">Gevraagd: <span className="font-bold">{requested || '-'}</span></div>
-                        <div className="text-xs text-slate-900">Definitief: <span className="font-bold text-indigo-700">{final || '-'}</span></div>
-                    </div>
-                </div>
-            )
-          })}
-        </div>
+        renderWeeklyPlanning()
       )}
     </div>
   );
