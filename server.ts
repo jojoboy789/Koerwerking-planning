@@ -420,10 +420,8 @@ function requirePlannerOrAdminMiddleware(req: AuthenticatedRequest, res: Respons
   if (!req.user) {
     return res.status(401).json({ error: 'Niet geauthenticeerd.' });
   }
-  const role = (req.user.role || '').toLowerCase().trim();
-  const isPlanner = role === 'planning' || role === 'planner';
-  if (!req.user.isAdmin && !req.user.canPlannerMode && !isPlanner && !(req.user.canEditPlanning && req.user.canViewOverview)) {
-    return res.status(403).json({ error: 'Je hebt geen rechten om planningen van teamleden te beheren.' });
+  if (!req.user.isAdmin && !req.user.canPlannerMode) {
+    return res.status(403).json({ error: 'Je hebt geen rechten om deze actie uit te voeren.' });
   }
   next();
 }
@@ -447,6 +445,7 @@ async function sendTelegramNotification(message: string) {
       body: JSON.stringify({
         chat_id: chatId,
         text: message,
+        parse_mode: 'HTML'
       }),
     });
 
@@ -578,7 +577,7 @@ async function startServer() {
     }
 
     if (!user.isActive) {
-      return res.status(403).json({ error: 'Deze toegangscode is momenteel gedeactiveerd.' });
+      return res.status(403).json({ error: 'Deze toegangscode is momenteen gedeactiveerd.' });
     }
 
     // Generate secure session token
@@ -730,6 +729,21 @@ async function startServer() {
       month,
       teamData,
     });
+  });
+  
+  // === GENERAL CHAT ENDPOINT ===
+  app.post('/api/chat/send-message', authMiddleware, requirePlannerOrAdminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    const { message } = req.body;
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Bericht mag niet leeg zijn.' });
+    }
+
+    const senderName = req.user!.name;
+    const fullMessage = `<b>Bericht van ${senderName}:</b>\n\n${message.trim()}`;
+
+    await sendTelegramNotification(fullMessage);
+
+    res.json({ success: true, message: 'Bericht succesvol verzonden naar het kanaal.' });
   });
 
   // === ADMIN PORTAL ENDPOINTS ===

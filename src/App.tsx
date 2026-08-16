@@ -8,10 +8,11 @@ import { TeamOverviewView } from './components/TeamOverviewView';
 import { TeamPlanningView } from './components/TeamPlanningView';
 import { AdminPortalView } from './components/AdminPortalView';
 import { FinalPlanningView } from './components/FinalPlanningView';
+import { GeneralChatView } from './components/GeneralChatView';
 import { Loader2 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
-  const { user, isLoading, canViewOverview, canEditPlanning, isAdmin } = useAuth();
+  const { user, isLoading, canViewOverview, canEditPlanning, isAdmin, canPlannerMode } = useAuth();
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
@@ -56,6 +57,8 @@ const MainLayout: React.FC = () => {
     effectiveTab = canEditPlanning ? 'planning' : 'dashboard';
   } else if (effectiveTab === 'admin' && !isAdmin) {
     effectiveTab = canEditPlanning ? 'planning' : 'overview';
+  } else if (effectiveTab === 'chat' && !canPlannerMode && !isAdmin) {
+    effectiveTab = 'dashboard';
   }
 
   return (
@@ -72,6 +75,7 @@ const MainLayout: React.FC = () => {
         {effectiveTab === 'final_planning' && <FinalPlanningView />}
         {effectiveTab === 'overview' && canViewOverview && <TeamOverviewView onNavigateToTeamPlanning={() => setCurrentTab('team_planning')} />}
         {effectiveTab === 'admin' && isAdmin && <AdminPortalView />}
+        {effectiveTab === 'chat' && (canPlannerMode || isAdmin) && <GeneralChatView />}
       </main>
     </div>
   );

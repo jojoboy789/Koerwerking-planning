@@ -209,6 +209,15 @@ class ApiClient {
       method: 'POST',
     });
   }
+
+  // General Chat
+  async sendTelegramMessage(message: string) {
+    return this.request<{ success: boolean; message: string }>('/chat/send-message', {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
+  }
+
 }
 
 export const api = new ApiClient();

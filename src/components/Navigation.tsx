@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Calendar, Users, Shield, LogOut, X, UserCheck, Menu, CalendarCheck } from 'lucide-react';
+import { LayoutDashboard, Calendar, Users, Shield, LogOut, X, UserCheck, Menu, CalendarCheck, MessageSquare } from 'lucide-react';
 
 interface NavigationProps {
   currentTab: string;
@@ -11,14 +11,15 @@ export const Navigation: React.FC<NavigationProps> = ({
   currentTab,
   onSelectTab,
 }) => {
-  const { user, logout, canViewOverview, canEditPlanning, isAdmin } = useAuth();
+  const { user, logout, canViewOverview, canEditPlanning, isAdmin, canPlannerMode } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, show: canEditPlanning || isAdmin },
     { id: 'planning', label: 'Mijn Planning', icon: Calendar, show: canEditPlanning || isAdmin },
     { id: 'final_planning', label: 'Final Planning', icon: CalendarCheck, show: canEditPlanning || canViewOverview },
-    { id: 'team_planning', label: 'Team Plannen', icon: UserCheck, show: user?.canPlannerMode || isAdmin, badge: 'PLANNER' },
+    { id: 'team_planning', label: 'Team Plannen', icon: UserCheck, show: canPlannerMode || isAdmin, badge: 'PLANNER' },
+    { id: 'chat', label: 'Algemene Chat', icon: MessageSquare, show: canPlannerMode || isAdmin },
     { id: 'overview', label: 'Overzicht', icon: Users, show: canViewOverview, badge: 'LIVE' },
     { id: 'admin', label: 'Gebruikers', icon: Shield, show: isAdmin, badge: 'ADMIN' },
   ];
