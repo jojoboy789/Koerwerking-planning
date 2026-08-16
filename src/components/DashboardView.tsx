@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { SHIFT_DEFINITIONS } from '../types';
+import { TelegramInvitationModal } from './TelegramInvitationModal';
 import {
   Calendar, Users, Shield, ArrowRight, Sparkles, CheckCircle2,
   Clock, ShieldCheck
@@ -16,11 +17,14 @@ const MONTH_NAMES = [
   'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'
 ];
 
+const TELEGRAM_INVITE_URL = 'https://t.me/+B0GMB0QZaM01ZWJk';
+
 export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   const { user, canViewOverview, canEditPlanning, isAdmin } = useAuth();
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
 
+  const [showInviteModal, setShowInviteModal] = useState(false);
   const [planningStats, setPlanningStats] = useState<{
     v: number;
     d: number;
@@ -52,13 +56,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     }).catch(() => {
       // ignore
     });
-  }, [currentYear, currentMonth]);
+
+    // Check if we should show the Telegram invite modal
+    const hasSeenInvite = localStorage.getItem('hasSeenTelegramInvite');
+    const userRole = user?.role?.toLowerCase() || '';
+
+    if (userRole.includes('teamlid') && !hasSeenInvite) {
+      setShowInviteModal(true);
+    }
+
+  }, [currentYear, currentMonth, user]);
+
+  const handleCloseInvite = () => {
+    try {
+      localStorage.setItem('hasSeenTelegramInvite', 'true');
+    } catch (e) {
+      console.error("Could not save to localStorage", e);
+    }
+    setShowInviteModal(false);
+  };
 
   const daysInCurrentMonth = new Date(currentYear, currentMonth, 0).getDate();
   const remainingDays = Math.max(0, daysInCurrentMonth - planningStats.total);
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6 pb-24 font-sans">
+      {showInviteModal && (
+        <TelegramInvitationModal 
+          onClose={handleCloseInvite}
+          inviteUrl={TELEGRAM_INVITE_URL}
+        />
+      )}
+
       {/* Top Bento Row: Welcome & Month Control */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         <div className="md:col-span-8 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
