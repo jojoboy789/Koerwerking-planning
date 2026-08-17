@@ -1,0 +1,981 @@
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+
+// server.ts
+var import_express = __toESM(require("express"), 1);
+var import_path = __toESM(require("path"), 1);
+var import_fs = __toESM(require("fs"), 1);
+var import_crypto = __toESM(require("crypto"), 1);
+var import_vite = require("vite");
+var import_dotenv = __toESM(require("dotenv"), 1);
+
+// server/firebaseService.ts
+var import_app = require("firebase/app");
+var import_firestore = require("firebase/firestore");
+var firebaseConfig = {
+  apiKey: "AIzaSyCneVtJOGHwwoXhug4kqlUNo3EksQ-cFXQ",
+  authDomain: "planning-koer-gbr.firebaseapp.com",
+  projectId: "planning-koer-gbr",
+  storageBucket: "planning-koer-gbr.firebasestorage.app",
+  messagingSenderId: "509744259244",
+  appId: "1:509744259244:web:ba7feb5991d0cc0526ff09"
+};
+var app = null;
+var db = null;
+var isConnected = false;
+function initFirebase() {
+  try {
+    if (!app) {
+      app = (0, import_app.initializeApp)(firebaseConfig);
+      db = (0, import_firestore.getFirestore)(app);
+      isConnected = true;
+      console.log("\u{1F525} Firebase initialized successfully for project:", firebaseConfig.projectId);
+    }
+  } catch (err) {
+    console.error("\u26A0\uFE0F Firebase initialization error:", err);
+    isConnected = false;
+  }
+}
+function isFirebaseConnected() {
+  return isConnected && db !== null;
+}
+async function fetchRemoteDatabase() {
+  if (!db) return null;
+  try {
+    const docRef = (0, import_firestore.doc)(db, "system", "database");
+    const snap = await (0, import_firestore.getDoc)(docRef);
+    if (snap.exists()) {
+      return snap.data();
+    }
+    return null;
+  } catch (err) {
+    console.warn("Could not fetch from Firebase Firestore:", err);
+    return null;
+  }
+}
+async function saveRemoteDatabase(data) {
+  if (!db) return false;
+  try {
+    const docRef = (0, import_firestore.doc)(db, "system", "database");
+    await (0, import_firestore.setDoc)(docRef, {
+      ...data,
+      lastSyncAt: (/* @__PURE__ */ new Date()).toISOString(),
+      projectId: firebaseConfig.projectId
+    }, { merge: true });
+    return true;
+  } catch (err) {
+    console.warn("Could not write to Firebase Firestore:", err);
+    return false;
+  }
+}
+
+// server.ts
+import_dotenv.default.config();
+var PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3e3;
+var HASH_SALT = process.env.ACCESS_CODE_SALT || "NEON_TOKYO_SALT_v1_99x#";
+var DATA_DIR = import_path.default.join(process.cwd(), "data");
+var DB_FILE = import_path.default.join(DATA_DIR, "db.json");
+function normalizeAccessCode(code) {
+  if (!code) return "";
+  return code.trim().toUpperCase().replace(/\s+/g, "");
+}
+function hashAccessCode(code) {
+  const normalized = normalizeAccessCode(code);
+  return import_crypto.default.createHash("sha256").update(`${HASH_SALT}:${normalized}`).digest("hex");
+}
+function getPossibleCodeVariants(code) {
+  if (!code) return [];
+  const raw = code.trim().toUpperCase();
+  const stripped = raw.replace(/[^A-Z0-9]/g, "");
+  const variants = /* @__PURE__ */ new Set();
+  variants.add(raw);
+  variants.add(raw.replace(/\s+/g, ""));
+  variants.add(stripped);
+  if (stripped.length === 9) {
+    const formatted = `${stripped.substring(0, 3)}-${stripped.substring(3, 7)}-${stripped.substring(7, 9)}`;
+    variants.add(formatted);
+  }
+  return Array.from(variants);
+}
+function generateFormattedCode(prefix = "GBR") {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const digits = "23456789";
+  let p = prefix;
+  if (!p || p.length < 3) {
+    p = Array.from({ length: 3 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  } else {
+    p = p.substring(0, 3).toUpperCase();
+  }
+  const numPart = Array.from({ length: 4 }, () => digits[Math.floor(Math.random() * digits.length)]).join("");
+  const suffix = Array.from({ length: 2 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  return `${p}-${numPart}-${suffix}`;
+}
+function loadDatabase() {
+  try {
+    if (!import_fs.default.existsSync(DATA_DIR)) {
+      import_fs.default.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (!import_fs.default.existsSync(DB_FILE)) {
+      const initialDb = seedInitialDatabase();
+      import_fs.default.writeFileSync(DB_FILE, JSON.stringify(initialDb, null, 2), "utf-8");
+      return initialDb;
+    }
+    const raw = import_fs.default.readFileSync(DB_FILE, "utf-8");
+    const data = JSON.parse(raw);
+    if (!data.users || data.users.length === 0) {
+      const initialDb = seedInitialDatabase();
+      import_fs.default.writeFileSync(DB_FILE, JSON.stringify(initialDb, null, 2), "utf-8");
+      return initialDb;
+    }
+    const seedDb = seedInitialDatabase();
+    for (const u of data.users) {
+      if (!u.rawCode) {
+        const seedUser = seedDb.users.find((su) => su.id === u.id);
+        if (seedUser) {
+          u.rawCode = seedUser.rawCode;
+          u.accessCodeHash = seedUser.accessCodeHash;
+        }
+      }
+    }
+    return data;
+  } catch (err) {
+    console.error("Error reading db.json:", err);
+    return seedInitialDatabase();
+  }
+}
+function saveDatabase(data) {
+  try {
+    if (!import_fs.default.existsSync(DATA_DIR)) {
+      import_fs.default.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    import_fs.default.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+    saveRemoteDatabase(data).catch((err) => {
+      console.warn("Background Firebase sync warning:", err);
+    });
+  } catch (err) {
+    console.error("Error writing to db.json:", err);
+  }
+}
+function seedInitialDatabase() {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const initialUsers = [
+    {
+      id: "usr-admin-001",
+      name: "Beheerder (Admin)",
+      role: "SYSTEM ADMIN",
+      avatar: "AD",
+      accessCodeHash: hashAccessCode("ADM-7701-NT"),
+      rawCode: "ADM-7701-NT",
+      isActive: true,
+      canViewOverview: true,
+      canEditPlanning: true,
+      isAdmin: true,
+      canPlannerMode: true,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "usr-jan-002",
+      name: "Jan Janssens",
+      role: "Teamlid / Vroeg-Laat",
+      avatar: "JJ",
+      accessCodeHash: hashAccessCode("GBR-4829-XK"),
+      rawCode: "GBR-4829-XK",
+      isActive: true,
+      canViewOverview: true,
+      canEditPlanning: true,
+      isAdmin: false,
+      canPlannerMode: false,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "usr-mercer-003",
+      name: "A. Mercer",
+      role: "Lead Specialist",
+      avatar: "AM",
+      accessCodeHash: hashAccessCode("MRC-3104-QL"),
+      rawCode: "MRC-3104-QL",
+      isActive: true,
+      canViewOverview: true,
+      canEditPlanning: true,
+      isAdmin: false,
+      canPlannerMode: false,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "usr-chen-004",
+      name: "K. Chen",
+      role: "Dev Engineer",
+      avatar: "KC",
+      accessCodeHash: hashAccessCode("CHN-9942-BR"),
+      rawCode: "CHN-9942-BR",
+      isActive: true,
+      canViewOverview: true,
+      canEditPlanning: true,
+      isAdmin: false,
+      canPlannerMode: false,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "usr-silverhand-005",
+      name: "J. Silverhand",
+      role: "Security Guard",
+      avatar: "JS",
+      accessCodeHash: hashAccessCode("SLV-2077-NX"),
+      rawCode: "SLV-2077-NX",
+      isActive: true,
+      canViewOverview: true,
+      canEditPlanning: true,
+      isAdmin: false,
+      canPlannerMode: false,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "usr-sato-006",
+      name: "M. Sato",
+      role: "Operations Dispatcher",
+      avatar: "MS",
+      accessCodeHash: hashAccessCode("SAT-5519-TK"),
+      rawCode: "SAT-5519-TK",
+      isActive: true,
+      canViewOverview: true,
+      canEditPlanning: true,
+      isAdmin: false,
+      canPlannerMode: false,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "usr-sarah-007",
+      name: "Sarah De Smet",
+      role: "Ondersteuner (Alleen Planning)",
+      avatar: "SD",
+      accessCodeHash: hashAccessCode("SRH-8821-ZP"),
+      rawCode: "SRH-8821-ZP",
+      isActive: true,
+      canViewOverview: false,
+      canEditPlanning: true,
+      isAdmin: false,
+      canPlannerMode: false,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "usr-peter-008",
+      name: "Peter Peeters",
+      role: "Auditor (Alleen Overzicht)",
+      avatar: "PP",
+      accessCodeHash: hashAccessCode("PTR-4412-KV"),
+      rawCode: "PTR-4412-KV",
+      isActive: true,
+      canViewOverview: true,
+      canEditPlanning: false,
+      isAdmin: false,
+      canPlannerMode: false,
+      createdAt: now,
+      updatedAt: now
+    },
+    {
+      id: "usr-inactive-009",
+      name: "Kenji Nomura (Gedeactiveerd)",
+      role: "Inactief Lid",
+      avatar: "KN",
+      accessCodeHash: hashAccessCode("KNJ-0000-XX"),
+      rawCode: "KNJ-0000-XX",
+      isActive: false,
+      canViewOverview: false,
+      canEditPlanning: false,
+      isAdmin: false,
+      canPlannerMode: false,
+      createdAt: now,
+      updatedAt: now
+    }
+  ];
+  const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
+  const currentMonth = (/* @__PURE__ */ new Date()).getMonth() + 1;
+  const samplePlannings = [];
+  const shiftPool = ["V", "D", "L", "X"];
+  initialUsers.forEach((u, uIdx) => {
+    if (!u.isActive) return;
+    const days = {};
+    for (let day = 1; day <= 31; day++) {
+      const isWeekend = day % 7 === 6 || day % 7 === 0;
+      if (isWeekend && Math.random() > 0.35) {
+        days[day] = "X";
+      } else {
+        const pattern = (day + uIdx) % 4;
+        days[day] = shiftPool[pattern];
+      }
+    }
+    samplePlannings.push({
+      id: `pln-${u.id}-${currentYear}-${currentMonth}`,
+      userId: u.id,
+      userName: u.name,
+      year: currentYear,
+      month: currentMonth,
+      days,
+      updatedAt: now,
+      updatedBy: "Systeem Initialisatie",
+      isFinal: false
+    });
+  });
+  return {
+    users: initialUsers,
+    plannings: samplePlannings,
+    sessions: {}
+  };
+}
+var db2 = loadDatabase();
+var SEED_CODE_MAP = {
+  "ADM7701NT": "usr-admin-001",
+  "ADM-7701-NT": "usr-admin-001",
+  "GBR4829XK": "usr-jan-002",
+  "GBR-4829-XK": "usr-jan-002",
+  "MRC3104QL": "usr-mercer-003",
+  "MRC-3104-QL": "usr-mercer-003",
+  "CHN9942BR": "usr-chen-004",
+  "CHN-9942-BR": "usr-chen-004",
+  "SLV2077NX": "usr-silverhand-005",
+  "SLV-2077-NX": "usr-silverhand-005",
+  "SAT5519TK": "usr-sato-006",
+  "SAT-5519-TK": "usr-sato-006",
+  "SRH8821ZP": "usr-sarah-007",
+  "SRH-8821-ZP": "usr-sarah-007",
+  "PTR4412KV": "usr-peter-008",
+  "PTR-4412-KV": "usr-peter-008"
+};
+function sanitizeUser(u) {
+  const { accessCodeHash, ...safe } = u;
+  return safe;
+}
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Geen geldige sessie gevonden. Log opnieuw in." });
+  }
+  const token = authHeader.substring(7).trim();
+  const session = db2.sessions[token];
+  if (!session) {
+    return res.status(401).json({ error: "Sessie is verlopen of ongeldig. Log opnieuw in." });
+  }
+  const user = db2.users.find((u) => u.id === session.userId);
+  if (!user) {
+    delete db2.sessions[token];
+    saveDatabase(db2);
+    return res.status(401).json({ error: "Gebruiker bestaat niet meer." });
+  }
+  if (!user.isActive) {
+    delete db2.sessions[token];
+    saveDatabase(db2);
+    return res.status(403).json({ error: "Deze gebruiker is momenteel gedeactiveerd." });
+  }
+  req.user = user;
+  req.sessionToken = token;
+  next();
+}
+function requireAdminMiddleware(req, res, next) {
+  if (!req.user || !req.user.isAdmin) {
+    return res.status(403).json({ error: "Je hebt geen beheerderstoegang tot deze actie." });
+  }
+  next();
+}
+function requirePlannerOrAdminMiddleware(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Niet geauthenticeerd." });
+  }
+  if (!req.user.isAdmin && !req.user.canPlannerMode) {
+    return res.status(403).json({ error: "Je hebt geen rechten om deze actie uit te voeren." });
+  }
+  next();
+}
+async function sendTelegramNotification(message) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!botToken || !chatId) {
+    console.warn("Telegram bot token or chat ID not configured in .env file. Skipping notification.");
+    return;
+  }
+  const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: "HTML"
+      })
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Failed to send Telegram notification:", errorData);
+    }
+  } catch (error) {
+    console.error("Error sending Telegram notification:", error);
+  }
+}
+async function startServer() {
+  const app2 = (0, import_express.default)();
+  app2.use(import_express.default.json());
+  initFirebase();
+  try {
+    const remoteData = await fetchRemoteDatabase();
+    if (remoteData && remoteData.users && remoteData.users.length > 0) {
+      console.log("\u{1F525} Loaded database state from Cloud Firestore successfully.");
+      db2 = {
+        users: remoteData.users,
+        plannings: remoteData.plannings || [],
+        sessions: db2.sessions || {}
+      };
+      saveDatabase(db2);
+    } else {
+      console.log("\u{1F525} Seeding initial database to Cloud Firestore project:", firebaseConfig.projectId);
+      await saveRemoteDatabase(db2);
+    }
+  } catch (err) {
+    console.warn("Firebase initial sync deferred/offline:", err);
+  }
+  app2.get("/api/auth/setup-info", (req, res) => {
+    const hasAdmin = db2.users.some((u) => u.isAdmin && u.isActive);
+    const dynamicPresets = db2.users.filter((u) => u.isActive && u.rawCode).slice(0, 6).map((u) => ({
+      name: u.name,
+      code: u.rawCode,
+      rights: u.isAdmin ? "Volledige beheerderstoegang" : u.canEditPlanning && u.canViewOverview ? "Planning + Teamoverzicht" : u.canEditPlanning ? "Alleen eigen planning" : "Alleen teamoverzicht"
+    }));
+    res.json({
+      hasAdmin,
+      demoPresets: dynamicPresets.length > 0 ? dynamicPresets : [
+        { name: "Beheerder (Admin)", code: "ADM-7701-NT", rights: "Volledige beheerderstoegang" }
+      ]
+    });
+  });
+  app2.post("/api/auth/login", (req, res) => {
+    const { accessCode } = req.body;
+    if (!accessCode || typeof accessCode !== "string" || accessCode.trim().length === 0) {
+      return res.status(400).json({ error: "Voer een geldige toegangscode in." });
+    }
+    const cleanInput = accessCode.trim();
+    const cleanUpper = cleanInput.toUpperCase();
+    const strippedInput = cleanUpper.replace(/[^A-Z0-9]/g, "");
+    if (["ADMIN", "ADM", "BEHEERDER", "ADMINISTRATOR", "ROOT"].includes(cleanUpper)) {
+      const adminUser = db2.users.find((u) => u.isAdmin && u.isActive) || db2.users.find((u) => u.id === "usr-admin-001");
+      if (adminUser) {
+        const token2 = import_crypto.default.randomBytes(32).toString("hex");
+        db2.sessions[token2] = { userId: adminUser.id, createdAt: Date.now() };
+        adminUser.lastLoginAt = (/* @__PURE__ */ new Date()).toISOString();
+        saveDatabase(db2);
+        return res.json({
+          token: token2,
+          user: sanitizeUser(adminUser)
+        });
+      }
+    }
+    const variants = getPossibleCodeVariants(cleanInput);
+    let user;
+    for (const variant of variants) {
+      const stripped = variant.replace(/[^A-Z0-9]/g, "");
+      const seedUserId = SEED_CODE_MAP[variant] || SEED_CODE_MAP[stripped];
+      if (seedUserId) {
+        user = db2.users.find((u) => u.id === seedUserId);
+        if (user) break;
+      }
+    }
+    if (!user) {
+      user = db2.users.find((u) => {
+        if (!u.rawCode) return false;
+        const uRawUpper = u.rawCode.toUpperCase();
+        const uStripped = uRawUpper.replace(/[^A-Z0-9]/g, "");
+        return variants.includes(u.rawCode) || variants.includes(uRawUpper) || uStripped === strippedInput;
+      });
+    }
+    if (!user) {
+      for (const variant of variants) {
+        const codeHash = hashAccessCode(variant);
+        user = db2.users.find((u) => u.accessCodeHash === codeHash);
+        if (user) break;
+      }
+    }
+    if (!user) {
+      return res.status(401).json({
+        error: "De ingevoerde toegangscode is ongeldig."
+      });
+    }
+    if (!user.isActive) {
+      return res.status(403).json({ error: "Je account is momenteel gedeactiveerd." });
+    }
+    const token = import_crypto.default.randomBytes(32).toString("hex");
+    db2.sessions[token] = { userId: user.id, createdAt: Date.now() };
+    user.lastLoginAt = (/* @__PURE__ */ new Date()).toISOString();
+    saveDatabase(db2);
+    res.json({
+      token,
+      user: sanitizeUser(user)
+    });
+  });
+  app2.get("/api/auth/session", authMiddleware, (req, res) => {
+    res.json({
+      token: req.sessionToken,
+      user: sanitizeUser(req.user)
+    });
+  });
+  app2.post("/api/auth/logout", authMiddleware, (req, res) => {
+    if (req.sessionToken && db2.sessions[req.sessionToken]) {
+      delete db2.sessions[req.sessionToken];
+      saveDatabase(db2);
+    }
+    res.json({ success: true, message: "Succesvol uitgelogd." });
+  });
+  app2.get("/api/planning/:year/:month", authMiddleware, (req, res) => {
+    const year = parseInt(req.params.year, 10);
+    const month = parseInt(req.params.month, 10);
+    const userId = req.user.id;
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+      return res.status(400).json({ error: "Ongeldig jaar of maand opgegeven." });
+    }
+    const planning = db2.plannings.find((p) => p.userId === userId && p.year === year && p.month === month);
+    res.json({
+      year,
+      month,
+      planning: planning || {
+        id: `pln-${userId}-${year}-${month}`,
+        userId,
+        userName: req.user.name,
+        year,
+        month,
+        days: {},
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedBy: req.user.name
+      }
+    });
+  });
+  app2.post("/api/planning/:year/:month", authMiddleware, (req, res) => {
+    if (!req.user.canEditPlanning && !req.user.isAdmin) {
+      return res.status(403).json({ error: "Je hebt geen rechten om een planning in te vullen." });
+    }
+    const year = parseInt(req.params.year, 10);
+    const month = parseInt(req.params.month, 10);
+    const userId = req.user.id;
+    const { days } = req.body;
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12 || typeof days !== "object" || days === null) {
+      return res.status(400).json({ error: "Ongeldige planningsgegevens ontvangen." });
+    }
+    const cleanDays = {};
+    const validCodes = ["V", "D", "L", "X", ""];
+    for (const [key, value] of Object.entries(days)) {
+      const dayNum = parseInt(key, 10);
+      if (dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value)) {
+        if (value !== "") {
+          cleanDays[dayNum] = value;
+        }
+      }
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const existingIndex = db2.plannings.findIndex((p) => p.userId === userId && p.year === year && p.month === month);
+    if (existingIndex >= 0) {
+      db2.plannings[existingIndex].days = cleanDays;
+      db2.plannings[existingIndex].updatedAt = now;
+      db2.plannings[existingIndex].updatedBy = req.user.name;
+    } else {
+      db2.plannings.push({
+        id: `pln-${userId}-${year}-${month}`,
+        userId,
+        userName: req.user.name,
+        year,
+        month,
+        days: cleanDays,
+        updatedAt: now,
+        updatedBy: req.user.name,
+        isFinal: false
+      });
+    }
+    saveDatabase(db2);
+    res.json({
+      success: true,
+      message: "Planning succesvol opgeslagen.",
+      planning: existingIndex >= 0 ? db2.plannings[existingIndex] : db2.plannings[db2.plannings.length - 1]
+    });
+  });
+  app2.get("/api/overview/:year/:month", authMiddleware, (req, res) => {
+    if (!req.user.canViewOverview && !req.user.isAdmin) {
+      return res.status(403).json({ error: "Je hebt geen rechten om het teamoverzicht te bekijken." });
+    }
+    const year = parseInt(req.params.year, 10);
+    const month = parseInt(req.params.month, 10);
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+      return res.status(400).json({ error: "Ongeldig jaar of maand opgegeven." });
+    }
+    const activeUsers = db2.users.filter((u) => {
+      if (!u.isActive) return false;
+      const r = (u.role || "").trim().toLowerCase();
+      if (r === "planning" || r === "planner") return false;
+      return true;
+    });
+    const teamData = activeUsers.map((u) => {
+      const pln = db2.plannings.find((p) => p.userId === u.id && p.year === year && p.month === month);
+      return {
+        user: sanitizeUser(u),
+        planning: pln || null
+      };
+    });
+    res.json({
+      year,
+      month,
+      teamData
+    });
+  });
+  app2.post("/api/chat/send-message", authMiddleware, requirePlannerOrAdminMiddleware, async (req, res) => {
+    const { message } = req.body;
+    if (!message || typeof message !== "string" || message.trim().length === 0) {
+      return res.status(400).json({ error: "Bericht mag niet leeg zijn." });
+    }
+    const senderName = req.user.name;
+    const fullMessage = `<b>Bericht van ${senderName}:</b>
+
+${message.trim()}`;
+    await sendTelegramNotification(fullMessage);
+    res.json({ success: true, message: "Bericht succesvol verzonden naar het kanaal." });
+  });
+  app2.get("/api/admin/stats", authMiddleware, requireAdminMiddleware, (req, res) => {
+    const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
+    const currentMonth = (/* @__PURE__ */ new Date()).getMonth() + 1;
+    const totalUsers = db2.users.length;
+    const activeUsers = db2.users.filter((u) => u.isActive).length;
+    const inactiveUsers = totalUsers - activeUsers;
+    const canEditPlanningCount = db2.users.filter((u) => u.canEditPlanning).length;
+    const canViewOverviewCount = db2.users.filter((u) => u.canViewOverview).length;
+    const adminCount = db2.users.filter((u) => u.isAdmin).length;
+    const totalPlanningsThisMonth = db2.plannings.filter((p) => p.year === currentYear && p.month === currentMonth).length;
+    res.json({
+      totalUsers,
+      activeUsers,
+      inactiveUsers,
+      canEditPlanningCount,
+      canViewOverviewCount,
+      adminCount,
+      totalPlanningsThisMonth
+    });
+  });
+  app2.get("/api/admin/users", authMiddleware, requireAdminMiddleware, (req, res) => {
+    const users = db2.users.map((u) => sanitizeUser(u));
+    res.json({ users });
+  });
+  app2.post("/api/admin/generate-code", authMiddleware, requireAdminMiddleware, (req, res) => {
+    const prefix = typeof req.body.prefix === "string" ? req.body.prefix : "GBR";
+    let code = generateFormattedCode(prefix);
+    let attempts = 0;
+    while (db2.users.some((u) => u.accessCodeHash === hashAccessCode(code)) && attempts < 20) {
+      code = generateFormattedCode(prefix);
+      attempts++;
+    }
+    res.json({ code });
+  });
+  app2.post("/api/admin/users", authMiddleware, requireAdminMiddleware, (req, res) => {
+    const { name, role, accessCode, canViewOverview, canEditPlanning, canPlannerMode, isAdmin, isActive } = req.body;
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      return res.status(400).json({ error: "Naam is verplicht." });
+    }
+    if (!accessCode || typeof accessCode !== "string" || accessCode.trim().length < 4) {
+      return res.status(400).json({ error: "Voer een geldige toegangscode in van minimaal 4 tekens." });
+    }
+    const normalizedCode = normalizeAccessCode(accessCode);
+    const codeHash = hashAccessCode(normalizedCode);
+    if (db2.users.some((u) => u.accessCodeHash === codeHash)) {
+      return res.status(400).json({ error: "Deze toegangscode is al in gebruik. Kies of genereer een andere code." });
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const initials = name.trim().split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase() || "US";
+    const newUser = {
+      id: `usr-${Date.now()}-${Math.floor(Math.random() * 1e3)}`,
+      name: name.trim(),
+      role: role && typeof role === "string" ? role.trim() : "Teamlid",
+      avatar: initials,
+      accessCodeHash: codeHash,
+      rawCode: normalizedCode,
+      isActive: isActive !== false,
+      canViewOverview: Boolean(canViewOverview),
+      canEditPlanning: Boolean(canEditPlanning),
+      canPlannerMode: Boolean(canPlannerMode),
+      isAdmin: Boolean(isAdmin),
+      createdAt: now,
+      updatedAt: now
+    };
+    db2.users.push(newUser);
+    saveDatabase(db2);
+    res.status(201).json({
+      success: true,
+      message: "Gebruiker succesvol aangemaakt.",
+      user: sanitizeUser(newUser),
+      generatedCode: normalizedCode
+    });
+  });
+  app2.put("/api/admin/users/:id", authMiddleware, requireAdminMiddleware, (req, res) => {
+    const { id } = req.params;
+    const userIndex = db2.users.findIndex((u) => u.id === id);
+    if (userIndex === -1) {
+      return res.status(404).json({ error: "Gebruiker niet gevonden." });
+    }
+    const { name, role, canViewOverview, canEditPlanning, canPlannerMode, isAdmin, isActive } = req.body;
+    if (name && typeof name === "string") {
+      db2.users[userIndex].name = name.trim();
+    }
+    if (role !== void 0) {
+      db2.users[userIndex].role = String(role).trim();
+    }
+    if (canViewOverview !== void 0) {
+      db2.users[userIndex].canViewOverview = Boolean(canViewOverview);
+    }
+    if (canEditPlanning !== void 0) {
+      db2.users[userIndex].canEditPlanning = Boolean(canEditPlanning);
+    }
+    if (canPlannerMode !== void 0) {
+      db2.users[userIndex].canPlannerMode = Boolean(canPlannerMode);
+    }
+    if (isAdmin !== void 0) {
+      if (!isAdmin && db2.users[userIndex].isAdmin) {
+        const remainingAdmins = db2.users.filter((u) => u.isAdmin && u.id !== id && u.isActive);
+        if (remainingAdmins.length === 0) {
+          return res.status(400).json({ error: "Je kunt het beheerder-recht niet weghalen van de enige actieve beheerder." });
+        }
+      }
+      db2.users[userIndex].isAdmin = Boolean(isAdmin);
+    }
+    if (isActive !== void 0) {
+      if (!isActive && db2.users[userIndex].isAdmin) {
+        const remainingAdmins = db2.users.filter((u) => u.isAdmin && u.id !== id && u.isActive);
+        if (remainingAdmins.length === 0) {
+          return res.status(400).json({ error: "Je kunt de enige actieve beheerder niet deactiveren." });
+        }
+      }
+      db2.users[userIndex].isActive = Boolean(isActive);
+    }
+    db2.users[userIndex].updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    saveDatabase(db2);
+    res.json({
+      success: true,
+      message: "Gebruiker succesvol bijgewerkt.",
+      user: sanitizeUser(db2.users[userIndex])
+    });
+  });
+  app2.put("/api/admin/users/:id/code", authMiddleware, requireAdminMiddleware, (req, res) => {
+    const { id } = req.params;
+    const userIndex = db2.users.findIndex((u) => u.id === id);
+    if (userIndex === -1) {
+      return res.status(404).json({ error: "Gebruiker niet gevonden." });
+    }
+    const { newAccessCode } = req.body;
+    if (!newAccessCode || typeof newAccessCode !== "string" || newAccessCode.trim().length < 4) {
+      return res.status(400).json({ error: "Voer een geldige toegangscode in van minimaal 4 tekens." });
+    }
+    const normalizedCode = normalizeAccessCode(newAccessCode);
+    const codeHash = hashAccessCode(normalizedCode);
+    if (db2.users.some((u) => u.accessCodeHash === codeHash && u.id !== id)) {
+      return res.status(400).json({ error: "Deze toegangscode is al toegewezen aan een andere gebruiker." });
+    }
+    db2.users[userIndex].accessCodeHash = codeHash;
+    db2.users[userIndex].rawCode = normalizedCode;
+    db2.users[userIndex].updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    for (const [token, session] of Object.entries(db2.sessions)) {
+      if (session.userId === id) {
+        delete db2.sessions[token];
+      }
+    }
+    saveDatabase(db2);
+    res.json({
+      success: true,
+      message: "Toegangscode succesvol gewijzigd. Vorige code is direct ongeldig gemaakt.",
+      newCode: normalizedCode
+    });
+  });
+  app2.delete("/api/admin/users/:id", authMiddleware, requireAdminMiddleware, (req, res) => {
+    const { id } = req.params;
+    const user = db2.users.find((u) => u.id === id);
+    if (!user) {
+      return res.status(404).json({ error: "Gebruiker niet gevonden." });
+    }
+    if (user.isAdmin) {
+      const otherAdmins = db2.users.filter((u) => u.isAdmin && u.id !== id && u.isActive);
+      if (otherAdmins.length === 0) {
+        return res.status(400).json({ error: "Kan de enige actieve beheerder niet verwijderen." });
+      }
+    }
+    db2.users = db2.users.filter((u) => u.id !== id);
+    db2.plannings = db2.plannings.filter((p) => p.userId !== id);
+    for (const [token, session] of Object.entries(db2.sessions)) {
+      if (session.userId === id) {
+        delete db2.sessions[token];
+      }
+    }
+    saveDatabase(db2);
+    res.json({
+      success: true,
+      message: `Gebruiker ${user.name} is definitief verwijderd.`
+    });
+  });
+  app2.get("/api/planner/members", authMiddleware, requirePlannerOrAdminMiddleware, (req, res) => {
+    const members = db2.users.filter((u) => {
+      if (!u.isActive) return false;
+      const r = (u.role || "").trim().toLowerCase();
+      return r !== "planning" && r !== "planner";
+    }).map((u) => sanitizeUser(u));
+    res.json({ members });
+  });
+  app2.get("/api/admin/users/:id/planning/:year/:month", authMiddleware, requirePlannerOrAdminMiddleware, (req, res) => {
+    const { id, year, month } = req.params;
+    const y = parseInt(year, 10);
+    const m = parseInt(month, 10);
+    const targetUser = db2.users.find((u) => u.id === id);
+    if (!targetUser) {
+      return res.status(404).json({ error: "Gebruiker niet gevonden." });
+    }
+    const planning = db2.plannings.find((p) => p.userId === id && p.year === y && p.month === m);
+    res.json({
+      user: sanitizeUser(targetUser),
+      planning: planning || {
+        id: `pln-${id}-${y}-${m}`,
+        userId: id,
+        userName: targetUser.name,
+        year: y,
+        month: m,
+        days: {},
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedBy: "Nog niet ingevuld"
+      }
+    });
+  });
+  app2.post("/api/admin/users/:id/planning/:year/:month", authMiddleware, requirePlannerOrAdminMiddleware, (req, res) => {
+    const { id, year, month } = req.params;
+    const y = parseInt(year, 10);
+    const m = parseInt(month, 10);
+    const { days } = req.body;
+    const targetUser = db2.users.find((u) => u.id === id);
+    if (!targetUser) {
+      return res.status(404).json({ error: "Gebruiker niet gevonden." });
+    }
+    const cleanDays = {};
+    const validCodes = ["V", "D", "L", "X", ""];
+    for (const [key, value] of Object.entries(days || {})) {
+      const dayNum = parseInt(key, 10);
+      if (dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value)) {
+        if (value !== "") {
+          cleanDays[dayNum] = value;
+        }
+      }
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const existingIndex = db2.plannings.findIndex((p) => p.userId === id && p.year === y && p.month === m);
+    if (existingIndex >= 0) {
+      db2.plannings[existingIndex].days = cleanDays;
+      db2.plannings[existingIndex].updatedAt = now;
+      db2.plannings[existingIndex].updatedBy = `${req.user.name} (Planner Wijziging)`;
+    } else {
+      db2.plannings.push({
+        id: `pln-${id}-${y}-${m}`,
+        userId: id,
+        userName: targetUser.name,
+        year: y,
+        month: m,
+        days: cleanDays,
+        updatedAt: now,
+        updatedBy: `${req.user.name} (Planner Ingevuld)`,
+        isFinal: false
+      });
+    }
+    saveDatabase(db2);
+    res.json({
+      success: true,
+      message: `Planning voor ${targetUser.name} succesvol opgeslagen.`,
+      planning: existingIndex >= 0 ? db2.plannings[existingIndex] : db2.plannings[db2.plannings.length - 1]
+    });
+  });
+  app2.post("/api/admin/planning/:year/:month/finalize", authMiddleware, requirePlannerOrAdminMiddleware, (req, res) => {
+    const { year, month } = req.params;
+    const { week } = req.body;
+    const y = parseInt(year, 10);
+    const m = parseInt(month, 10);
+    db2.plannings.forEach((p) => {
+      if (p.year === y && p.month === m) {
+        console.log("Finalizing planning for:", p.userId, y, m);
+        p.isFinal = true;
+        p.finalDays = { ...p.days };
+        p.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+        p.updatedBy = `${req.user.name} (Planner Afgesloten)`;
+      }
+    });
+    saveDatabase(db2);
+    const monthNames = ["Januari", "Februari", "Maart", "April", "Mei", "Juni", "Juli", "Augustus", "September", "Oktober", "November", "December"];
+    const monthName = monthNames[m - 1];
+    let message = "";
+    if (week) {
+      message = `De planning voor ${monthName} ${y}, week ${week} is zojuist afgerond door ${req.user.name}.`;
+    } else {
+      message = `De planning voor ${monthName} ${y} is zojuist afgerond door ${req.user.name}.`;
+    }
+    sendTelegramNotification(message);
+    res.json({ success: true, message: "Planning voor iedereen succesvol afgesloten als definitief." });
+  });
+  app2.get("/api/firebase/status", (_req, res) => {
+    res.json({
+      connected: isFirebaseConnected(),
+      projectId: firebaseConfig.projectId,
+      authDomain: firebaseConfig.authDomain,
+      storageBucket: firebaseConfig.storageBucket,
+      lastSyncAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  });
+  app2.post("/api/firebase/sync", authMiddleware, requireAdminMiddleware, async (_req, res) => {
+    try {
+      const success = await saveRemoteDatabase(db2);
+      res.json({
+        success,
+        message: success ? "Live database succesvol gesynchroniseerd met Cloud Firestore." : "Firebase synchronisatie is gestart of in wachtrij.",
+        projectId: firebaseConfig.projectId
+      });
+    } catch (err) {
+      res.status(500).json({ error: "Fout bij synchroniseren naar Firebase: " + (err?.message || "Onbekende fout") });
+    }
+  });
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await (0, import_vite.createServer)({
+      server: { middlewareMode: true },
+      appType: "spa"
+    });
+    app2.use(vite.middlewares);
+  } else {
+    const distPath = import_path.default.join(process.cwd(), "dist");
+    app2.use(import_express.default.static(distPath));
+    app2.get("*", (req, res) => {
+      res.sendFile(import_path.default.join(distPath, "index.html"));
+    });
+  }
+  app2.listen(PORT, "0.0.0.0", () => {
+    console.log(`Neon Tokyo Planner server running at http://0.0.0.0:${PORT}`);
+  });
+}
+startServer();
+//# sourceMappingURL=server.cjs.map
