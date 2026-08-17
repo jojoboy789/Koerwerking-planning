@@ -10,6 +10,7 @@ import { AdminPortalView } from './components/AdminPortalView';
 import { FinalPlanningView } from './components/FinalPlanningView';
 import { GeneralChatView } from './components/GeneralChatView';
 import { Loader2 } from 'lucide-react';
+import { CookieConsent } from './components/CookieConsent';
 
 const MainLayout: React.FC = () => {
   const { user, isLoading, canViewOverview, canEditPlanning, isAdmin, canPlannerMode } = useAuth();
@@ -77,6 +78,7 @@ const MainLayout: React.FC = () => {
         {effectiveTab === 'admin' && isAdmin && <AdminPortalView />}
         {effectiveTab === 'chat' && (canPlannerMode || isAdmin) && <GeneralChatView />}
       </main>
+      <CookieConsent />
     </div>
   );
 };
