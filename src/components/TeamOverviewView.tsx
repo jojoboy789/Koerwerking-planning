@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { TeamMemberOverview, ShiftCode, SHIFT_DEFINITIONS } from '../types';
+import { WeekSelectionModal } from './WeekSelectionModal';
 import {
   ChevronLeft,
   ChevronRight,
@@ -38,6 +39,8 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   const { user, isPlanner, isAdmin } = useAuth();
   const [currentYear, setCurrentYear] = useState<number>(() => new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(() => new Date().getMonth() + 1);
+  
+  const [showFinalizeModal, setShowFinalizeModal] = useState<boolean>(false);
 
   const [teamData, setTeamData] = useState<TeamMemberOverview[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -330,22 +333,13 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
 
         {/* Action button to Planner Mode & Month Navigation */}
         <div className="flex items-center gap-3">
-          {(user?.canPlannerMode || isAdmin) && (
+          {(isPlanner || isAdmin) && (
             <button
-              onClick={async () => {
-                if (confirm("Weet je zeker dat je deze planning als definitief wilt markeren?")) {
-                  try {
-                    await api.finalizePlanning(currentYear, currentMonth);
-                    fetchOverview();
-                  } catch (err: any) {
-                    alert('Fout bij afronden planning: ' + err.message);
-                  }
-                }
-              }}
+              onClick={() => setShowFinalizeModal(true)}
               className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm shadow-emerald-200 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>Planning volledig</span>
+              <span>Planning Afronden</span>
             </button>
           )}
 
@@ -1112,6 +1106,13 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
           </div>
         </div>
       )}
+       <WeekSelectionModal
+        show={showFinalizeModal}
+        onClose={() => setShowFinalizeModal(false)}
+        year={currentYear}
+        month={currentMonth}
+        daysInMonth={daysInMonth}
+      />
     </div>
   );
 };

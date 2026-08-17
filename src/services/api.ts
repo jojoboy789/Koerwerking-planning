@@ -177,10 +177,13 @@ class ApiClient {
     return this.request<{ user: User; planning: MonthlyPlanning }>(`/admin/users/${userId}/planning/${year}/${month}`);
   }
 
-  async finalizePlanning(year: number, month: number) {
+  async finalizePlanning(year: number, month: number, week?: number | 'all') {
     return this.request<{ success: boolean; message: string }>(
       `/admin/planning/${year}/${month}/finalize`,
-      { method: 'POST' }
+      {
+        method: 'POST',
+        body: JSON.stringify({ week: week === 'all' ? undefined : week }),
+      }
     );
   }
 

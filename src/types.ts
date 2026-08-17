@@ -24,7 +24,7 @@ export const SHIFT_DEFINITIONS: Record<Exclude<ShiftCode, ''>, ShiftInfo> = {
     code: 'D',
     label: 'Dagdienst',
     shortLabel: 'Dag',
-    description: 'Dagdienst (????)',
+    description: 'Dagdienst (08:00-16 of 09:00-17:00)',
     colorClass: 'code-D',
     activeClass: 'bg-amber-500 text-white shadow-md shadow-amber-200 border-amber-500',
     textColor: '#b45309',

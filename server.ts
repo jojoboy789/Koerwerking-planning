@@ -572,12 +572,12 @@ async function startServer() {
 
     if (!user) {
       return res.status(401).json({
-        error: 'De ingevoerde toegangscode is ongeldig. Gebruik bijvoorbeeld ADM-7701-NT (Admin) of GBR-4829-XK (Medewerker).'
+        error: 'De ingevoerde toegangscode is ongeldig.'
       });
     }
 
     if (!user.isActive) {
-      return res.status(403).json({ error: 'Deze toegangscode is momenteen gedeactiveerd.' });
+      return res.status(403).json({ error: 'Je account is momenteel gedeactiveerd.' });
     }
 
     // Generate secure session token
@@ -1064,6 +1064,7 @@ async function startServer() {
   // Finalize all team planning (Planner / Admin)
   app.post('/api/admin/planning/:year/:month/finalize', authMiddleware, requirePlannerOrAdminMiddleware, (req: AuthenticatedRequest, res: Response) => {
     const { year, month } = req.params;
+    const { week } = req.body;
     const y = parseInt(year, 10);
     const m = parseInt(month, 10);
 
@@ -1081,7 +1082,14 @@ async function startServer() {
 
     // Send Telegram notification
     const monthNames = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
-    const message = `De planning voor ${monthNames[m - 1]} ${y} is zojuist afgerond door ${req.user!.name}.`;
+    const monthName = monthNames[m - 1];
+    let message = ''
+    if(week){
+      message = `De planning voor ${monthName} ${y}, week ${week} is zojuist afgerond door ${req.user!.name}.`;
+    }
+    else{
+      message = `De planning voor ${monthName} ${y} is zojuist afgerond door ${req.user!.name}.`;
+    }
     sendTelegramNotification(message);
 
     res.json({ success: true, message: 'Planning voor iedereen succesvol afgesloten als definitief.' });
