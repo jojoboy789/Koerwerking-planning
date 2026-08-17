@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '../services/api';
 import { TeamMemberOverview, ShiftCode, SHIFT_DEFINITIONS } from '../types';
-import { ChevronLeft, ChevronRight, AlertTriangle, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertTriangle, Loader2, Download } from 'lucide-react';
+import { PrintableWeekView } from './PrintableWeekView';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 const MONTH_NAMES = [
   'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
@@ -56,6 +59,7 @@ export const FinalPlanningView: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState<number>(() => new Date().getMonth() + 1);
   const [teamData, setTeamData] = useState<TeamMemberOverview[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isPrinting, setIsPrinting] = useState<number | null>(null);
 
   const fetchTeamOverview = useCallback(async () => {
     setIsLoading(true);
@@ -83,21 +87,20 @@ export const FinalPlanningView: React.FC = () => {
   const daysInMonth = useMemo(() => new Date(currentYear, currentMonth, 0).getDate(), [currentYear, currentMonth]);
 
   const weeks = useMemo(() => {
-    const weeksMap: { [week: number]: {days: number[], hasWorkday: boolean} } = {};
+    const weeksMap: { [week: number]: {days: { day: number; date: Date }[], hasWorkday: boolean} } = {};
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(currentYear, currentMonth - 1, day);
       const weekNum = getWeekNumber(date);
       if (!weeksMap[weekNum]) {
         weeksMap[weekNum] = { days: [], hasWorkday: false };
       }
-      weeksMap[weekNum].days.push(day);
+      weeksMap[weekNum].days.push({ day, date });
     }
 
-    // Check if any member works in a given week
     teamData.forEach(member => {
         Object.keys(weeksMap).forEach(weekNum => {
             const weekInfo = weeksMap[parseInt(weekNum)];
-            const hasWorkDayInWeek = weekInfo.days.some(day => {
+            const hasWorkDayInWeek = weekInfo.days.some(({ day }) => {
                 const shift = member.planning?.finalDays?.[day];
                 return shift && shift !== 'X';
             });
@@ -114,11 +117,56 @@ export const FinalPlanningView: React.FC = () => {
 
   }, [teamData, currentYear, currentMonth, daysInMonth]);
 
+  const handleDownloadPdf = async (weekNumber: number) => {
+    setIsPrinting(weekNumber);
+    const input = document.getElementById(`printable-week-${weekNumber}`);
+    if (input) {
+      html2canvas(input, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        onclone: (clonedDoc) => {
+            // Aggressively remove all styles to prevent oklch color errors
+            const head = clonedDoc.head;
+            if (head) {
+                const styles = head.querySelectorAll('style, link[rel="stylesheet"]');
+                styles.forEach(style => style.remove());
+            }
+        }
+      }).then((canvas) => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('l', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const ratio = canvasWidth / canvasHeight;
+        let width = pdfWidth - 20; // with margin
+        let height = width / ratio;
+
+        if (height > pdfHeight - 20) {
+          height = pdfHeight - 20; // respect margin
+          width = height * ratio;
+        }
+
+        const x = (pdfWidth - width) / 2;
+        const y = (pdfHeight - height) / 2;
+
+        pdf.addImage(imgData, 'PNG', x, y, width, height);
+        pdf.save(`planning-week-${currentYear}-${weekNumber}.pdf`);
+      }).finally(() => {
+        setIsPrinting(null);
+      });
+    } else {
+      setIsPrinting(null);
+    }
+  };
+
   const renderWeeklyPlanning = () => (
     <div className="space-y-6">
       {weeks.map(({ week, days }) => {
         const membersForWeek = teamData.filter(member => {
-            const hasWorkDayInWeek = days.some(day => {
+            const hasWorkDayInWeek = days.some(({ day }) => {
                 const shift = member.planning?.finalDays?.[day];
                 return shift && shift !== 'X';
             });
@@ -128,45 +176,61 @@ export const FinalPlanningView: React.FC = () => {
         if (membersForWeek.length === 0) return null;
 
         return (
-          <div key={week} className="overflow-x-auto bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-              <h3 className="font-bold text-lg text-indigo-700 mb-3 ml-1">Week {week}</h3>
-              <table className="w-full border-collapse min-w-[600px]">
-                  <thead>
-                      <tr className="border-b border-slate-200">
-                          <th className="sticky left-0 z-10 bg-white p-2 font-bold text-slate-700 text-left text-sm w-48">Teamlid</th>
-                          {days.map(day => (
-                             <th key={day} className="p-1 min-w-[70px]">
-                                 <DayHeader day={day} month={currentMonth} year={currentYear} />
-                             </th>
-                          ))}
-                      </tr>
-                  </thead>
-                  <tbody>
-                      {membersForWeek.map(member => (
-                          <tr key={member.user.id} className="border-t border-slate-100 hover:bg-slate-50/70 transition-colors group">
-                              <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50/70 p-2 font-semibold text-sm text-slate-800 whitespace-nowrap border-r border-slate-100">
-                                  <div className="flex items-center gap-3">
-                                      <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 text-xs border border-indigo-200 shrink-0">
-                                          {member.user.avatar || member.user.name.substring(0, 2).toUpperCase()}
-                                      </div>
-                                      <div>
-                                          <div className="font-semibold text-slate-900 text-sm">{member.user.name}</div>
-                                          <div className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">{member.user.role || 'Teamlid'}</div>
-                                      </div>
-                                  </div>
-                              </td>
-                              {days.map(day => {
-                                  const shift = (member.planning?.finalDays?.[day] as ShiftCode | null) || null;
-                                  return (
-                                      <td key={day} className="p-1 text-center border-r border-slate-100">
-                                         <ShiftCell shift={shift} memberName={member.user.name} day={day} />
-                                      </td>
-                                  );
-                              })}
-                          </tr>
-                      ))}
-                  </tbody>
-              </table>
+          <div key={week}>
+            <div className="overflow-x-auto bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex justify-between items-center mb-3 ml-1">
+                    <h3 className="font-bold text-lg text-indigo-700">Week {week}</h3>
+                    <button 
+                      onClick={() => handleDownloadPdf(week)} 
+                      disabled={isPrinting !== null}
+                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm shadow-indigo-200 transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isPrinting === week ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      <span>{isPrinting === week ? 'Moment...' : 'Download PDF'}</span>
+                    </button>
+                </div>
+                <table className="w-full border-collapse min-w-[600px]">
+                    <thead>
+                        <tr className="border-b border-slate-200">
+                            <th className="sticky left-0 z-10 bg-white p-2 font-bold text-slate-700 text-left text-sm w-48">Teamlid</th>
+                            {days.map(({ day }) => (
+                              <th key={day} className="p-1 min-w-[70px]">
+                                  <DayHeader day={day} month={currentMonth} year={currentYear} />
+                              </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {membersForWeek.map(member => (
+                            <tr key={member.user.id} className="border-t border-slate-100 hover:bg-slate-50/70 transition-colors group">
+                                <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50/70 p-2 font-semibold text-sm text-slate-800 whitespace-nowrap border-r border-slate-100">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 text-xs border border-indigo-200 shrink-0">
+                                            {member.user.avatar || member.user.name.substring(0, 2).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <div className="font-semibold text-slate-900 text-sm">{member.user.name}</div>
+                                            <div className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">{member.user.role || 'Teamlid'}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                {days.map(({ day }) => {
+                                    const shift = (member.planning?.finalDays?.[day] as ShiftCode | null) || null;
+                                    return (
+                                        <td key={day} className="p-1 text-center border-r border-slate-100">
+                                          <ShiftCell shift={shift} memberName={member.user.name} day={day} />
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {/* Off-screen component for printing, using inline styles only */}
+            <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', zIndex: -100 }}>
+                <PrintableWeekView weekNumber={week} weekData={days} teamData={membersForWeek} year={currentYear} month={currentMonth} />
+            </div>
           </div>
         )
       })}
