@@ -124,8 +124,15 @@ export const LoginPage: React.FC = () => {
 
       {/* Footer Branding */}
       <footer className="relative z-10 mt-8 text-center">
-        <p className="text-xs text-slate-400 font-medium">
-          Mijn Planning &mdash; Bento Grid Layout
+        <p className="text-xs font-medium">
+          <a
+            href="https://capturedcode.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-blue-600 animate-gradient"
+          >
+            gemaakt met liefde door Capturedcode
+          </a>
         </p>
       </footer>
 
