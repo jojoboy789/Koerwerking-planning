@@ -9,7 +9,7 @@ interface ChangePasswordModalProps {
 }
 
 export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClose }) => {
-  const { user } = useAuth();
+  const { logout } = useAuth();
   const [oldCode, setOldCode] = useState('');
   const [newCode, setNewCode] = useState('');
   const [confirmCode, setConfirmCode] = useState('');
@@ -38,6 +38,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClos
       const res = await api.changeMyPassword({ oldCode, newCode });
       setSuccessMessage(res.message || 'Je wachtwoord is succesvol gewijzigd.');
       setTimeout(() => {
+        logout();
         onClose();
       }, 2000);
     } catch (err: unknown) {
