@@ -1,3 +1,4 @@
+
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -607,6 +608,79 @@ async function startServer() {
       saveDatabase(db);
     }
     res.json({ success: true, message: 'Succesvol uitgelogd.' });
+  });
+
+  // Change own access code
+  app.put('/api/auth/change-password', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    const { oldCode, newCode } = req.body;
+    const userId = req.user!.id;
+
+    if (!oldCode || !newCode || typeof newCode !== 'string' || newCode.trim().length < 6) {
+      return res.status(400).json({ error: 'De nieuwe code moet minimaal 6 karakters lang zijn.' });
+    }
+
+    const userIndex = db.users.findIndex(u => u.id === userId);
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'Gebruiker niet gevonden.' }); // Should not happen with authMiddleware
+    }
+    
+    const user = db.users[userIndex];
+
+    // Verify old code
+    const variants = getPossibleCodeVariants(oldCode);
+    let isOldCodeValid = false;
+    
+    // 1. Check direct rawCode match
+    if (user.rawCode) {
+        const uRawUpper = user.rawCode.toUpperCase();
+        const uStripped = uRawUpper.replace(/[^A-Z0-9]/g, '');
+        const oldStripped = oldCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (variants.includes(user.rawCode) || variants.includes(uRawUpper) || uStripped === oldStripped) {
+            isOldCodeValid = true;
+        }
+    }
+
+    // 2. Check hashed codes if not already valid
+    if (!isOldCodeValid) {
+       for (const variant of variants) {
+        const codeHash = hashAccessCode(variant);
+        if (user.accessCodeHash === codeHash) {
+            isOldCodeValid = true;
+            break;
+        }
+      }
+    }
+    
+    if (!isOldCodeValid) {
+        return res.status(401).json({ error: 'De oude toegangscode is onjuist.' });
+    }
+
+    // New code is valid, update it
+    const normalizedNewCode = normalizeAccessCode(newCode);
+    const newCodeHash = hashAccessCode(normalizedNewCode);
+
+    // Check if new code is already in use by another user
+    if (db.users.some(u => u.accessCodeHash === newCodeHash && u.id !== userId)) {
+      return res.status(400).json({ error: 'Deze nieuwe toegangscode is al in gebruik. Kies een andere.' });
+    }
+
+    db.users[userIndex].accessCodeHash = newCodeHash;
+    db.users[userIndex].rawCode = normalizedNewCode;
+    db.users[userIndex].updatedAt = new Date().toISOString();
+
+    // Invalidate all sessions for this user
+    for (const [token, session] of Object.entries(db.sessions)) {
+      if (session.userId === userId) {
+        delete db.sessions[token];
+      }
+    }
+
+    saveDatabase(db);
+
+    res.json({
+      success: true,
+      message: 'Je toegangscode is succesvol gewijzigd. Je wordt nu uitgelogd en kunt met de nieuwe code inloggen.',
+    });
   });
 
   // === PLANNING ENDPOINTS (CURRENT USER) ===

@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Calendar, Users, Shield, LogOut, X, UserCheck, Menu, CalendarCheck, MessageSquare, Send } from 'lucide-react';
+import { LayoutDashboard, Calendar, Users, Shield, LogOut, X, UserCheck, Menu, CalendarCheck, MessageSquare, Send, Key } from 'lucide-react';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 interface NavigationProps {
   currentTab: string;
@@ -13,6 +15,7 @@ export const Navigation: React.FC<NavigationProps> = ({
 }) => {
   const { user, logout, canViewOverview, canEditPlanning, isAdmin, canPlannerMode } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, show: canEditPlanning || isAdmin },
@@ -33,6 +36,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsMenuOpen(false);
+        setShowChangePasswordModal(false);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -115,6 +119,19 @@ export const Navigation: React.FC<NavigationProps> = ({
             })}
           </nav>
           
+          <div className="mt-4 space-y-2">
+            <button
+              onClick={() => {
+                setShowChangePasswordModal(true);
+                setIsMenuOpen(false);
+              }}
+              className="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-base font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              <Key className="w-5 h-5 text-slate-400" />
+              <span>Verander wachtwoord</span>
+            </button>
+          </div>
+
           {/* Telegram Invitation Link */}
           <div className="mt-8">
             <a
@@ -136,6 +153,7 @@ export const Navigation: React.FC<NavigationProps> = ({
           </div>
         </div>
       </div>
+      {showChangePasswordModal && <ChangePasswordModal onClose={() => setShowChangePasswordModal(false)} />}
     </>
   );
 };

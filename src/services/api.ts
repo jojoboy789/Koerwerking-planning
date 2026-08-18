@@ -94,6 +94,13 @@ class ApiClient {
     }
   }
 
+  async changeMyPassword({ oldCode, newCode }: { oldCode: string; newCode: string }) {
+    return this.request<{ success: boolean; message: string }>('/auth/change-password', {
+      method: 'PUT',
+      body: JSON.stringify({ oldCode, newCode }),
+    });
+  }
+
   // Planning (Current User)
   async getPlanning(year: number, month: number) {
     return this.request<{ year: number; month: number; planning: MonthlyPlanning }>(`/planning/${year}/${month}`);

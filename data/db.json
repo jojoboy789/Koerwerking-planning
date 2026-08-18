@@ -1,137 +1,132 @@
 {
   "users": [
     {
-      "createdAt": "2026-08-14T10:21:26.507Z",
-      "lastLoginAt": "2026-08-17T18:42:59.509Z",
-      "role": "Teamlid",
-      "name": "Jonas",
+      "canViewOverview": true,
+      "rawCode": "JONAS27",
+      "avatar": "J",
       "id": "usr-1786702886507-595",
       "isActive": true,
-      "canEditPlanning": true,
       "isAdmin": true,
-      "updatedAt": "2026-08-17T07:56:16.824Z",
-      "accessCodeHash": "d45945e0b222d23eea2f075b78a467185bcf5ed4a8c67993f598d8e018fd12eb",
-      "canViewOverview": true,
-      "avatar": "J",
-      "rawCode": "JONAS27"
+      "createdAt": "2026-08-14T10:21:26.507Z",
+      "accessCodeHash": "7dbdaa6faaa9b43a5a977d288a9b38fc6edfe8dba8247e9bc71da5ac797357ce",
+      "updatedAt": "2026-08-18T19:37:11.969Z",
+      "canEditPlanning": true,
+      "lastLoginAt": "2026-08-18T19:37:40.931Z",
+      "role": "Teamlid",
+      "name": "Jonas"
     },
     {
-      "isActive": true,
-      "lastLoginAt": "2026-08-16T12:42:54.929Z",
+      "canViewOverview": true,
+      "rawCode": "PLANNER1",
+      "avatar": "P",
+      "role": "planning",
+      "name": "test",
       "id": "usr-1786703167206-375",
       "isAdmin": false,
-      "updatedAt": "2026-08-15T20:51:46.598Z",
-      "canPlannerMode": true,
       "accessCodeHash": "19bbc91e5fcb70af548b49034024bd83264589513b91f5b431a38023eaf936a3",
-      "name": "test",
-      "role": "planning",
+      "lastLoginAt": "2026-08-16T12:42:54.929Z",
+      "canPlannerMode": true,
       "canEditPlanning": false,
-      "avatar": "P",
-      "canViewOverview": true,
       "createdAt": "2026-08-14T10:26:07.206Z",
-      "rawCode": "PLANNER1"
+      "isActive": true,
+      "updatedAt": "2026-08-15T20:51:46.598Z"
     },
     {
-      "updatedAt": "2026-08-14T11:09:55.147Z",
-      "rawCode": "DYL-7637-GS",
+      "isAdmin": false,
       "isActive": true,
+      "avatar": "D",
+      "role": "Teamlid",
+      "canEditPlanning": true,
+      "name": "Dylan",
       "canViewOverview": true,
       "lastLoginAt": "2026-08-15T18:46:51.758Z",
-      "createdAt": "2026-08-14T11:09:55.147Z",
-      "name": "Dylan",
-      "role": "Teamlid",
-      "accessCodeHash": "2e9b2d79a44234c02474cbdb5e3df81307738f9a8ce3266653bcda43be53fcce",
       "id": "usr-1786705795147-449",
-      "isAdmin": false,
-      "avatar": "D",
-      "canEditPlanning": true
+      "updatedAt": "2026-08-14T11:09:55.147Z",
+      "accessCodeHash": "2e9b2d79a44234c02474cbdb5e3df81307738f9a8ce3266653bcda43be53fcce",
+      "createdAt": "2026-08-14T11:09:55.147Z",
+      "rawCode": "DYL-7637-GS"
     },
     {
-      "canViewOverview": true,
-      "id": "usr-1786711502024-703",
-      "accessCodeHash": "c8aca1f635144d6177c79938775d80fca6760db1c21f3826adbe75d8b65d6c88",
-      "isAdmin": false,
       "role": "Teamlid",
       "name": "Illya",
-      "createdAt": "2026-08-14T12:45:02.024Z",
-      "avatar": "I",
-      "isActive": true,
-      "lastLoginAt": "2026-08-14T12:45:32.807Z",
-      "canEditPlanning": true,
       "rawCode": "GBR-7838-VU",
-      "updatedAt": "2026-08-14T12:45:02.024Z"
+      "canEditPlanning": true,
+      "accessCodeHash": "c8aca1f635144d6177c79938775d80fca6760db1c21f3826adbe75d8b65d6c88",
+      "isAdmin": false,
+      "isActive": true,
+      "canViewOverview": true,
+      "lastLoginAt": "2026-08-14T12:45:32.807Z",
+      "avatar": "I",
+      "updatedAt": "2026-08-14T12:45:02.024Z",
+      "id": "usr-1786711502024-703",
+      "createdAt": "2026-08-14T12:45:02.024Z"
     },
     {
-      "createdAt": "2026-08-14T12:45:08.884Z",
-      "accessCodeHash": "198f1b0bc943d62063b945f5db6590728da62371eff6e64f32aacaf0be1179f6",
-      "canViewOverview": true,
-      "isAdmin": false,
       "avatar": "J",
-      "isActive": true,
+      "canEditPlanning": true,
+      "accessCodeHash": "198f1b0bc943d62063b945f5db6590728da62371eff6e64f32aacaf0be1179f6",
       "lastLoginAt": "2026-08-14T12:46:22.442Z",
-      "updatedAt": "2026-08-14T12:45:08.884Z",
+      "role": "Teamlid",
       "rawCode": "GBR-7795-YM",
-      "role": "Teamlid",
-      "canEditPlanning": true,
       "name": "Jordy",
-      "id": "usr-1786711508884-479"
-    },
-    {
-      "role": "Teamlid",
-      "accessCodeHash": "49727c57c946b51bab3583665c4e2cdf0eacee9fc449efb0be8bc5bd3b802eae",
-      "name": "Bruno",
       "isActive": true,
-      "canEditPlanning": true,
+      "createdAt": "2026-08-14T12:45:08.884Z",
+      "updatedAt": "2026-08-14T12:45:08.884Z",
       "isAdmin": false,
-      "updatedAt": "2026-08-14T12:45:15.636Z",
-      "lastLoginAt": "2026-08-14T12:47:33.489Z",
-      "rawCode": "GBR-5878-CD",
-      "createdAt": "2026-08-14T12:45:15.636Z",
-      "canViewOverview": true,
-      "avatar": "B",
-      "id": "usr-1786711515636-473"
+      "id": "usr-1786711508884-479",
+      "canViewOverview": true
     },
     {
+      "createdAt": "2026-08-14T12:45:15.636Z",
       "canEditPlanning": true,
+      "id": "usr-1786711515636-473",
+      "updatedAt": "2026-08-14T12:45:15.636Z",
+      "rawCode": "GBR-5878-CD",
+      "accessCodeHash": "49727c57c946b51bab3583665c4e2cdf0eacee9fc449efb0be8bc5bd3b802eae",
+      "avatar": "B",
+      "isAdmin": false,
       "isActive": true,
-      "createdAt": "2026-08-15T20:51:05.435Z",
-      "avatar": "K",
+      "name": "Bruno",
+      "lastLoginAt": "2026-08-14T12:47:33.489Z",
       "role": "Teamlid",
-      "id": "usr-1786827065436-614",
+      "canViewOverview": true
+    },
+    {
+      "isActive": true,
+      "canEditPlanning": true,
+      "avatar": "K",
+      "accessCodeHash": "77d4cb28bb01fb22aa2f641c9e47a84fb015282baf4cc10f9b42ccff9fe701bc",
+      "role": "Teamlid",
       "name": "Kurt",
       "isAdmin": false,
       "canPlannerMode": false,
+      "rawCode": "GBR-8456-WJ",
       "updatedAt": "2026-08-15T20:51:05.435Z",
-      "accessCodeHash": "77d4cb28bb01fb22aa2f641c9e47a84fb015282baf4cc10f9b42ccff9fe701bc",
+      "id": "usr-1786827065436-614",
       "canViewOverview": true,
-      "rawCode": "GBR-8456-WJ"
+      "createdAt": "2026-08-15T20:51:05.435Z"
     },
     {
-      "isAdmin": false,
-      "canEditPlanning": false,
       "id": "usr-1786949731027-356",
-      "avatar": "J",
-      "createdAt": "2026-08-17T06:55:31.027Z",
-      "role": "Planner",
-      "name": "Jarne",
-      "lastLoginAt": "2026-08-17T06:55:43.261Z",
       "canViewOverview": true,
-      "accessCodeHash": "76e12c4e2cb9df0080e6043c37d5d37feace9de4bceb80d4169cb75b8d35890e",
-      "rawCode": "JARNE11",
-      "canPlannerMode": true,
+      "name": "Jarne",
+      "role": "Planner",
       "isActive": true,
+      "isAdmin": false,
+      "canPlannerMode": true,
+      "avatar": "J",
+      "accessCodeHash": "76e12c4e2cb9df0080e6043c37d5d37feace9de4bceb80d4169cb75b8d35890e",
+      "lastLoginAt": "2026-08-17T06:55:43.261Z",
+      "rawCode": "JARNE11",
+      "canEditPlanning": false,
+      "createdAt": "2026-08-17T06:55:31.027Z",
       "updatedAt": "2026-08-17T06:55:31.027Z"
     }
   ],
   "plannings": [
     {
-      "updatedBy": "Jonas",
-      "year": 2026,
-      "userId": "usr-1786702886507-595",
-      "id": "pln-usr-1786702886507-595-2026-9",
       "updatedAt": "2026-08-14T11:02:16.400Z",
-      "month": 9,
-      "userName": "Jonas",
+      "id": "pln-usr-1786702886507-595-2026-9",
       "days": {
         "1": "X",
         "2": "X",
@@ -163,10 +158,15 @@
         "28": "L",
         "29": "L",
         "30": "D"
-      }
+      },
+      "userId": "usr-1786702886507-595",
+      "userName": "Jonas",
+      "updatedBy": "Jonas",
+      "month": 9,
+      "year": 2026
     },
     {
-      "userName": "Jonas",
+      "month": 8,
       "days": {
         "17": "D",
         "18": "X",
@@ -176,9 +176,6 @@
         "22": "X",
         "23": "X"
       },
-      "userId": "usr-1786702886507-595",
-      "isFinal": true,
-      "id": "pln-usr-1786702886507-595-2026-8",
       "updatedBy": "Jonas (Planner Afgesloten)",
       "finalDays": {
         "17": "D",
@@ -189,12 +186,20 @@
         "22": "X",
         "23": "X"
       },
-      "updatedAt": "2026-08-17T10:07:17.752Z",
-      "month": 8,
-      "year": 2026
+      "year": 2026,
+      "userId": "usr-1786702886507-595",
+      "id": "pln-usr-1786702886507-595-2026-8",
+      "userName": "Jonas",
+      "isFinal": true,
+      "updatedAt": "2026-08-17T10:07:17.752Z"
     },
     {
+      "id": "pln-usr-1786705795147-449-2026-9",
+      "month": 9,
       "userName": "Dylan",
+      "userId": "usr-1786705795147-449",
+      "year": 2026,
+      "updatedBy": "Dylan",
       "days": {
         "1": "L",
         "2": "L",
@@ -227,16 +232,14 @@
         "29": "X",
         "30": "V"
       },
-      "updatedAt": "2026-08-14T12:44:17.688Z",
-      "year": 2026,
-      "month": 9,
-      "userId": "usr-1786705795147-449",
-      "updatedBy": "Dylan",
-      "id": "pln-usr-1786705795147-449-2026-9"
+      "updatedAt": "2026-08-14T12:44:17.688Z"
     },
     {
-      "month": 9,
+      "updatedBy": "Illya",
       "id": "pln-usr-1786711502024-703-2026-9",
+      "year": 2026,
+      "month": 9,
+      "updatedAt": "2026-08-14T12:46:12.648Z",
       "days": {
         "1": "V",
         "2": "X",
@@ -270,18 +273,9 @@
         "30": "X"
       },
       "userId": "usr-1786711502024-703",
-      "year": 2026,
-      "updatedBy": "Illya",
-      "userName": "Illya",
-      "updatedAt": "2026-08-14T12:46:12.648Z"
+      "userName": "Illya"
     },
     {
-      "year": 2026,
-      "month": 9,
-      "id": "pln-usr-1786711508884-479-2026-9",
-      "updatedBy": "Jordy",
-      "userId": "usr-1786711508884-479",
-      "userName": "Jordy",
       "days": {
         "1": "X",
         "2": "V",
@@ -314,9 +308,18 @@
         "29": "X",
         "30": "V"
       },
-      "updatedAt": "2026-08-14T12:47:21.224Z"
+      "id": "pln-usr-1786711508884-479-2026-9",
+      "updatedAt": "2026-08-14T12:47:21.224Z",
+      "updatedBy": "Jordy",
+      "userName": "Jordy",
+      "year": 2026,
+      "userId": "usr-1786711508884-479",
+      "month": 9
     },
     {
+      "year": 2026,
+      "id": "pln-usr-1786711515636-473-2026-9",
+      "userName": "Bruno",
       "days": {
         "1": "D",
         "2": "D",
@@ -350,16 +353,15 @@
         "30": "X"
       },
       "updatedAt": "2026-08-14T12:48:18.649Z",
-      "id": "pln-usr-1786711515636-473-2026-9",
-      "updatedBy": "Bruno",
       "month": 9,
-      "userId": "usr-1786711515636-473",
-      "userName": "Bruno",
-      "year": 2026
+      "updatedBy": "Bruno",
+      "userId": "usr-1786711515636-473"
     },
     {
-      "updatedBy": "Jonas (Planner Afgesloten)",
-      "finalDays": {
+      "id": "pln-usr-1786705795147-449-2026-8",
+      "updatedAt": "2026-08-17T10:07:17.752Z",
+      "userId": "usr-1786705795147-449",
+      "days": {
         "17": "V",
         "18": "X",
         "19": "V",
@@ -368,14 +370,12 @@
         "22": "X",
         "23": "X"
       },
-      "updatedAt": "2026-08-17T10:07:17.752Z",
-      "year": 2026,
-      "id": "pln-usr-1786705795147-449-2026-8",
       "userName": "Dylan",
-      "isFinal": true,
-      "userId": "usr-1786705795147-449",
       "month": 8,
-      "days": {
+      "isFinal": true,
+      "year": 2026,
+      "updatedBy": "Jonas (Planner Afgesloten)",
+      "finalDays": {
         "17": "V",
         "18": "X",
         "19": "V",
@@ -386,6 +386,10 @@
       }
     },
     {
+      "updatedAt": "2026-08-17T10:07:17.753Z",
+      "id": "pln-usr-1786711502024-703-2026-8",
+      "year": 2026,
+      "isFinal": true,
       "days": {
         "17": "X",
         "18": "X",
@@ -395,10 +399,6 @@
         "22": "X",
         "23": "X"
       },
-      "userName": "Illya",
-      "isFinal": true,
-      "updatedBy": "Jonas (Planner Afgesloten)",
-      "userId": "usr-1786711502024-703",
       "finalDays": {
         "17": "X",
         "18": "X",
@@ -408,25 +408,24 @@
         "22": "X",
         "23": "X"
       },
-      "updatedAt": "2026-08-17T10:07:17.753Z",
-      "year": 2026,
-      "id": "pln-usr-1786711502024-703-2026-8",
-      "month": 8
+      "updatedBy": "Jonas (Planner Afgesloten)",
+      "userName": "Illya",
+      "month": 8,
+      "userId": "usr-1786711502024-703"
     },
     {
-      "days": {},
-      "userName": "Jordy",
-      "updatedBy": "Jonas (Planner Afgesloten)",
-      "finalDays": {},
       "updatedAt": "2026-08-17T10:07:17.753Z",
       "userId": "usr-1786711508884-479",
+      "days": {},
+      "userName": "Jordy",
       "year": 2026,
-      "id": "pln-usr-1786711508884-479-2026-8",
       "month": 8,
-      "isFinal": true
+      "isFinal": true,
+      "finalDays": {},
+      "updatedBy": "Jonas (Planner Afgesloten)",
+      "id": "pln-usr-1786711508884-479-2026-8"
     },
     {
-      "month": 8,
       "id": "pln-usr-1786711515636-473-2026-8",
       "finalDays": {
         "17": "L",
@@ -438,9 +437,11 @@
         "23": "X"
       },
       "updatedBy": "Jonas (Planner Afgesloten)",
-      "updatedAt": "2026-08-17T10:07:17.753Z",
-      "userId": "usr-1786711515636-473",
       "year": 2026,
+      "userId": "usr-1786711515636-473",
+      "updatedAt": "2026-08-17T10:07:17.753Z",
+      "isFinal": true,
+      "month": 8,
       "days": {
         "17": "L",
         "18": "L",
@@ -450,22 +451,10 @@
         "22": "X",
         "23": "X"
       },
-      "isFinal": true,
       "userName": "Bruno"
     },
     {
-      "userId": "usr-1786827065436-614",
-      "isFinal": true,
-      "days": {
-        "17": "X",
-        "18": "V",
-        "19": "X",
-        "20": "X",
-        "21": "X",
-        "22": "X",
-        "23": "X"
-      },
-      "userName": "Kurt",
+      "updatedBy": "Jonas (Planner Afgesloten)",
       "finalDays": {
         "17": "X",
         "18": "V",
@@ -475,24 +464,35 @@
         "22": "X",
         "23": "X"
       },
-      "year": 2026,
-      "updatedBy": "Jonas (Planner Afgesloten)",
       "id": "pln-usr-1786827065436-614-2026-8",
+      "userName": "Kurt",
+      "isFinal": true,
+      "days": {
+        "17": "X",
+        "18": "V",
+        "19": "X",
+        "20": "X",
+        "21": "X",
+        "22": "X",
+        "23": "X"
+      },
+      "month": 8,
       "updatedAt": "2026-08-17T10:07:17.754Z",
-      "month": 8
+      "year": 2026,
+      "userId": "usr-1786827065436-614"
     },
     {
-      "isFinal": false,
-      "userId": "usr-1786827065436-614",
       "days": {
         "4": "D"
       },
-      "userName": "Kurt",
-      "month": 9,
       "updatedBy": "Jonas (Planner Ingevuld)",
+      "updatedAt": "2026-08-17T06:45:42.705Z",
+      "month": 9,
       "year": 2026,
+      "userId": "usr-1786827065436-614",
+      "userName": "Kurt",
       "id": "pln-usr-1786827065436-614-2026-9",
-      "updatedAt": "2026-08-17T06:45:42.705Z"
+      "isFinal": false
     }
   ],
   "sessions": {
@@ -508,17 +508,9 @@
       "userId": "usr-1786703167206-375",
       "createdAt": 1786704421273
     },
-    "c18d0963a30931f298deefedebfd3b1a327fc4d44361900d959ef46910911039": {
+    "8624355a4279c3bd290f7c0458867165cdcb6a7dfcf70a514f8916911f778832": {
       "userId": "usr-1786702886507-595",
-      "createdAt": 1786884325434
-    },
-    "294cf985d2642f90e9cdee709dbb566628094daa3f978904dc77132f62852ab4": {
-      "userId": "usr-1786702886507-595",
-      "createdAt": 1786953749902
-    },
-    "d4cb5f03a99443a0f01b06697f1eaecef3cb604e0dc70c2d5ad01c2b1293a2fd": {
-      "userId": "usr-1786702886507-595",
-      "createdAt": 1786992179509
+      "createdAt": 1787081860931
     }
   }
 }
