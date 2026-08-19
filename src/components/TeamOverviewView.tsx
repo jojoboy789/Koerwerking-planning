@@ -471,7 +471,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                           isToday
                             ? 'bg-indigo-50 text-indigo-700 font-bold border-b-2 border-b-indigo-600'
                             : isWeekend
-                            ? 'text-slate-500 bg-slate-100/60'
+                            ? 'text-slate-500 bg-slate-300/40'
                             : 'text-slate-600'
                         }`}
                         title={`Klik om bezetting en shifts van Dag ${dayNum} te inspecteren en bewerken`}
@@ -542,7 +542,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                             key={dayNum}
                             onClick={() => handleOpenDayModal(dayNum)}
                             className={`p-1 text-center border-r border-slate-100 last:border-r-0 cursor-pointer hover:bg-indigo-50/50 ${
-                              isToday ? 'bg-indigo-50/30' : isWeekend ? 'bg-slate-50/50' : ''
+                              isToday ? 'bg-indigo-50/30' : isWeekend ? 'bg-slate-300/40' : ''
                             }`}
                           >
                             <div
@@ -583,6 +583,8 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                     const working = tot.V + tot.D + tot.L;
                     const isCovered = tot.isIdeal;
                     const hasConflict = tot.hasConflict;
+                    const date = new Date(currentYear, currentMonth - 1, dayNum);
+                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
                     return (
                       <td
@@ -590,7 +592,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                         onClick={() => handleOpenDayModal(dayNum)}
                         className={`p-1.5 text-center border-r border-slate-100 cursor-pointer hover:bg-indigo-100/50 transition-colors ${
                           hasConflict ? 'bg-amber-50/60' : isCovered ? 'bg-emerald-50/40' : ''
-                        }`}
+                        }${isWeekend ? ' bg-slate-300/40' : ''}`}
                         title={`Dag ${dayNum}: V:${tot.V}, D:${tot.D}, L:${tot.L} (Klik om te bekijken)`}
                       >
                         <div className="flex items-center justify-center gap-1">
@@ -862,7 +864,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">
-                    Dag {selectedDayDetail} - {DAY_NAMES[new Date(currentYear, currentMonth - 1, selectedDayDetail).getDay()]}{' '}
+                    Dag {selectedDayDetail} - {DAY_NAMES[new Date(currentYear, currentMonth - 1, selectedDayDetail).getDay()]} {' '}
                     {selectedDayDetail} {MONTH_NAMES[currentMonth - 1]} {currentYear}
                   </h3>
                   <p className="text-xs text-slate-500">
