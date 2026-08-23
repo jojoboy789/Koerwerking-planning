@@ -39,7 +39,7 @@ function getWeekNumber(d: Date): number {
 }
 
 export const TeamPlanningView: React.FC = () => {
-  const { user: currentUser, isPlanner, isAdmin } = useAuth();
+  const { user: currentUser, canPlannerMode, isAdmin } = useAuth();
 
   const [currentYear, setCurrentYear] = useState<number>(() => new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(() => new Date().getMonth() + 1);
@@ -400,7 +400,7 @@ export const TeamPlanningView: React.FC = () => {
 
         {/* Month Selector Controls */}
         <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 self-start md:self-auto">
-          {(isPlanner || isAdmin) && (
+          {(canPlannerMode || isAdmin) && (
             <button
               onClick={() => setShowFinalizeModal(true)}
               className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm shadow-emerald-200 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
