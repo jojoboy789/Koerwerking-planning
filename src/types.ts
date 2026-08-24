@@ -35,8 +35,8 @@ export const SHIFT_DEFINITIONS: Record<Exclude<ShiftCode, ''>, ShiftInfo> = {
     shortLabel: 'Laat',
     description: 'Late shift (13:00-21:00)',
     colorClass: 'code-L',
-    activeClass: 'bg-indigo-600 text-white shadow-md shadow-indigo-200 border-indigo-600',
-    textColor: '#4338ca',
+    activeClass: 'bg-purple-600 text-white shadow-md shadow-purple-200 border-purple-600',
+    textColor: '#7e22ce',
   },
   R: {
     code: 'R',

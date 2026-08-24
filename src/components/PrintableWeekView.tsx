@@ -48,10 +48,11 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({ weekNumber
                   const shiftCode = member.planning?.finalDays?.[day] || member.planning?.days?.[day] || '';
 
                   let bgColor = '#f3f4f6';
-                  if (shiftCode === 'V') bgColor = '#dcfce7';
-                  if (shiftCode === 'D') bgColor = '#fef9c3';
-                  if (shiftCode === 'L') bgColor = '#dbeafe';
-                  if (shiftCode === 'X') bgColor = '#d1d5db';
+                  if (shiftCode === 'V') bgColor = '#d1fae5';
+                  if (shiftCode === 'D') bgColor = '#fef3c7';
+                  if (shiftCode === 'L') bgColor = '#f3e8ff';
+                  if (shiftCode === 'R') bgColor = '#dbeafe';
+                  if (shiftCode === 'X') bgColor = '#e2e8f0';
 
                   return (
                     <td key={day} style={{ padding: '1rem 1.5rem', textAlign: 'center', backgroundColor: bgColor }}>
@@ -68,9 +69,9 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({ weekNumber
       <div style={{ marginTop: '2rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 'bold', color: '#1f2937', marginBottom: '1rem' }}>Dienstcodes Legenda</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '1rem' }}>
-          {Object.entries(SHIFT_DEFINITIONS).map(([code, { shortLabel, description }]) => (
+          {Object.entries(SHIFT_DEFINITIONS).map(([code, { shortLabel, description, textColor }]) => (
             <div key={code} style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ width: '2rem', height: '2rem', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: 'white', marginRight: '0.75rem', backgroundColor: code === 'V' ? '#22c55e' : code === 'D' ? '#f59e0b' : code === 'L' ? '#3b82f6' : '#6b7280' }}>
+              <div style={{ width: '2rem', height: '2rem', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: 'white', marginRight: '0.75rem', backgroundColor: textColor }}>
                 {code}
               </div>
               <div>
