@@ -159,6 +159,7 @@ export const MyPlanningView: React.FC = () => {
     let vCount = 0;
     let dCount = 0;
     let lCount = 0;
+    let rCount = 0;
     let xCount = 0;
     let filledCount = 0;
 
@@ -167,11 +168,12 @@ export const MyPlanningView: React.FC = () => {
       if (code === 'V') vCount++;
       else if (code === 'D') dCount++;
       else if (code === 'L') lCount++;
+      else if (code === 'R') rCount++;
       else if (code === 'X') xCount++;
       if (code && code !== '') filledCount++;
     }
 
-    return { vCount, dCount, lCount, xCount, filledCount, emptyCount: daysInMonth - filledCount };
+    return { vCount, dCount, lCount, rCount, xCount, filledCount, emptyCount: daysInMonth - filledCount };
   }, [daysState, daysInMonth]);
 
   const monthTitle = `${MONTH_NAMES[currentMonth - 1]} ${currentYear}`.toUpperCase();
@@ -220,7 +222,7 @@ export const MyPlanningView: React.FC = () => {
       )}
 
       {/* Stats and Fast Fill Helpers - Bento Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Vroeg (V)</div>
@@ -254,6 +256,18 @@ export const MyPlanningView: React.FC = () => {
           </div>
           <div className="w-8 h-8 rounded-xl bg-indigo-100 border border-indigo-200 flex items-center justify-center font-bold text-indigo-700">
             L
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+          <div>
+            <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Rust (R)</div>
+            <div className="text-xl font-bold text-sky-700 mt-0.5">
+              {stats.rCount} <span className="text-xs font-normal text-slate-400">dagen</span>
+            </div>
+          </div>
+          <div className="w-8 h-8 rounded-xl bg-sky-100 border border-sky-200 flex items-center justify-center font-bold text-sky-700">
+            R
           </div>
         </div>
 
@@ -374,9 +388,9 @@ export const MyPlanningView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Shift Selector Buttons [V] [D] [L] [X] */}
+                {/* Shift Selector Buttons [V] [D] [L] [R] [X] */}
                 <div className="flex items-center gap-2">
-                  {(['V', 'D', 'L', 'X'] as ShiftCode[]).map((code) => {
+                  {(['V', 'D', 'L', 'R', 'X'] as ShiftCode[]).map((code) => {
                     const shiftDef = SHIFT_DEFINITIONS[code as Exclude<ShiftCode, ''>];
                     const isSelected = selectedShift === code;
 

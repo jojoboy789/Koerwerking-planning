@@ -301,6 +301,7 @@ export const TeamPlanningView: React.FC = () => {
     let vCount = 0;
     let dCount = 0;
     let lCount = 0;
+    let rCount = 0;
     let xCount = 0;
     let workDaysCount = 0;
 
@@ -315,13 +316,15 @@ export const TeamPlanningView: React.FC = () => {
       } else if (code === 'L') {
         lCount++;
         workDaysCount++;
+      } else if (code === 'R') {
+        rCount++;
       } else if (code === 'X') {
         xCount++;
       }
     }
 
     const totalHours = workDaysCount * 8;
-    return { vCount, dCount, lCount, xCount, workDaysCount, totalHours };
+    return { vCount, dCount, lCount, rCount, xCount, workDaysCount, totalHours };
   }, [daysState, daysInMonth]);
 
   // Calendar weeks computation
@@ -392,7 +395,7 @@ export const TeamPlanningView: React.FC = () => {
                 </span>
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                Selecteer een teamlid om shifts (V, D, L, X) direct per dag aan te passen en op te slaan.
+                Selecteer een teamlid om shifts (V, D, L, R, X) direct per dag aan te passen en op te slaan.
               </p>
             </div>
           </div>
@@ -508,11 +511,12 @@ export const TeamPlanningView: React.FC = () => {
                 const filledShiftsCount = Object.keys(userDays).length;
 
                 // Mini counters
-                let v = 0, d = 0, l = 0, x = 0;
+                let v = 0, d = 0, l = 0, r = 0, x = 0;
                 Object.values(userDays).forEach((code) => {
                   if (code === 'V') v++;
                   if (code === 'D') d++;
                   if (code === 'L') l++;
+                  if (code === 'R') r++;
                   if (code === 'X') x++;
                 });
 
@@ -575,8 +579,13 @@ export const TeamPlanningView: React.FC = () => {
                               L:{l}
                             </span>
                           )}
+                          {r > 0 && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 font-mono font-bold" title={`${r} Rustdagen`}>
+                              R:{r}
+                            </span>
+                          )}
                           {x > 0 && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono font-bold" title={`${x} Rust/Verlof dagen`}>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono font-bold" title={`${x} Vrije dagen`}>
                               X:{x}
                             </span>
                           )}
@@ -685,8 +694,8 @@ export const TeamPlanningView: React.FC = () => {
                 </div>
 
                 {/* Shift codes buttons */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {(['V', 'D', 'L', 'X'] as const).map((code) => {
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {(['V', 'D', 'L', 'R', 'X'] as const).map((code) => {
                     const def = SHIFT_DEFINITIONS[code];
                     const isSelectedBrush = activeBrushCode === code;
                     return (
@@ -711,7 +720,7 @@ export const TeamPlanningView: React.FC = () => {
                           <div>
                             <p className="text-xs font-bold leading-tight">{def.shortLabel}</p>
                             <p className="text-[10px] opacity-80 leading-tight">
-                              {code === 'V' ? '05:00 - 13:00' : code === 'D' ? '08:30 - 17:00' : code === 'L' ? '13:00 - 21:00' : 'Rustdag / Verlof'}
+                              {def.description}
                             </p>
                           </div>
                         </div>
@@ -785,6 +794,8 @@ export const TeamPlanningView: React.FC = () => {
                                 ? 'bg-amber-50/60 border-amber-300 hover:border-amber-500'
                                 : shiftCode === 'L'
                                 ? 'bg-indigo-50/60 border-indigo-300 hover:border-indigo-500'
+                                : shiftCode === 'R'
+                                ? 'bg-sky-50/60 border-sky-300 hover:border-sky-500'
                                 : shiftCode === 'X'
                                 ? 'bg-slate-100 border-slate-300 hover:border-slate-400'
                                 : isWeekend
@@ -826,6 +837,8 @@ export const TeamPlanningView: React.FC = () => {
                                       ? 'bg-amber-500 text-white'
                                       : shiftCode === 'L'
                                       ? 'bg-indigo-600 text-white'
+                                      : shiftCode === 'R'
+                                      ? 'bg-sky-500 text-white'
                                       : 'bg-slate-700 text-white'
                                   }`}
                                 >
@@ -858,6 +871,10 @@ export const TeamPlanningView: React.FC = () => {
                 <div className="bg-indigo-50/60 p-2.5 rounded-xl border border-indigo-200">
                   <p className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider">Late shifts (L)</p>
                   <p className="text-lg font-bold text-indigo-900 mt-0.5">{stats.lCount} <span className="text-[10px] font-normal text-indigo-700">({stats.lCount * 8}u)</span></p>
+                </div>
+                 <div className="bg-sky-50/60 p-2.5 rounded-xl border border-sky-200">
+                  <p className="text-[10px] font-bold text-sky-800 uppercase tracking-wider">Rustdagen (R)</p>
+                  <p className="text-lg font-bold text-sky-900 mt-0.5">{stats.rCount} <span className="text-[10px] font-normal text-sky-700">dagen</span></p>
                 </div>
                 <div className="bg-slate-100 p-2.5 rounded-xl border border-slate-200">
                   <p className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Vrij / Verlof (X)</p>

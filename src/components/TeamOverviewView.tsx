@@ -130,12 +130,14 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
         V: number;
         D: number;
         L: number;
+        R: number;
         X: number;
         empty: number;
         byShift: {
           V: Array<{ userId: string; name: string; role?: string }>;
           D: Array<{ userId: string; name: string; role?: string }>;
           L: Array<{ userId: string; name: string; role?: string }>;
+          R: Array<{ userId: string; name: string; role?: string }>;
           X: Array<{ userId: string; name: string; role?: string }>;
           none: Array<{ userId: string; name: string; role?: string }>;
         };
@@ -157,9 +159,10 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
         V: 0,
         D: 0,
         L: 0,
+        R: 0,
         X: 0,
         empty: 0,
-        byShift: { V: [], D: [], L: [], X: [], none: [] },
+        byShift: { V: [], D: [], L: [], R: [], X: [], none: [] },
         isIdeal: false,
         hasConflict: false,
         isMissing: false,
@@ -183,6 +186,9 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
         } else if (code === 'L') {
           totals[d].L++;
           totals[d].byShift.L.push(memberInfo);
+        } else if (code === 'R') {
+          totals[d].R++;
+          totals[d].byShift.R.push(memberInfo);
         } else if (code === 'X') {
           totals[d].X++;
           totals[d].byShift.X.push(memberInfo);
@@ -392,6 +398,10 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
             <span className="w-3.5 h-3.5 rounded-sm code-L inline-block"></span>
             <span className="text-slate-600 font-medium">Laat (L)</span>
           </div>
+           <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs">
+            <span className="w-3.5 h-3.5 rounded-sm code-R inline-block"></span>
+            <span className="text-slate-600 font-medium">Rustdag (R)</span>
+          </div>
           <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs">
             <span className="w-3.5 h-3.5 rounded-sm code-X inline-block"></span>
             <span className="text-slate-600 font-medium">Vrij (X)</span>
@@ -535,6 +545,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                         if (code === 'V') codeClass = 'code-V';
                         else if (code === 'D') codeClass = 'code-D';
                         else if (code === 'L') codeClass = 'code-L';
+                        else if (code === 'R') codeClass = 'code-R';
                         else if (code === 'X') codeClass = 'code-X';
 
                         return (
@@ -556,6 +567,8 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                                   ? 'Dag'
                                   : code === 'L'
                                   ? 'Laat'
+                                  : code === 'R'
+                                  ? 'Rustdag'
                                   : code === 'X'
                                   ? 'Vrij'
                                   : 'Nog niet ingevuld'
@@ -1026,7 +1039,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                         return null;
                       })()}
 
-                      {(['V', 'D', 'L', 'X'] as const).map((code) => {
+                      {(['V', 'D', 'L', 'R', 'X'] as const).map((code) => {
                         const isSelected = currentShift === code;
                         return (
                           <button
@@ -1041,6 +1054,8 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                                   ? 'bg-amber-500 text-white shadow-xs ring-2 ring-amber-300'
                                   : code === 'L'
                                   ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-300'
+                                  : code === 'R'
+                                  ? 'bg-sky-500 text-white shadow-xs ring-2 ring-sky-300'
                                   : 'bg-slate-700 text-white shadow-xs ring-2 ring-slate-400'
                                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                             }`}

@@ -64,9 +64,15 @@
 }
 
 .code-L {
-  background-color: #e0e7ff; /* indigo-100 */
-  color: #4338ca; /* indigo-700 */
-  border: 1px solid #c7d2fe; /* indigo-200 */
+  background-color: #fce7f3; /* pink-100 */
+  color: #be185d; /* pink-700 */
+  border: 1px solid #fbcfe8; /* pink-200 */
+}
+
+.code-R {
+  background-color: #dbeafe; /* blue-100 */
+  color: #1e40af; /* blue-800 */
+  border: 1px solid #bfdbfe; /* blue-200 */
 }
 
 .code-X {
@@ -90,5 +96,3 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
-
-

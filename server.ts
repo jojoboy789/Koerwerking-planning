@@ -307,7 +307,7 @@ function seedInitialDatabase(): DatabaseSchema {
   const currentMonth = new Date().getMonth() + 1;
 
   const samplePlannings: StoredPlanning[] = [];
-  const shiftPool = ['V', 'D', 'L', 'X'];
+  const shiftPool = ['V', 'D', 'L', 'X', 'R'];
 
   initialUsers.forEach((u, uIdx) => {
     if (!u.isActive) return;
@@ -317,7 +317,7 @@ function seedInitialDatabase(): DatabaseSchema {
       if (isWeekend && Math.random() > 0.35) {
         days[day] = 'X';
       } else {
-        const pattern = (day + uIdx) % 4;
+        const pattern = (day + uIdx) % 5;
         days[day] = shiftPool[pattern];
       }
     }
@@ -729,7 +729,7 @@ async function startServer() {
 
     // Validate days map
     const cleanDays: Record<number, string> = {};
-    const validCodes = ['V', 'D', 'L', 'X', ''];
+    const validCodes = ['V', 'D', 'L', 'R', 'X', ''];
     for (const [key, value] of Object.entries(days)) {
       const dayNum = parseInt(key, 10);
       if (dayNum >= 1 && dayNum <= 31 && typeof value === 'string' && validCodes.includes(value)) {
@@ -1096,7 +1096,7 @@ async function startServer() {
     }
 
     const cleanDays: Record<number, string> = {};
-    const validCodes = ['V', 'D', 'L', 'X', ''];
+    const validCodes = ['V', 'D', 'L', 'R', 'X', ''];
     for (const [key, value] of Object.entries(days || {})) {
       const dayNum = parseInt(key, 10);
       if (dayNum >= 1 && dayNum <= 31 && typeof value === 'string' && validCodes.includes(value)) {

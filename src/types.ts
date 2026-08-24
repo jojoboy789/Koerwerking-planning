@@ -1,4 +1,4 @@
-export type ShiftCode = 'V' | 'D' | 'L' | 'X' | '';
+export type ShiftCode = 'V' | 'D' | 'L' | 'R' | 'X' | '';
 
 export interface ShiftInfo {
   code: ShiftCode;
@@ -37,6 +37,15 @@ export const SHIFT_DEFINITIONS: Record<Exclude<ShiftCode, ''>, ShiftInfo> = {
     colorClass: 'code-L',
     activeClass: 'bg-indigo-600 text-white shadow-md shadow-indigo-200 border-indigo-600',
     textColor: '#4338ca',
+  },
+  R: {
+    code: 'R',
+    label: 'Rustdag',
+    shortLabel: 'Rust',
+    description: 'Ingeplande rustdag',
+    colorClass: 'code-R',
+    activeClass: 'bg-sky-500 text-white shadow-md shadow-sky-200 border-sky-500',
+    textColor: '#0ea5e9',
   },
   X: {
     code: 'X',
