@@ -5,7 +5,7 @@ import { SHIFT_DEFINITIONS } from '../types';
 import { TelegramInvitationModal } from './TelegramInvitationModal';
 import {
   Calendar, Users, Shield, ArrowRight, Sparkles, CheckCircle2,
-  Clock, ShieldCheck
+  Clock, ShieldCheck, Info
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -57,7 +57,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       // ignore
     });
 
-    // Check if we should show the Telegram invite modal
     const hasSeenInvite = localStorage.getItem('hasSeenTelegramInvite');
     const userRole = user?.role?.toLowerCase() || '';
 
@@ -88,7 +87,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         />
       )}
 
-      {/* Top Bento Row: Welcome & Month Control */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         <div className="md:col-span-8 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
@@ -123,11 +121,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* Main Grid: Bento Action Cards & Live Stats */}
+      {canEditPlanning && (
+        <div className="p-4 rounded-2xl bg-sky-50 border border-sky-200 flex items-center gap-3 text-sky-800 text-xs font-medium">
+          <Info className="w-5 h-5 text-sky-600 shrink-0" />
+          <span>
+            <strong>Let op:</strong> Je kunt de planning voor een maand invullen of wijzigen tot en met de 7e van de maand ervoor.
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left 8 cols: Quick Navigation Cards */}
         <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* My Planning Card */}
           <div
             onClick={() => onNavigate('planning')}
             className="p-6 rounded-3xl bg-white border border-slate-200 shadow-xs hover:border-indigo-300 hover:shadow-md transition-all duration-200 group cursor-pointer flex flex-col justify-between"
@@ -149,7 +153,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          {/* Team Overview Card */}
           {canViewOverview ? (
             <div
               onClick={() => onNavigate('overview')}
@@ -193,7 +196,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
           )}
 
-          {/* Admin Portal Card */}
           {isAdmin ? (
             <div
               onClick={() => onNavigate('admin')}
@@ -247,7 +249,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           )}
         </div>
 
-        {/* Right 4 cols: Stats Bento Box (Indigo Theme matching Design HTML) */}
         <div className="lg:col-span-4 bg-indigo-600 p-6 sm:p-8 rounded-3xl text-white shadow-xl shadow-indigo-100 flex flex-col justify-between">
           <div>
             <h3 className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-6">
@@ -279,7 +280,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* Shift Codes Legend Bento Box */}
       <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-xs">
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
           Dienstcodes Legenda
