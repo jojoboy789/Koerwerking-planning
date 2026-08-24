@@ -727,6 +727,18 @@ async function startServer() {
       return res.status(400).json({ error: 'Ongeldige planningsgegevens ontvangen.' });
     }
 
+    // Prevent editing after the 7th of the PREVIOUS month for non-planners
+    const now = new Date();
+    const isPlanner = req.user!.canPlannerMode || req.user!.isAdmin;
+    if (!isPlanner) {
+        const deadline = new Date(year, month - 2, 8); // Deadline is 8th of the month BEFORE the one being edited
+        if (now >= deadline) {
+            const monthNames = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
+            const targetMonthName = monthNames[month - 1];
+            return res.status(403).json({ error: `De deadline voor het aanpassen van de planning voor ${targetMonthName} is verstreken (7e van de vorige maand).` });
+        }
+    }
+
     // Validate days map
     const cleanDays: Record<number, string> = {};
     const validCodes = ['V', 'D', 'L', 'R', 'X', ''];
@@ -739,12 +751,12 @@ async function startServer() {
       }
     }
 
-    const now = new Date().toISOString();
+    const updatedAt = new Date().toISOString();
     const existingIndex = db.plannings.findIndex(p => p.userId === userId && p.year === year && p.month === month);
 
     if (existingIndex >= 0) {
       db.plannings[existingIndex].days = cleanDays;
-      db.plannings[existingIndex].updatedAt = now;
+      db.plannings[existingIndex].updatedAt = updatedAt;
       db.plannings[existingIndex].updatedBy = req.user!.name;
     } else {
       db.plannings.push({
@@ -754,7 +766,7 @@ async function startServer() {
         year,
         month,
         days: cleanDays,
-        updatedAt: now,
+        updatedAt,
         updatedBy: req.user!.name,
         isFinal: false,
       });

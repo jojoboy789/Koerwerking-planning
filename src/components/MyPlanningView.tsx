@@ -35,6 +35,19 @@ export const MyPlanningView: React.FC = () => {
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const { isLockedForEditing, deadlineFormatted } = useMemo(() => {
+    if (!user || user.canPlannerMode || user.isAdmin) {
+      return { isLockedForEditing: false, deadlineFormatted: '' };
+    }
+    const now = new Date();
+    const deadline = new Date(currentYear, currentMonth - 2, 8); // Deadline is 8th of the month BEFORE the one being edited
+    const deadlineStr = `7 ${MONTH_NAMES[(currentMonth - 2 + 12) % 12].toLowerCase()} ${deadline.getFullYear()}`;
+    return { 
+        isLockedForEditing: now >= deadline, 
+        deadlineFormatted: deadlineStr 
+    };
+  }, [currentYear, currentMonth, user]);
+
   const daysInMonth = useMemo(() => {
     return new Date(currentYear, currentMonth, 0).getDate();
   }, [currentYear, currentMonth]);
@@ -67,13 +80,14 @@ export const MyPlanningView: React.FC = () => {
 
   // Check if there are unsaved changes
   const hasUnsavedChanges = useMemo(() => {
+    if (isLockedForEditing) return false;
     for (let d = 1; d <= daysInMonth; d++) {
       if ((daysState[d] || '') !== (initialDaysState[d] || '')) {
         return true;
       }
     }
     return false;
-  }, [daysState, initialDaysState, daysInMonth]);
+  }, [daysState, initialDaysState, daysInMonth, isLockedForEditing]);
 
   // Navigate months
   const handlePrevMonth = () => {
@@ -96,12 +110,10 @@ export const MyPlanningView: React.FC = () => {
 
   // Toggle shift for a day
   const handleSetShift = (day: number, code: ShiftCode) => {
-    if (!canEditPlanning && !isAdmin) return;
+    if (isLockedForEditing || (!canEditPlanning && !isAdmin)) return;
     setDaysState((prev) => {
       const current = prev[day];
-      // If clicking the active one, keep or toggle
       if (current === code) {
-        // Deselect or retain
         return { ...prev, [day]: '' };
       }
       return { ...prev, [day]: code };
@@ -111,7 +123,7 @@ export const MyPlanningView: React.FC = () => {
 
   // Batch auto-fill helpers
   const handleFillPattern = (pattern: 'weekdays-D' | 'weekends-X' | 'clear') => {
-    if (!canEditPlanning && !isAdmin) return;
+    if (isLockedForEditing || (!canEditPlanning && !isAdmin)) return;
     setDaysState((prev) => {
       const updated = { ...prev };
       for (let day = 1; day <= daysInMonth; day++) {
@@ -132,7 +144,7 @@ export const MyPlanningView: React.FC = () => {
 
   // Save planning
   const handleSave = async () => {
-    if (!canEditPlanning && !isAdmin) return;
+    if (isLockedForEditing || !hasUnsavedChanges || (!canEditPlanning && !isAdmin)) return;
     setIsSaving(true);
     setErrorMessage(null);
     setSaveSuccessMessage(null);
@@ -156,12 +168,7 @@ export const MyPlanningView: React.FC = () => {
 
   // Monthly stats summary
   const stats = useMemo(() => {
-    let vCount = 0;
-    let dCount = 0;
-    let lCount = 0;
-    let rCount = 0;
-    let xCount = 0;
-    let filledCount = 0;
+    let vCount = 0, dCount = 0, lCount = 0, rCount = 0, xCount = 0, filledCount = 0;
 
     for (let day = 1; day <= daysInMonth; day++) {
       const code = daysState[day];
@@ -180,7 +187,6 @@ export const MyPlanningView: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-36 space-y-6 font-sans">
-      {/* Month Navigation Banner - Bento Card */}
       <div className="flex items-center justify-between bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
         <button
           id="btn-prev-month"
@@ -192,12 +198,8 @@ export const MyPlanningView: React.FC = () => {
         </button>
 
         <div className="text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-            {monthTitle}
-          </h2>
-          <p className="text-xs text-slate-500 mt-1 font-medium">
-            {stats.filledCount} van de {daysInMonth} dagen ingevuld
-          </p>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{monthTitle}</h2>
+          <p className="text-xs text-slate-500 mt-1 font-medium">{stats.filledCount} van de {daysInMonth} dagen ingevuld</p>
         </div>
 
         <button
@@ -210,119 +212,85 @@ export const MyPlanningView: React.FC = () => {
         </button>
       </div>
 
-      {/* Permissions Notice if not allowed to edit */}
-      {!canEditPlanning && !isAdmin && (
+      {!isLockedForEditing && !canEditPlanning && !isAdmin && (
         <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center gap-3 text-amber-800 text-xs font-medium">
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>
-            Je hebt momenteel alleen leesrechten. Vraag een beheerder om <strong>Planning invullen</strong> in te schakelen
-            om wijzigingen te kunnen opslaan.
-          </span>
+          <span>Je hebt momenteel alleen leesrechten. Vraag een beheerder om <strong>Planning invullen</strong> in te schakelen om wijzigingen te kunnen opslaan.</span>
         </div>
       )}
 
-      {/* Stats and Fast Fill Helpers - Bento Cards */}
+      {isLockedForEditing && (
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-center gap-4 text-rose-800 text-sm">
+          <AlertTriangle className="w-6 h-6 text-rose-500 shrink-0" />
+          <div>
+            <h4 className="font-bold text-rose-900">Planning is vergrendeld</h4>
+            <p className="text-xs mt-0.5">De deadline voor het invullen van deze planning was {deadlineFormatted}. Aanpassingen kunnen alleen nog door een planner worden gedaan.</p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Vroeg (V)</div>
-            <div className="text-xl font-bold text-emerald-700 mt-0.5">
-              {stats.vCount} <span className="text-xs font-normal text-slate-400">dagen</span>
-            </div>
+            <div className="text-xl font-bold text-emerald-700 mt-0.5">{stats.vCount} <span className="text-xs font-normal text-slate-400">dagen</span></div>
           </div>
-          <div className="w-8 h-8 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center font-bold text-emerald-700">
-            V
-          </div>
+          <div className="w-8 h-8 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center font-bold text-emerald-700">V</div>
         </div>
 
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Dag (D)</div>
-            <div className="text-xl font-bold text-amber-700 mt-0.5">
-              {stats.dCount} <span className="text-xs font-normal text-slate-400">dagen</span>
-            </div>
+            <div className="text-xl font-bold text-amber-700 mt-0.5">{stats.dCount} <span className="text-xs font-normal text-slate-400">dagen</span></div>
           </div>
-          <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center font-bold text-amber-700">
-            D
-          </div>
+          <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center font-bold text-amber-700">D</div>
         </div>
 
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Laat (L)</div>
-            <div className="text-xl font-bold text-indigo-700 mt-0.5">
-              {stats.lCount} <span className="text-xs font-normal text-slate-400">dagen</span>
-            </div>
+            <div className="text-xl font-bold text-purple-700 mt-0.5">{stats.lCount} <span className="text-xs font-normal text-slate-400">dagen</span></div>
           </div>
-          <div className="w-8 h-8 rounded-xl bg-indigo-100 border border-indigo-200 flex items-center justify-center font-bold text-indigo-700">
-            L
-          </div>
+          <div className="w-8 h-8 rounded-xl bg-purple-100 border border-purple-200 flex items-center justify-center font-bold text-purple-700">L</div>
         </div>
 
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Rust (R)</div>
-            <div className="text-xl font-bold text-sky-700 mt-0.5">
-              {stats.rCount} <span className="text-xs font-normal text-slate-400">dagen</span>
-            </div>
+            <div className="text-xl font-bold text-sky-700 mt-0.5">{stats.rCount} <span className="text-xs font-normal text-slate-400">dagen</span></div>
           </div>
-          <div className="w-8 h-8 rounded-xl bg-sky-100 border border-sky-200 flex items-center justify-center font-bold text-sky-700">
-            R
-          </div>
+          <div className="w-8 h-8 rounded-xl bg-sky-100 border border-sky-200 flex items-center justify-center font-bold text-sky-700">R</div>
         </div>
 
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Niet inplannen (X)</div>
-            <div className="text-xl font-bold text-slate-700 mt-0.5">
-              {stats.xCount} <span className="text-xs font-normal text-slate-400">dagen</span>
-            </div>
+            <div className="text-xl font-bold text-slate-700 mt-0.5">{stats.xCount} <span className="text-xs font-normal text-slate-400">dagen</span></div>
           </div>
-          <div className="w-8 h-8 rounded-xl bg-slate-200 border border-slate-300 flex items-center justify-center font-bold text-slate-700">
-            X
-          </div>
+          <div className="w-8 h-8 rounded-xl bg-slate-200 border border-slate-300 flex items-center justify-center font-bold text-slate-700">X</div>
         </div>
       </div>
 
-      {/* Quick Pattern Tools */}
-      {(canEditPlanning || isAdmin) && (
+      {(canEditPlanning || isAdmin) && !isLockedForEditing && (
         <div className="flex flex-wrap items-center justify-between gap-2 p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs text-xs">
           <div className="flex items-center gap-1.5 text-slate-500 font-medium">
             <Sparkles className="w-4 h-4 text-indigo-600" />
             <span>Snelle hulpknoppen:</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => handleFillPattern('weekdays-D')}
-              className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 border border-slate-200 hover:border-indigo-200 transition-colors font-medium cursor-pointer"
-            >
-              Weekdagen op Dag (D)
-            </button>
-            <button
-              onClick={() => handleFillPattern('weekends-X')}
-              className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 hover:text-slate-900 text-slate-700 border border-slate-200 transition-colors font-medium cursor-pointer"
-            >
-              Weekenden op Vrij (X)
-            </button>
-            <button
-              onClick={() => handleFillPattern('clear')}
-              className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-red-50 hover:text-red-700 text-slate-700 border border-slate-200 hover:border-red-200 transition-colors font-medium cursor-pointer inline-flex items-center gap-1"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Wis maand
-            </button>
+            <button onClick={() => handleFillPattern('weekdays-D')} className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 border border-slate-200 hover:border-indigo-200 transition-colors font-medium cursor-pointer">Weekdagen op Dag (D)</button>
+            <button onClick={() => handleFillPattern('weekends-X')} className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 hover:text-slate-900 text-slate-700 border border-slate-200 transition-colors font-medium cursor-pointer">Weekenden op Vrij (X)</button>
+            <button onClick={() => handleFillPattern('clear')} className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-red-50 hover:text-red-700 text-slate-700 border border-slate-200 hover:border-red-200 transition-colors font-medium cursor-pointer inline-flex items-center gap-1"><RotateCcw className="w-3.5 h-3.5" />Wis maand</button>
           </div>
         </div>
       )}
 
-      {/* Loading state */}
       {isLoading ? (
         <div className="py-20 flex flex-col items-center justify-center space-y-4">
           <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
           <p className="text-sm text-slate-500">Planning laden...</p>
         </div>
       ) : (
-        /* Day Rows List (Bento card row design) */
         <div className="space-y-2.5">
           {Array.from({ length: daysInMonth }, (_, i) => {
             const dayNum = i + 1;
@@ -332,81 +300,37 @@ export const MyPlanningView: React.FC = () => {
             const isWeekend = dayOfWeekIndex === 0 || dayOfWeekIndex === 6;
             const weekNumber = getWeekNumber(date);
             const selectedShift = daysState[dayNum] || '';
-
-            // Show week label only on Mondays or day 1
             const showWeekNumber = dayOfWeekIndex === 1 || dayNum === 1;
-
-            const isToday =
-              new Date().getFullYear() === currentYear &&
-              new Date().getMonth() + 1 === currentMonth &&
-              new Date().getDate() === dayNum;
+            const isToday = new Date().getFullYear() === currentYear && new Date().getMonth() + 1 === currentMonth && new Date().getDate() === dayNum;
 
             return (
-              <div
-                key={dayNum}
-                className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all duration-150 border ${
-                  isToday
-                    ? 'bg-indigo-50/40 border-indigo-200 shadow-xs'
-                    : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
-                }`}
-              >
-                {/* Date Badge and Day Name */}
+              <div key={dayNum} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all duration-150 border ${isToday ? 'bg-indigo-50/40 border-indigo-200 shadow-xs' : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'}`}>
                 <div className="flex items-center gap-4 mb-3 sm:mb-0">
-                  <div
-                    className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center border font-sans transition-all ${
-                      isWeekend
-                        ? 'bg-slate-100 border-slate-200 text-slate-600'
-                        : isToday
-                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                        : 'bg-slate-50 border-slate-200 text-slate-800'
-                    }`}
-                  >
-                    <span className="text-[10px] font-bold uppercase tracking-wider">
-                      {dayName}
-                    </span>
-                    <span className="text-base font-bold leading-none mt-0.5">
-                      {String(dayNum).padStart(2, '0')}
-                    </span>
+                  <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center border font-sans transition-all ${isWeekend ? 'bg-slate-100 border-slate-200 text-slate-600' : isToday ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-800'}`}>
+                    <span className="text-[10px] font-bold uppercase tracking-wider">{dayName}</span>
+                    <span className="text-base font-bold leading-none mt-0.5">{String(dayNum).padStart(2, '0')}</span>
                   </div>
-
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-slate-900">
-                        {dayNum} {MONTH_NAMES[currentMonth - 1]}
-                      </span>
-                      {isToday && (
-                        <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase tracking-wider">
-                          Vandaag
-                        </span>
-                      )}
+                      <span className="text-sm font-semibold text-slate-900">{dayNum} {MONTH_NAMES[currentMonth - 1]}</span>
+                      {isToday && <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase tracking-wider">Vandaag</span>}
                     </div>
-                    {showWeekNumber && (
-                      <p className="text-xs text-slate-400 mt-0.5 font-medium">
-                        Week {weekNumber}
-                      </p>
-                    )}
+                    {showWeekNumber && <p className="text-xs text-slate-400 mt-0.5 font-medium">Week {weekNumber}</p>}
                   </div>
                 </div>
-
-                {/* Shift Selector Buttons [V] [D] [L] [R] [X] */}
                 <div className="flex items-center gap-2">
                   {(['V', 'D', 'L', 'R', 'X'] as ShiftCode[]).map((code) => {
                     const shiftDef = SHIFT_DEFINITIONS[code as Exclude<ShiftCode, ''>];
                     const isSelected = selectedShift === code;
-
                     return (
                       <button
                         key={code}
                         id={`btn-shift-${dayNum}-${code}`}
                         type="button"
-                        disabled={!canEditPlanning && !isAdmin}
+                        disabled={isLockedForEditing || (!canEditPlanning && !isAdmin)}
                         onClick={() => handleSetShift(dayNum, code)}
                         title={`${shiftDef.label}: ${shiftDef.description}`}
-                        className={`w-11 h-10 sm:w-12 sm:h-10 rounded-xl font-bold text-sm transition-all duration-150 cursor-pointer flex items-center justify-center border ${
-                          isSelected
-                            ? `${shiftDef.activeClass} scale-105`
-                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-100'
-                        } disabled:opacity-50 disabled:cursor-not-allowed active:scale-95`}
+                        className={`w-11 h-10 sm:w-12 sm:h-10 rounded-xl font-bold text-sm transition-all duration-150 cursor-pointer flex items-center justify-center border ${isSelected ? `${shiftDef.activeClass} scale-105` : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-100'} disabled:opacity-50 disabled:cursor-not-allowed active:scale-95`}
                       >
                         {code}
                       </button>
@@ -419,7 +343,6 @@ export const MyPlanningView: React.FC = () => {
         </div>
       )}
 
-      {/* Floating Bottom Action Bar */}
       {(canEditPlanning || isAdmin) && (
         <div className="fixed bottom-0 left-0 md:left-64 right-0 p-4 bg-white/95 backdrop-blur-xl border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 z-30 shadow-lg px-6 md:px-10">
           <div className="text-xs text-slate-500 text-center sm:text-left">
@@ -436,8 +359,12 @@ export const MyPlanningView: React.FC = () => {
                 • Niet-opgeslagen wijzigingen
               </span>
             )}
+            {isLockedForEditing && (
+                 <span className="block sm:inline sm:ml-2 text-rose-600 font-semibold">
+                 • Planning vergrendeld
+               </span>
+            )}
           </div>
-
           <div className="flex items-center gap-3">
             {saveSuccessMessage && (
               <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-medium animate-in fade-in">
@@ -455,19 +382,13 @@ export const MyPlanningView: React.FC = () => {
             <button
               id="save-planning-button"
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isSaving || isLockedForEditing || !hasUnsavedChanges}
               className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-indigo-100 transition-all duration-150 flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-98"
             >
               {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Opslaan...</span>
-                </>
+                <><Loader2 className="w-4 h-4 animate-spin" /><span>Opslaan...</span></>
               ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  <span>Planning opslaan</span>
-                </>
+                <><Save className="w-4 h-4" /><span>Planning opslaan</span></>
               )}
             </button>
           </div>
