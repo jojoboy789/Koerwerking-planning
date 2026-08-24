@@ -404,7 +404,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
           </div>
           <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs">
             <span className="w-3.5 h-3.5 rounded-sm code-X inline-block"></span>
-            <span className="text-slate-600 font-medium">Vrij (X)</span>
+            <span className="text-slate-600 font-medium">Niet inplannen (X)</span>
           </div>
         </div>
 

@@ -51,7 +51,7 @@ export const SHIFT_DEFINITIONS: Record<Exclude<ShiftCode, ''>, ShiftInfo> = {
     code: 'X',
     label: 'Vrij / Niet werken',
     shortLabel: 'Vrij',
-    description: 'Rustdag / weekend / niet ingeroosterd',
+    description: 'Niet inplannen',
     colorClass: 'code-X',
     activeClass: 'bg-slate-700 text-white shadow-md shadow-slate-300 border-slate-700',
     textColor: '#475569',

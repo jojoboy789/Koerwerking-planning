@@ -273,7 +273,7 @@ export const MyPlanningView: React.FC = () => {
 
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Vrij (X)</div>
+            <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Niet inplannen (X)</div>
             <div className="text-xl font-bold text-slate-700 mt-0.5">
               {stats.xCount} <span className="text-xs font-normal text-slate-400">dagen</span>
             </div>
