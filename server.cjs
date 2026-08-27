@@ -318,7 +318,7 @@ function seedInitialDatabase() {
   const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
   const currentMonth = (/* @__PURE__ */ new Date()).getMonth() + 1;
   const samplePlannings = [];
-  const shiftPool = ["V", "D", "L", "X"];
+  const shiftPool = ["V", "D", "L", "X", "R"];
   initialUsers.forEach((u, uIdx) => {
     if (!u.isActive) return;
     const days = {};
@@ -327,7 +327,7 @@ function seedInitialDatabase() {
       if (isWeekend && Math.random() > 0.35) {
         days[day] = "X";
       } else {
-        const pattern = (day + uIdx) % 4;
+        const pattern = (day + uIdx) % 5;
         days[day] = shiftPool[pattern];
       }
     }
@@ -551,6 +551,58 @@ async function startServer() {
     }
     res.json({ success: true, message: "Succesvol uitgelogd." });
   });
+  app2.put("/api/auth/change-password", authMiddleware, (req, res) => {
+    const { oldCode, newCode } = req.body;
+    const userId = req.user.id;
+    if (!oldCode || !newCode || typeof newCode !== "string" || newCode.trim().length < 6) {
+      return res.status(400).json({ error: "De nieuwe code moet minimaal 6 karakters lang zijn." });
+    }
+    const userIndex = db2.users.findIndex((u) => u.id === userId);
+    if (userIndex === -1) {
+      return res.status(404).json({ error: "Gebruiker niet gevonden." });
+    }
+    const user = db2.users[userIndex];
+    const variants = getPossibleCodeVariants(oldCode);
+    let isOldCodeValid = false;
+    if (user.rawCode) {
+      const uRawUpper = user.rawCode.toUpperCase();
+      const uStripped = uRawUpper.replace(/[^A-Z0-9]/g, "");
+      const oldStripped = oldCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (variants.includes(user.rawCode) || variants.includes(uRawUpper) || uStripped === oldStripped) {
+        isOldCodeValid = true;
+      }
+    }
+    if (!isOldCodeValid) {
+      for (const variant of variants) {
+        const codeHash = hashAccessCode(variant);
+        if (user.accessCodeHash === codeHash) {
+          isOldCodeValid = true;
+          break;
+        }
+      }
+    }
+    if (!isOldCodeValid) {
+      return res.status(401).json({ error: "De oude toegangscode is onjuist." });
+    }
+    const normalizedNewCode = normalizeAccessCode(newCode);
+    const newCodeHash = hashAccessCode(normalizedNewCode);
+    if (db2.users.some((u) => u.accessCodeHash === newCodeHash && u.id !== userId)) {
+      return res.status(400).json({ error: "Deze nieuwe toegangscode is al in gebruik. Kies een andere." });
+    }
+    db2.users[userIndex].accessCodeHash = newCodeHash;
+    db2.users[userIndex].rawCode = normalizedNewCode;
+    db2.users[userIndex].updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    for (const [token, session] of Object.entries(db2.sessions)) {
+      if (session.userId === userId) {
+        delete db2.sessions[token];
+      }
+    }
+    saveDatabase(db2);
+    res.json({
+      success: true,
+      message: "Je toegangscode is succesvol gewijzigd. Je wordt nu uitgelogd en kunt met de nieuwe code inloggen."
+    });
+  });
   app2.get("/api/planning/:year/:month", authMiddleware, (req, res) => {
     const year = parseInt(req.params.year, 10);
     const month = parseInt(req.params.month, 10);
@@ -585,8 +637,18 @@ async function startServer() {
     if (isNaN(year) || isNaN(month) || month < 1 || month > 12 || typeof days !== "object" || days === null) {
       return res.status(400).json({ error: "Ongeldige planningsgegevens ontvangen." });
     }
+    const now = /* @__PURE__ */ new Date();
+    const isPlanner = req.user.canPlannerMode || req.user.isAdmin;
+    if (!isPlanner) {
+      const deadline = new Date(year, month - 2, 8);
+      if (now >= deadline) {
+        const monthNames = ["Januari", "Februari", "Maart", "April", "Mei", "Juni", "Juli", "Augustus", "September", "Oktober", "November", "December"];
+        const targetMonthName = monthNames[month - 1];
+        return res.status(403).json({ error: `De deadline voor het aanpassen van de planning voor ${targetMonthName} is verstreken (7e van de vorige maand).` });
+      }
+    }
     const cleanDays = {};
-    const validCodes = ["V", "D", "L", "X", ""];
+    const validCodes = ["V", "D", "L", "R", "X", ""];
     for (const [key, value] of Object.entries(days)) {
       const dayNum = parseInt(key, 10);
       if (dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value)) {
@@ -595,11 +657,11 @@ async function startServer() {
         }
       }
     }
-    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const updatedAt = (/* @__PURE__ */ new Date()).toISOString();
     const existingIndex = db2.plannings.findIndex((p) => p.userId === userId && p.year === year && p.month === month);
     if (existingIndex >= 0) {
       db2.plannings[existingIndex].days = cleanDays;
-      db2.plannings[existingIndex].updatedAt = now;
+      db2.plannings[existingIndex].updatedAt = updatedAt;
       db2.plannings[existingIndex].updatedBy = req.user.name;
     } else {
       db2.plannings.push({
@@ -609,7 +671,7 @@ async function startServer() {
         year,
         month,
         days: cleanDays,
-        updatedAt: now,
+        updatedAt,
         updatedBy: req.user.name,
         isFinal: false
       });
@@ -878,7 +940,7 @@ ${message.trim()}`;
       return res.status(404).json({ error: "Gebruiker niet gevonden." });
     }
     const cleanDays = {};
-    const validCodes = ["V", "D", "L", "X", ""];
+    const validCodes = ["V", "D", "L", "R", "X", ""];
     for (const [key, value] of Object.entries(days || {})) {
       const dayNum = parseInt(key, 10);
       if (dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value)) {
