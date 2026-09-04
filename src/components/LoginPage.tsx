@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
-import { Key, ArrowRight, HelpCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Key, ArrowRight, HelpCircle, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
@@ -9,6 +9,7 @@ export const LoginPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,7 +72,7 @@ export const LoginPage: React.FC = () => {
                 <input
                   id="access_code"
                   name="access_code"
-                  type="text"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="off"
                   spellCheck="false"
                   value={accessCode}
@@ -81,10 +82,18 @@ export const LoginPage: React.FC = () => {
                   }}
                   placeholder="GBR-XXXX-XX"
                   disabled={isSubmitting}
-                  className={`w-full bg-slate-50 text-slate-900 font-mono text-center text-lg sm:text-xl font-bold tracking-widest py-3.5 pl-11 pr-4 rounded-2xl border transition-all outline-none placeholder:text-slate-400 uppercase ${
+                  className={`w-full bg-slate-50 text-slate-900 font-mono text-center text-lg sm:text-xl font-bold tracking-widest py-3.5 pl-11 pr-12 rounded-2xl border transition-all outline-none placeholder:text-slate-400 uppercase ${
                     errorMessage ? 'border-red-400 bg-red-50/40 focus:border-red-600 focus:ring-4 focus:ring-red-100' : 'border-slate-200 focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-100'
                   }`}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 hover:text-indigo-600"
+                  title={showPassword ? 'Verberg code' : 'Toon code'}
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
               </div>
             </div>
 
