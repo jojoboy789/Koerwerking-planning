@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Calendar, Users, Shield, LogOut, X, UserCheck, Menu, CalendarCheck, MessageSquare, Send, Key, BusFront,} from 'lucide-react';
+import { LayoutDashboard, Calendar, Users, Shield, LogOut, X, UserCheck, Menu, CalendarCheck, MessageSquare, Send, Key, BusFront, Clock, } from 'lucide-react';
 import { ChangePasswordModal } from './ChangePasswordModal';
 
 interface NavigationProps {
@@ -134,17 +134,28 @@ export const Navigation: React.FC<NavigationProps> = ({
           </div>
 
           {/* Telegram Invitation Link */}
-          <div className="mt-8">
-            <a
-              href="https://t.me/+B0GMB0QZaM01ZWJk"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors bg-sky-100 text-sky-700 hover:bg-sky-200 border border-sky-200/80"
-            >
-              <Send className="w-5 h-5 text-sky-600" />
-              <span>Word lid van Telegram</span>
-            </a>
-          </div>
+<div className="mt-8 space-y-2">
+  <a
+    href="https://t.me/+B0GMB0QZaM01ZWJk"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors bg-sky-100 text-sky-700 hover:bg-sky-200 border border-sky-200/80"
+  >
+    <Send className="w-5 h-5 text-sky-600" />
+    <span>Word lid van Telegram</span>
+  </a>
+
+  {/* Uur prestatie */}
+  <a
+    href="https://studio--studio-7879467716-81e7e.us-central1.hosted.app/"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors bg-[#ffdc00] text-slate-900 hover:bg-[#f0d000] border border-yellow-400/80 shadow-sm"
+  >
+    <Clock className="w-5 h-5 text-slate-900" />
+    <span>Uur prestatie</span>
+  </a>
+</div>
 
           {/* Footer with User Info */}
           <div className="mt-4 pt-4 border-t border-slate-200">

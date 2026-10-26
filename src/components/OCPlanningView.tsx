@@ -8,6 +8,7 @@ import {
   Clock,
   Loader2,
   Wifi,
+  Download,
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -30,6 +31,35 @@ type OCPlanningResponse = {
 };
 
 type FilterType = 'all' | 'planning' | 'notices';
+const downloadSlide = (slide: OCSlide) => {
+  const htmlDocument = `<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${slide.title.replace(/[<>&"]/g, '')}</title>
+</head>
+<body>
+${slide.html}
+</body>
+</html>`;
+
+  const blob = new Blob([htmlDocument], {
+    type: 'text/html;charset=utf-8',
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = `OC-Planning-${slide.id}.html`;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
 
 export const OCPlanningView: React.FC = () => {
   const { user } = useAuth();
@@ -287,7 +317,17 @@ const response = await fetch('/api/oc-planning', {
                 </div>
 
                 <div className="p-5">
-                  <iframe
+  {slide.dated && (
+    <button
+      onClick={() => downloadSlide(slide)}
+      className="mb-4 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+    >
+      <Download className="h-4 w-4" />
+      Download dagplanning
+    </button>
+  )}
+
+  <iframe
                     title={slide.title}
                     srcDoc={slide.html}
                     sandbox=""
