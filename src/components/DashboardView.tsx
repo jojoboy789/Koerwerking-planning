@@ -5,7 +5,7 @@ import { SHIFT_DEFINITIONS } from '../types';
 import { TelegramInvitationModal } from './TelegramInvitationModal';
 import {
   Calendar, Users, Shield, ArrowRight, Sparkles, CheckCircle2,
-  Clock, ShieldCheck, Info
+  Clock, ShieldCheck, Info, BusFront, ExternalLink
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -249,35 +249,76 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           )}
         </div>
 
-        <div className="lg:col-span-4 bg-indigo-600 p-6 sm:p-8 rounded-3xl text-white shadow-xl shadow-indigo-100 flex flex-col justify-between">
-          <div>
-            <h3 className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-6">
-              Statistieken Deze Maand
-            </h3>
-            <div className="space-y-5">
-              <div>
-                <div className="text-4xl font-bold tracking-tight">
-                  {planningStats.v + planningStats.d + planningStats.l}
-                </div>
-                <div className="text-indigo-200 text-xs uppercase tracking-wider font-semibold mt-1">
-                  Diensten ingepland (V, D, L)
-                </div>
-              </div>
-              <div className="h-px bg-indigo-500/60 w-full"></div>
-              <div>
-                <div className="text-4xl font-bold tracking-tight">{planningStats.x}</div>
-                <div className="text-indigo-200 text-xs uppercase tracking-wider font-semibold mt-1">
-                  Vrije dagen (X)
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="pt-6 border-t border-indigo-500/50 mt-6">
-            <div className="text-[11px] text-indigo-200 leading-tight">
-              Alle gegevens worden veilig gesynchroniseerd in de cloud.
-            </div>
-          </div>
+        <div className="lg:col-span-4 flex flex-col gap-4">
+  {/* OC BUS GBR Dagplanning snelkoppeling */}
+  <button
+    type="button"
+    onClick={() => onNavigate('oc_planning')}
+    className="w-full rounded-3xl border border-amber-200 bg-white p-5 text-left shadow-sm transition-all duration-200 hover:border-yellow-400 hover:shadow-md group"
+  >
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-yellow-100 text-yellow-800 transition-colors group-hover:bg-[#ffdc00]">
+          <BusFront className="h-6 w-6" />
         </div>
+
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+            OC BUS GBR
+          </p>
+          <h3 className="mt-1 text-lg font-bold text-slate-900">
+            Dagplanning
+          </h3>
+        </div>
+      </div>
+
+      <ExternalLink className="h-5 w-5 text-slate-400 transition-transform group-hover:translate-x-1 group-hover:text-slate-900" />
+    </div>
+
+    <p className="mt-3 text-sm leading-relaxed text-slate-500">
+      Bekijk de actuele dagplanning en mededelingen van OC BUS GBR.
+    </p>
+
+    <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs font-bold uppercase tracking-wider text-slate-800">
+      <span>Planning bekijken</span>
+      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+    </div>
+  </button>
+
+  {/* Statistieken deze maand */}
+  <div className="rounded-3xl bg-indigo-600 p-5 sm:p-6 text-white shadow-lg shadow-indigo-100">
+    <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-indigo-200">
+      Statistieken deze maand
+    </h3>
+
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <div className="text-3xl font-bold tracking-tight">
+          {planningStats.v + planningStats.d + planningStats.l}
+        </div>
+        <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-200">
+          Diensten ingepland (V, D, L)
+        </div>
+      </div>
+
+      <div className="border-l border-indigo-500/60 pl-4">
+        <div className="text-3xl font-bold tracking-tight">
+          {planningStats.x}
+        </div>
+        <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-200">
+          Vrije dagen (X)
+        </div>
+      </div>
+    </div>
+
+    <div className="mt-4 border-t border-indigo-500/50 pt-3">
+      <p className="text-[11px] leading-relaxed text-indigo-200">
+        Alle gegevens worden veilig gesynchroniseerd in de cloud.
+      </p>
+    </div>
+ </div>
+</div>
+
       </div>
 
       <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-xs">
