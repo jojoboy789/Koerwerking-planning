@@ -18,6 +18,9 @@ class ApiClient {
     }
     return this.memoryToken;
   }
+    public getAuthToken(): string | null {
+    return this.getToken();
+  }
 
   public setToken(token: string, remember = true) {
     this.memoryToken = token;

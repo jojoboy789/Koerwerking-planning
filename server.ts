@@ -13,7 +13,7 @@ import {
   firebaseConfig,
 } from './server/firebaseService';
 
-dotenv.config();
+dotenv.config({ path: ['.env.local', '.env'] });
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const HASH_SALT = process.env.ACCESS_CODE_SALT || 'NEON_TOKYO_SALT_v1_99x#';
@@ -682,6 +682,132 @@ async function startServer() {
       message: 'Je toegangscode is succesvol gewijzigd. Je wordt nu uitgelogd en kunt met de nieuwe code inloggen.',
     });
   });
+
+  // === OC PLANNING API ===
+
+const OC_PLANNING_BASE_URL = 'https://oc-gbr.meta-technics.be';
+
+app.get(
+  '/api/oc-planning',
+  authMiddleware,
+  async (_req: AuthenticatedRequest, res: Response) => {
+    const apiToken = process.env.OC_PLANNING_API_TOKEN;
+
+    if (!apiToken) {
+      console.error('OC Planning API-token ontbreekt in de serveromgeving.');
+
+      return res.status(503).json({
+        error: 'OC Planning is momenteel niet geconfigureerd.',
+      });
+    }
+
+    try {
+      const headers = {
+        Authorization: `Bearer ${apiToken}`,
+        Accept: 'application/json',
+      };
+
+      // 1. Haal de actieve slides op.
+      const manifestResponse = await fetch(
+        `${OC_PLANNING_BASE_URL}/kiosk/manifest.json`,
+        {
+          headers,
+          signal: AbortSignal.timeout(15000),
+        }
+      );
+
+      if (!manifestResponse.ok) {
+        console.error(
+          'OC Planning manifest mislukt:',
+          manifestResponse.status
+        );
+
+        return res.status(502).json({
+          error:
+            manifestResponse.status === 401
+              ? 'De toegang tot de OC Planning API is geweigerd.'
+              : 'De OC Planning kan momenteel niet worden opgehaald.',
+        });
+      }
+
+      const manifest = await manifestResponse.json() as {
+        generated_at?: string;
+        poll_seconds?: number;
+        staleness?: {
+          amber_minutes?: number;
+          red_minutes?: number;
+        };
+        slides?: Array<{
+          id: string;
+          title: string;
+          seconds: number;
+          urgent: boolean;
+          dated: boolean;
+          version: string;
+          updated_at: string;
+          expires: string | null;
+        }>;
+      };
+
+      if (!Array.isArray(manifest.slides)) {
+        return res.status(502).json({
+          error: 'De OC Planning API stuurde een ongeldig antwoord.',
+        });
+      }
+
+      // 2. Haal de HTML-inhoud van alle actieve slides op.
+      const slides = await Promise.all(
+        manifest.slides.map(async (slide) => {
+          // Bescherm de URL tegen ongeldige slide-ID's.
+          if (!/^[a-zA-Z0-9_-]+$/.test(slide.id)) {
+            throw new Error('Ongeldige slide-ID ontvangen.');
+          }
+
+          const response = await fetch(
+            `${OC_PLANNING_BASE_URL}/kiosk/slides/${encodeURIComponent(slide.id)}.html`,
+            {
+              headers: {
+                Authorization: `Bearer ${apiToken}`,
+                Accept: 'text/html',
+              },
+              signal: AbortSignal.timeout(15000),
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(
+              `Slide kon niet worden opgehaald: ${response.status}`
+            );
+          }
+
+          const html = await response.text();
+
+          return {
+            ...slide,
+            html,
+          };
+        })
+      );
+
+      // 3. Stuur de gegevens terug naar de ingelogde gebruiker.
+      res.setHeader('Cache-Control', 'private, no-store');
+
+      return res.json({
+        generated_at: manifest.generated_at,
+        poll_seconds: manifest.poll_seconds || 60,
+        staleness: manifest.staleness,
+        slides,
+      });
+    } catch (error) {
+      console.error('Fout bij ophalen OC Planning:', error);
+
+      return res.status(502).json({
+        error:
+          'De verbinding met OC Planning is mislukt. Probeer het later opnieuw.',
+      });
+    }
+  }
+);
 
   // === PLANNING ENDPOINTS (CURRENT USER) ===
 

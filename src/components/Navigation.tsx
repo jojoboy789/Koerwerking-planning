@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Calendar, Users, Shield, LogOut, X, UserCheck, Menu, CalendarCheck, MessageSquare, Send, Key } from 'lucide-react';
+import { LayoutDashboard, Calendar, Users, Shield, LogOut, X, UserCheck, Menu, CalendarCheck, MessageSquare, Send, Key, BusFront,} from 'lucide-react';
 import { ChangePasswordModal } from './ChangePasswordModal';
 
 interface NavigationProps {
@@ -25,6 +25,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     { id: 'chat', label: 'Algemene Chat', icon: MessageSquare, show: canPlannerMode || isAdmin },
     { id: 'overview', label: 'Overzicht', icon: Users, show: canViewOverview, badge: 'LIVE' },
     { id: 'admin', label: 'Gebruikers', icon: Shield, show: isAdmin, badge: 'ADMIN' },
+    { id: 'oc_planning', label: 'OC Planning', icon: BusFront, show: Boolean(user), badge: 'LIVE' },
   ];
 
   const handleTabClick = (tab: string) => {
