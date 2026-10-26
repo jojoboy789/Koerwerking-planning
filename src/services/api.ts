@@ -230,7 +230,15 @@ class ApiClient {
       body: JSON.stringify({ message }),
     });
   }
-
+  // OC BUS GBR Dagplanning naar Telegram
+  async sendOcPlanningToTelegram() {
+    return this.request<{ success: boolean; message: string }>(
+      '/oc-planning/send-telegram',
+      {
+        method: 'POST',
+      }
+    );
+  }
 }
 
 export const api = new ApiClient();

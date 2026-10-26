@@ -686,6 +686,208 @@ async function startServer() {
   // === OC PLANNING API ===
 
 const OC_PLANNING_BASE_URL = 'https://oc-gbr.meta-technics.be';
+// === OC PLANNING TELEGRAM MONITOR ===
+
+interface OCPlanningSlide {
+  id: string;
+  title: string;
+  seconds: number;
+  urgent: boolean;
+  dated: boolean;
+  version: string;
+  updated_at: string;
+  expires: string | null;
+}
+
+interface OCPlanningManifest {
+  generated_at?: string;
+  poll_seconds?: number;
+  slides?: OCPlanningSlide[];
+}
+
+let previousOCPlanningFingerprint: string | null = null;
+let ocPlanningMonitorStarted = false;
+
+async function fetchOCPlanningManifest(): Promise<OCPlanningManifest> {
+  const apiToken = process.env.OC_PLANNING_API_TOKEN;
+
+  if (!apiToken) {
+    throw new Error('OC_PLANNING_API_TOKEN ontbreekt.');
+  }
+
+  const response = await fetch(
+    `${OC_PLANNING_BASE_URL}/kiosk/manifest.json`,
+    {
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(15000),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`OC Planning manifest gaf HTTP ${response.status}.`);
+  }
+
+  const manifest = await response.json() as OCPlanningManifest;
+
+  if (!Array.isArray(manifest.slides)) {
+    throw new Error('Ongeldige OC Planning manifest ontvangen.');
+  }
+
+  return manifest;
+}
+
+async function fetchOCPlanningSlideHtml(slideId: string): Promise<string> {
+  const apiToken = process.env.OC_PLANNING_API_TOKEN;
+
+  if (!apiToken) {
+    throw new Error('OC_PLANNING_API_TOKEN ontbreekt.');
+  }
+
+  if (!/^[a-zA-Z0-9_-]+$/.test(slideId)) {
+    throw new Error('Ongeldige OC Planning slide-ID.');
+  }
+
+  const response = await fetch(
+    `${OC_PLANNING_BASE_URL}/kiosk/slides/${encodeURIComponent(slideId)}.html`,
+    {
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        Accept: 'text/html',
+      },
+      signal: AbortSignal.timeout(15000),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`OC Planning slide gaf HTTP ${response.status}.`);
+  }
+
+  return response.text();
+}
+
+function escapeTelegramHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function htmlToTelegramText(html: string): string {
+  return html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|section|article|h[1-6]|li|tr)>/gi, '\n')
+    .replace(/<li\b[^>]*>/gi, '• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+async function sendOCPlanningUpdateToTelegram(
+  slides: Array<OCPlanningSlide & { html: string }>
+): Promise<void> {
+  const changedSlides = slides.filter(slide => slide.dated);
+
+  if (changedSlides.length === 0) {
+    console.log('OC Planning gewijzigd, maar er zijn geen dagplanningsslides.');
+    return;
+  }
+
+  const heading = '🚌 <b>OC BUS GBR · DAGPLANNING GEWIJZIGD</b>\n\n';
+
+  let message = heading;
+
+  for (const slide of changedSlides) {
+    const content = htmlToTelegramText(slide.html);
+
+    const section =
+      `<b>${escapeTelegramHtml(slide.title)}</b>\n` +
+      `${escapeTelegramHtml(content || 'Geen tekstuele inhoud beschikbaar.')}\n\n`;
+
+    if ((message + section).length > 3500) {
+      await sendTelegramNotification(message.trim());
+      message = heading;
+    }
+
+    message += section;
+  }
+
+  if (message.trim() !== heading.trim()) {
+    await sendTelegramNotification(message.trim());
+  }
+}
+
+async function checkOCPlanningForChanges(): Promise<void> {
+  const manifest = await fetchOCPlanningManifest();
+
+  // De fingerprint omvat de actieve slides, volgorde en versies.
+  const fingerprint = JSON.stringify(
+    manifest.slides!.map(slide => ({
+      id: slide.id,
+      title: slide.title,
+      version: slide.version,
+      updated_at: slide.updated_at,
+      dated: slide.dated,
+    }))
+  );
+
+  // De eerste controle initialiseert de toestand zonder een Telegram-spam
+  // te veroorzaken wanneer de server opnieuw opstart.
+  if (previousOCPlanningFingerprint === null) {
+    previousOCPlanningFingerprint = fingerprint;
+    console.log('OC Planning-monitor gestart; huidige toestand opgeslagen.');
+    return;
+  }
+
+  if (fingerprint === previousOCPlanningFingerprint) {
+    return;
+  }
+
+  // Haal de nieuwste inhoud op voordat we de melding versturen.
+  const slides = await Promise.all(
+    manifest.slides!.map(async slide => ({
+      ...slide,
+      html: await fetchOCPlanningSlideHtml(slide.id),
+    }))
+  );
+
+  await sendOCPlanningUpdateToTelegram(slides);
+
+  // Pas na een geslaagde verwerking de vorige toestand bij.
+  previousOCPlanningFingerprint = fingerprint;
+
+  console.log('OC Planning-wijziging verwerkt.');
+}
+
+function startOCPlanningMonitor(): void {
+  if (ocPlanningMonitorStarted) return;
+  ocPlanningMonitorStarted = true;
+
+  const check = async () => {
+    try {
+      await checkOCPlanningForChanges();
+    } catch (error) {
+      console.error('OC Planning-monitor mislukt:', error);
+    }
+  };
+
+  // Eerste controle en daarna periodiek controleren.
+  void check();
+  setInterval(() => {
+    void check();
+  }, 60_000);
+}
 
 app.get(
   '/api/oc-planning',
@@ -810,6 +1012,131 @@ app.get(
 );
 
   // === PLANNING ENDPOINTS (CURRENT USER) ===
+
+  // Handmatig de volledige actuele OC BUS GBR-planning naar Telegram versturen
+  app.post(
+    '/api/oc-planning/send-telegram',
+    authMiddleware,
+    requireAdminMiddleware,
+    async (_req: AuthenticatedRequest, res: Response) => {
+      try {
+        // Haal de actuele planning en alle actieve mededelingen op.
+        const manifest = await fetchOCPlanningManifest();
+
+        if (!manifest.slides || manifest.slides.length === 0) {
+          return res.status(404).json({
+            error: 'Er zijn momenteel geen actieve planningsslides beschikbaar.',
+          });
+        }
+
+        const slides = await Promise.all(
+          manifest.slides.map(async (slide) => ({
+            ...slide,
+            html: await fetchOCPlanningSlideHtml(slide.id),
+          }))
+        );
+
+        // Maak leesbare Telegram-berichten van alle slides.
+        const heading = '🚌 <b>OC BUS GBR · ACTUELE DAGPLANNING</b>\n\n';
+        const sections = slides.map((slide) => {
+          const category = slide.dated ? 'Dagplanning' : 'Mededeling';
+          const content = htmlToTelegramText(slide.html);
+
+          return (
+            `<b>${escapeTelegramHtml(category)}: ${escapeTelegramHtml(slide.title)}</b>\n` +
+            `${escapeTelegramHtml(content || 'Geen tekstuele inhoud beschikbaar.')}`
+          );
+        });
+
+        // Verstuur de inhoud in stukken om binnen Telegram-limieten te blijven.
+        const maxLength = 3500;
+        const messages: string[] = [];
+        let message = heading;
+
+        for (const section of sections) {
+          const block = `${section}\n\n`;
+
+          if ((message + block).length > maxLength && message !== heading) {
+            messages.push(message.trim());
+            message = heading;
+          }
+
+          // Splits ook een uitzonderlijk lange slide op in kleinere stukken.
+          let remaining = block;
+          while ((message + remaining).length > maxLength) {
+            const available = maxLength - message.length;
+            if (available <= 0) {
+              messages.push(message.trim());
+              message = heading;
+              continue;
+            }
+
+            messages.push((message + remaining.slice(0, available)).trim());
+            remaining = remaining.slice(available);
+            message = heading;
+          }
+
+          message += remaining;
+        }
+
+        if (message.trim() !== heading.trim()) {
+          messages.push(message.trim());
+        }
+
+        if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
+          return res.status(503).json({
+            error: 'Telegram is niet correct geconfigureerd op de server.',
+          });
+        }
+
+        // Controleer elke verzending. Meld fouten terug aan de beheerder.
+        for (const telegramMessage of messages) {
+          const telegramResponse = await fetch(
+            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                chat_id: process.env.TELEGRAM_CHAT_ID,
+                text: telegramMessage,
+                parse_mode: 'HTML',
+              }),
+              signal: AbortSignal.timeout(15000),
+            }
+          );
+
+          const telegramResult = await telegramResponse.json() as {
+            ok?: boolean;
+            description?: string;
+          };
+
+          if (!telegramResponse.ok || !telegramResult.ok) {
+            console.error(
+              'OC Planning Telegram-verzending mislukt:',
+              telegramResult.description || telegramResponse.status
+            );
+
+            return res.status(502).json({
+              error: 'Telegram kon de volledige dagplanning niet versturen. Controleer de Telegram-configuratie.',
+            });
+          }
+        }
+
+        return res.json({
+          success: true,
+          message: `De actuele dagplanning en mededelingen zijn naar Telegram verstuurd (${slides.length} slides, ${messages.length} berichten).`,
+        });
+      } catch (error) {
+        console.error('Handmatig versturen OC Planning naar Telegram mislukt:', error);
+
+        return res.status(502).json({
+          error: 'De actuele OC BUS GBR-planning kon niet naar Telegram worden verstuurd.',
+        });
+      }
+    }
+  );
 
   // Get own planning for a specific year and month
   app.get('/api/planning/:year/:month', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
@@ -1347,6 +1674,8 @@ app.get(
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  startOCPlanningMonitor();
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Neon Tokyo Planner server running at http://0.0.0.0:${PORT}`);

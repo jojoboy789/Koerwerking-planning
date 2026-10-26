@@ -6,7 +6,7 @@ import { AdminPlanningModal } from './AdminPlanningModal';
 import {
   Users, UserPlus, Key, Edit3, Trash2, Calendar, Check, X, Shield,
   ShieldCheck, AlertCircle, CheckCircle2, Loader2, Sparkles, RefreshCw,
-  Copy, CheckCheck, Save, Cloud, Database
+  Copy, CheckCheck, Save, Cloud, Database, Send, BusFront
 } from 'lucide-react';
 
 export const AdminPortalView: React.FC = () => {
@@ -46,6 +46,7 @@ export const AdminPortalView: React.FC = () => {
   const [newIsAdmin, setNewIsAdmin] = useState(false);
   const [newIsActive, setNewIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSendingOcPlanning, setIsSendingOcPlanning] = useState(false);
 
   // Change Code Form State
   const [generatedNewCode, setGeneratedNewCode] = useState('');
@@ -92,6 +93,27 @@ export const AdminPortalView: React.FC = () => {
       setErrorMessage(msg);
     } finally {
       setIsSyncingFirebase(false);
+    }
+  };
+
+  // OC BUS GBR Dagplanning handmatig naar Telegram versturen
+  const handleSendOcPlanningToTelegram = async () => {
+    setIsSendingOcPlanning(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const result = await api.sendOcPlanningToTelegram();
+      setSuccessMessage(result.message);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'De OC BUS GBR-planning kon niet naar Telegram worden verstuurd.';
+
+      setErrorMessage(msg);
+    } finally {
+      setIsSendingOcPlanning(false);
     }
   };
 
@@ -369,6 +391,44 @@ export const AdminPortalView: React.FC = () => {
           </div>
         </div>
       )}
+
+{/* OC BUS GBR Dagplanning naar Telegram */}
+<div className="p-4 md:p-5 rounded-3xl bg-linear-to-r from-yellow-400/20 via-yellow-50 to-amber-50 border border-yellow-300 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+  <div className="flex items-start sm:items-center gap-3.5">
+    <div className="p-3 bg-[#ffdc00] text-slate-900 rounded-2xl shadow-sm shrink-0">
+      <BusFront className="w-5 h-5" />
+    </div>
+
+    <div>
+      <h3 className="text-sm font-bold text-slate-900">
+        OC BUS GBR Dagplanning
+      </h3>
+      <p className="text-xs text-slate-600 mt-1">
+        Verstuur de actuele dagplanning en mededelingen handmatig naar Telegram.
+      </p>
+    </div>
+  </div>
+
+  <button
+  type="button"
+  onClick={handleSendOcPlanningToTelegram}
+  disabled={isSendingOcPlanning}
+  title="Verstuur de actuele dagplanning en mededelingen naar Telegram"
+  className="px-4 py-2.5 bg-[#ffdc00] text-slate-900 font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 hover:bg-yellow-300 transition-all disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+>
+  {isSendingOcPlanning ? (
+    <>
+      <Loader2 className="w-4 h-4 animate-spin" />
+      <span>Versturen...</span>
+    </>
+  ) : (
+    <>
+      <Send className="w-4 h-4" />
+      <span>Verstuur naar Telegram</span>
+    </>
+  )}
+</button>
+</div>
 
       {/* Firebase Cloud Sync Card */}
       <div className="p-4 md:p-5 rounded-3xl bg-linear-to-r from-amber-500/10 via-amber-50 to-orange-50/40 border border-amber-200/90 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
