@@ -22,7 +22,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     { id: 'planning', label: 'Mijn Planning', icon: Calendar, show: canEditPlanning || isAdmin },
     { id: 'final_planning', label: 'Final Planning', icon: CalendarCheck, show: canEditPlanning || canViewOverview },
     { id: 'team_planning', label: 'Team Plannen', icon: UserCheck, show: canPlannerMode || isAdmin, badge: 'PLANNER' },
-    { id: 'chat', label: 'Algemene Chat', icon: MessageSquare, show: canPlannerMode || isAdmin },
+    { id: 'chat', label: 'Planner Chat', icon: MessageSquare, show: canPlannerMode || isAdmin },
     { id: 'overview', label: 'Overzicht', icon: Users, show: canViewOverview, badge: 'LIVE' },
     { id: 'admin', label: 'Gebruikers', icon: Shield, show: isAdmin, badge: 'ADMIN' },
     { id: 'oc_planning', label: 'OC Planning', icon: BusFront, show: Boolean(user), badge: 'LIVE' },
