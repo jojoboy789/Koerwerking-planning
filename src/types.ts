@@ -86,6 +86,7 @@ export interface MonthlyPlanning {
   year: number;
   month: number; // 1 - 12
   days: Record<number, ShiftCode>;
+  secondChoices?: Record<number, ShiftCode>;
   finalDays: Record<number, ShiftCode> | null;
   isFinal: boolean;
   updatedAt: string;

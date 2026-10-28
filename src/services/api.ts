@@ -109,10 +109,19 @@ class ApiClient {
     return this.request<{ year: number; month: number; planning: MonthlyPlanning }>(`/planning/${year}/${month}`);
   }
 
-  async savePlanning(year: number, month: number, days: Record<number, string>) {
-    return this.request<{ success: boolean; message: string; planning: MonthlyPlanning }>(`/planning/${year}/${month}`, {
+  async savePlanning(
+    year: number,
+    month: number,
+    days: Record<number, string>,
+    secondChoices: Record<number, string> = {}
+  ) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      planning: MonthlyPlanning;
+    }>(`/planning/${year}/${month}`, {
       method: 'POST',
-      body: JSON.stringify({ days }),
+      body: JSON.stringify({ days, secondChoices }),
     });
   }
 

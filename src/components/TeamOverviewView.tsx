@@ -52,6 +52,8 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   // Day resolution modal state
   const [selectedDayDetail, setSelectedDayDetail] = useState<number | null>(null);
   const [dayEditState, setDayEditState] = useState<Record<string, ShiftCode>>({});
+  const [daySecondChoiceState, setDaySecondChoiceState] = useState<Record<string, ShiftCode>>({});
+  const [initialDaySecondChoiceState, setInitialDaySecondChoiceState] = useState<Record<string, ShiftCode>>({});
   const [isSavingDay, setIsSavingDay] = useState<boolean>(false);
   const [daySaveMessage, setDaySaveMessage] = useState<string | null>(null);
 
@@ -499,6 +501,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                 {filteredMembers.map((member) => {
                   const isCurrentLoggedUser = member.user.id === user?.id;
                   const pln = member.planning?.days || {};
+                  const secondPln = member.planning?.secondChoices || {};
 
                   return (
                     <tr
@@ -535,6 +538,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                         const date = new Date(currentYear, currentMonth - 1, dayNum);
                         const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                         const code = pln[dayNum] || '';
+                        const secondCode = secondPln[dayNum] || '';
 
                         const isToday =
                           new Date().getFullYear() === currentYear &&

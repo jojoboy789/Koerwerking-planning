@@ -28,6 +28,8 @@ export const MyPlanningView: React.FC = () => {
 
   const [daysState, setDaysState] = useState<Record<number, ShiftCode>>({});
   const [initialDaysState, setInitialDaysState] = useState<Record<number, ShiftCode>>({});
+  const [secondChoices, setSecondChoices] = useState<Record<number, ShiftCode>>({});
+  const [initialSecondChoices, setInitialSecondChoices] = useState<Record<number, ShiftCode>>({});
   const [lastUpdatedInfo, setLastUpdatedInfo] = useState<{ at?: string; by?: string }>({});
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -59,9 +61,16 @@ export const MyPlanningView: React.FC = () => {
     setSaveSuccessMessage(null);
     try {
       const res = await api.getPlanning(currentYear, currentMonth);
+
       const days = (res.planning?.days as Record<number, ShiftCode>) || {};
+      const loadedSecondChoices =
+        (res.planning?.secondChoices as Record<number, ShiftCode>) || {};
+
       setDaysState(days);
       setInitialDaysState(days);
+
+      setSecondChoices(loadedSecondChoices);
+      setInitialSecondChoices(loadedSecondChoices);
       setLastUpdatedInfo({
         at: res.planning?.updatedAt,
         by: res.planning?.updatedBy,
@@ -81,13 +90,26 @@ export const MyPlanningView: React.FC = () => {
   // Check if there are unsaved changes
   const hasUnsavedChanges = useMemo(() => {
     if (isLockedForEditing) return false;
+
     for (let d = 1; d <= daysInMonth; d++) {
       if ((daysState[d] || '') !== (initialDaysState[d] || '')) {
         return true;
       }
+
+      if ((secondChoices[d] || '') !== (initialSecondChoices[d] || '')) {
+        return true;
+      }
     }
+
     return false;
-  }, [daysState, initialDaysState, daysInMonth, isLockedForEditing]);
+  }, [
+    daysState,
+    initialDaysState,
+    secondChoices,
+    initialSecondChoices,
+    daysInMonth,
+    isLockedForEditing,
+  ]);
 
   // Navigate months
   const handlePrevMonth = () => {
@@ -150,8 +172,16 @@ export const MyPlanningView: React.FC = () => {
     setSaveSuccessMessage(null);
 
     try {
-      const res = await api.savePlanning(currentYear, currentMonth, daysState);
-      setInitialDaysState({ ...daysState });
+const res = await api.savePlanning(
+  currentYear,
+  currentMonth,
+  daysState,
+  secondChoices
+);
+
+setInitialDaysState({ ...daysState });
+setInitialSecondChoices({ ...secondChoices });
+
       setLastUpdatedInfo({
         at: res.planning.updatedAt,
         by: res.planning.updatedBy,
@@ -300,6 +330,7 @@ export const MyPlanningView: React.FC = () => {
             const isWeekend = dayOfWeekIndex === 0 || dayOfWeekIndex === 6;
             const weekNumber = getWeekNumber(date);
             const selectedShift = daysState[dayNum] || '';
+            const selectedSecondChoice = secondChoices[dayNum] || '';
             const showWeekNumber = dayOfWeekIndex === 1 || dayNum === 1;
             const isToday = new Date().getFullYear() === currentYear && new Date().getMonth() + 1 === currentMonth && new Date().getDate() === dayNum;
 
@@ -318,25 +349,73 @@ export const MyPlanningView: React.FC = () => {
                     {showWeekNumber && <p className="text-xs text-slate-400 mt-0.5 font-medium">Week {weekNumber}</p>}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {(['V', 'D', 'L', 'R', 'X'] as ShiftCode[]).map((code) => {
-                    const shiftDef = SHIFT_DEFINITIONS[code as Exclude<ShiftCode, ''>];
-                    const isSelected = selectedShift === code;
-                    return (
-                      <button
-                        key={code}
-                        id={`btn-shift-${dayNum}-${code}`}
-                        type="button"
-                        disabled={isLockedForEditing || (!canEditPlanning && !isAdmin)}
-                        onClick={() => handleSetShift(dayNum, code)}
-                        title={`${shiftDef.label}: ${shiftDef.description}`}
-                        className={`w-11 h-10 sm:w-12 sm:h-10 rounded-xl font-bold text-sm transition-all duration-150 cursor-pointer flex items-center justify-center border ${isSelected ? `${shiftDef.activeClass} scale-105` : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-100'} disabled:opacity-50 disabled:cursor-not-allowed active:scale-95`}
-                      >
-                        {code}
-                      </button>
-                    );
-                  })}
+                <div className="flex flex-col items-end gap-2">
+                  {/* Eerste keuze */}
+                  <div className="flex items-center gap-2">
+                    {(['V', 'D', 'L', 'R', 'X'] as ShiftCode[]).map((code) => {
+                      const shiftDef = SHIFT_DEFINITIONS[code as Exclude<ShiftCode, ''>];
+                      const isSelected = selectedShift === code;
+
+                      return (
+                        <button
+                          key={code}
+                          id={`btn-shift-${dayNum}-${code}`}
+                          type="button"
+                          disabled={isLockedForEditing || (!canEditPlanning && !isAdmin)}
+                          onClick={() => handleSetShift(dayNum, code)}
+                          title={`${shiftDef.label}: ${shiftDef.description}`}
+                          className={`w-11 h-10 sm:w-12 sm:h-10 rounded-xl font-bold text-sm transition-all duration-150 cursor-pointer flex items-center justify-center border ${isSelected ? `${shiftDef.activeClass} scale-105` : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-100'} disabled:opacity-50 disabled:cursor-not-allowed active:scale-95`}
+                        >
+                          {code}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Tweede keuze */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold text-slate-400 mr-1">2e</span>
+
+                    {(['V', 'D', 'L', 'R', 'X'] as ShiftCode[]).map((code) => {
+                      const shiftDef = SHIFT_DEFINITIONS[code as Exclude<ShiftCode, ''>];
+                      const isSelected = selectedSecondChoice === code;
+                      const isPrimaryChoice = selectedShift === code;
+
+                      return (
+                        <button
+                          key={`second-${code}`}
+                          id={`btn-second-shift-${dayNum}-${code}`}
+                          type="button"
+                          disabled={
+                            isLockedForEditing ||
+                            (!canEditPlanning && !isAdmin) ||
+                            isPrimaryChoice
+                          }
+                          onClick={() => {
+                            setSecondChoices((prev) => ({
+                              ...prev,
+                              [dayNum]: prev[dayNum] === code ? '' : code,
+                            }));
+                            setSaveSuccessMessage(null);
+                          }}
+                          title={
+                            isPrimaryChoice
+                              ? 'Deze keuze is al je eerste keuze'
+                              : `Tweede keuze: ${shiftDef.label}`
+                          }
+                          className={`w-7 h-6 rounded-md text-[10px] font-bold transition-all border ${
+                            isSelected
+                              ? `${shiftDef.activeClass} border-current`
+                              : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                          } disabled:opacity-30 disabled:cursor-not-allowed`}
+                        >
+                          {code}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+
               </div>
             );
           })}

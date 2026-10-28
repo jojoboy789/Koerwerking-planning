@@ -45,6 +45,7 @@ interface StoredPlanning {
   year: number;
   month: number;
   days: Record<number, string>;
+  secondChoices?: Record<number, string>;
   finalDays?: Record<number, string>;
   isFinal: boolean;
   updatedAt: string;
@@ -1174,41 +1175,97 @@ app.get(
     const year = parseInt(req.params.year, 10);
     const month = parseInt(req.params.month, 10);
     const userId = req.user!.id;
-    const { days } = req.body;
+    const { days, secondChoices } = req.body;
 
-    if (isNaN(year) || isNaN(month) || month < 1 || month > 12 || typeof days !== 'object' || days === null) {
+    if (
+      isNaN(year) ||
+      isNaN(month) ||
+      month < 1 ||
+      month > 12 ||
+      typeof days !== 'object' ||
+      days === null ||
+      Array.isArray(days) ||
+      (secondChoices !== undefined &&
+        (typeof secondChoices !== 'object' ||
+          secondChoices === null ||
+          Array.isArray(secondChoices)))
+    ) {
       return res.status(400).json({ error: 'Ongeldige planningsgegevens ontvangen.' });
     }
 
     // Prevent editing after the 7th of the PREVIOUS month for non-planners
     const now = new Date();
     const isPlanner = req.user!.canPlannerMode || req.user!.isAdmin;
+
     if (!isPlanner) {
-        const deadline = new Date(year, month - 2, 8); // Deadline is 8th of the month BEFORE the one being edited
-        if (now >= deadline) {
-            const monthNames = ['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'];
-            const targetMonthName = monthNames[month - 1];
-            return res.status(403).json({ error: `De deadline voor het aanpassen van de planning voor ${targetMonthName} is verstreken (7e van de vorige maand).` });
-        }
+      const deadline = new Date(year, month - 2, 8);
+
+      if (now >= deadline) {
+        const monthNames = [
+          'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
+          'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'
+        ];
+        const targetMonthName = monthNames[month - 1];
+
+        return res.status(403).json({
+          error: `De deadline voor het aanpassen van de planning voor ${targetMonthName} is verstreken (7e van de vorige maand).`
+        });
+      }
     }
 
-    // Validate days map
-    const cleanDays: Record<number, string> = {};
+    // Geldige dienstcodes
     const validCodes = ['V', 'D', 'L', 'R', 'X', ''];
+
+    // Eerste keuze per dag valideren
+    const cleanDays: Record<number, string> = {};
+
     for (const [key, value] of Object.entries(days)) {
-      const dayNum = parseInt(key, 10);
-      if (dayNum >= 1 && dayNum <= 31 && typeof value === 'string' && validCodes.includes(value)) {
+      const dayNum = Number(key);
+
+      if (
+        Number.isInteger(dayNum) &&
+        dayNum >= 1 &&
+        dayNum <= 31 &&
+        typeof value === 'string' &&
+        validCodes.includes(value)
+      ) {
         if (value !== '') {
           cleanDays[dayNum] = value;
         }
       }
     }
 
+    // Tweede keuze per dag valideren
+    const cleanSecondChoices: Record<number, string> = {};
+
+    if (secondChoices) {
+      for (const [key, value] of Object.entries(secondChoices)) {
+        const dayNum = Number(key);
+
+        if (
+          Number.isInteger(dayNum) &&
+          dayNum >= 1 &&
+          dayNum <= 31 &&
+          typeof value === 'string' &&
+          validCodes.includes(value)
+        ) {
+          // Een tweede keuze mag niet identiek zijn aan de eerste keuze.
+          if (value !== '' && value !== cleanDays[dayNum]) {
+            cleanSecondChoices[dayNum] = value;
+          }
+        }
+      }
+    }
+
     const updatedAt = new Date().toISOString();
-    const existingIndex = db.plannings.findIndex(p => p.userId === userId && p.year === year && p.month === month);
+
+    const existingIndex = db.plannings.findIndex(
+      p => p.userId === userId && p.year === year && p.month === month
+    );
 
     if (existingIndex >= 0) {
       db.plannings[existingIndex].days = cleanDays;
+      db.plannings[existingIndex].secondChoices = cleanSecondChoices;
       db.plannings[existingIndex].updatedAt = updatedAt;
       db.plannings[existingIndex].updatedBy = req.user!.name;
     } else {
@@ -1219,6 +1276,7 @@ app.get(
         year,
         month,
         days: cleanDays,
+        secondChoices: cleanSecondChoices,
         updatedAt,
         updatedBy: req.user!.name,
         isFinal: false,
@@ -1226,10 +1284,16 @@ app.get(
     }
 
     saveDatabase(db);
-    res.json({
+
+    const savedPlanning =
+      existingIndex >= 0
+        ? db.plannings[existingIndex]
+        : db.plannings[db.plannings.length - 1];
+
+    return res.json({
       success: true,
       message: 'Planning succesvol opgeslagen.',
-      planning: existingIndex >= 0 ? db.plannings[existingIndex] : db.plannings[db.plannings.length - 1],
+      planning: savedPlanning,
     });
   });
 
