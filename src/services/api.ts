@@ -206,15 +206,28 @@ class ApiClient {
     );
   }
 
-  async saveUserPlanningAsAdmin(userId: string, year: number, month: number, days: Record<number, string>) {
-    return this.request<{ success: boolean; message: string; planning: MonthlyPlanning }>(
-      `/admin/users/${userId}/planning/${year}/${month}`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ days }),
-      }
-    );
-  }
+async saveUserPlanningAsAdmin(
+  userId: string,
+  year: number,
+  month: number,
+  days: Record<number, string>,
+  secondChoices?: Record<number, string>
+) {
+  return this.request<{
+    success: boolean;
+    message: string;
+    planning: MonthlyPlanning;
+  }>(
+    `/admin/users/${userId}/planning/${year}/${month}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        days,
+        secondChoices: secondChoices || {},
+      }),
+    }
+  );
+}
 
   async getFirebaseStatus() {
     return this.request<{

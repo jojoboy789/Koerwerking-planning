@@ -263,13 +263,23 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   const handleOpenDayModal = (day: number) => {
     setSelectedDayDetail(day);
     setDaySaveMessage(null);
-    // Initialize dayEditState with current assignments for that day
-    const state: Record<string, ShiftCode> = {};
+
+    const primaryState: Record<string, ShiftCode> = {};
+    const secondState: Record<string, ShiftCode> = {};
+
     filteredMembers.forEach((m) => {
-      state[m.user.id] = (m.planning?.days?.[day] as ShiftCode) || '';
+      primaryState[m.user.id] =
+        (m.planning?.days?.[day] as ShiftCode) || '';
+
+      secondState[m.user.id] =
+        (m.planning?.secondChoices?.[day] as ShiftCode) || '';
     });
-    setDayEditState(state);
+
+    setDayEditState(primaryState);
+    setDaySecondChoiceState(secondState);
+    setInitialDaySecondChoiceState(secondState);
   };
+
 
   // Change a member's shift for the currently selected day
   const handleSetMemberShiftForDay = (userId: string, code: ShiftCode) => {
@@ -279,45 +289,76 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
     }));
     setDaySaveMessage(null);
   };
+// Nieuwe handling 
+const handleSaveDayResolutions = async () => {
+  if (!selectedDayDetail) return;
 
-  // Save changes from day modal
-  const handleSaveDayResolutions = async () => {
-    if (!selectedDayDetail) return;
-    setIsSavingDay(true);
-    setDaySaveMessage(null);
-    try {
-      // Save for each member whose shift changed on this day
-      const promises = filteredMembers.map(async (m) => {
-        const currentCode = m.planning?.days?.[selectedDayDetail] || '';
-        const newCode = dayEditState[m.user.id] || '';
+  setIsSavingDay(true);
+  setDaySaveMessage(null);
 
-        if (currentCode !== newCode) {
-          const updatedDays = { ...(m.planning?.days || {}) };
-          if (!newCode) {
-            delete updatedDays[selectedDayDetail];
-          } else {
-            updatedDays[selectedDayDetail] = newCode;
-          }
-          return api.saveUserPlanningAsAdmin(m.user.id, currentYear, currentMonth, updatedDays);
+  try {
+    const promises = filteredMembers.map(async (m) => {
+      const currentCode = m.planning?.days?.[selectedDayDetail] || '';
+      const newCode = dayEditState[m.user.id] || '';
+
+      const currentSecondCode =
+        m.planning?.secondChoices?.[selectedDayDetail] || '';
+      const newSecondCode =
+        daySecondChoiceState[m.user.id] || '';
+
+      const primaryChanged = currentCode !== newCode;
+      const secondChanged = currentSecondCode !== newSecondCode;
+
+      if (primaryChanged || secondChanged) {
+        const updatedDays = { ...(m.planning?.days || {}) };
+        const updatedSecondChoices = {
+          ...(m.planning?.secondChoices || {}),
+        };
+
+        if (!newCode) {
+          delete updatedDays[selectedDayDetail];
+        } else {
+          updatedDays[selectedDayDetail] = newCode;
         }
-        return Promise.resolve();
-      });
 
-      await Promise.all(promises);
-      setDaySaveMessage('Wijzigingen voor deze dag zijn direct opgeslagen!');
-      // Refresh whole overview
-      await fetchOverview();
-      setTimeout(() => {
-        setSelectedDayDetail(null);
-        setDaySaveMessage(null);
-      }, 1200);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Opslaan van dagwijzigingen mislukt.';
-      setErrorMessage(msg);
-    } finally {
-      setIsSavingDay(false);
-    }
-  };
+        if (!newSecondCode) {
+          delete updatedSecondChoices[selectedDayDetail];
+        } else {
+          updatedSecondChoices[selectedDayDetail] = newSecondCode;
+        }
+
+        return api.saveUserPlanningAsAdmin(
+          m.user.id,
+          currentYear,
+          currentMonth,
+          updatedDays,
+          updatedSecondChoices
+        );
+      }
+
+      return Promise.resolve();
+    });
+
+    await Promise.all(promises);
+
+    setDaySaveMessage('Wijzigingen voor deze dag zijn direct opgeslagen!');
+    await fetchOverview();
+
+    setTimeout(() => {
+      setSelectedDayDetail(null);
+      setDaySaveMessage(null);
+    }, 1200);
+  } catch (err: unknown) {
+    const msg =
+      err instanceof Error
+        ? err.message
+        : 'Opslaan van dagwijzigingen mislukt.';
+
+    setErrorMessage(msg);
+  } finally {
+    setIsSavingDay(false);
+  }
+};
 
   const monthDisplay = `${MONTH_NAMES[currentMonth - 1]} ${currentYear}`.toUpperCase();
 
@@ -560,8 +601,10 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                               isToday ? 'bg-indigo-50/30' : isWeekend ? 'bg-slate-300/40' : ''
                             }`}
                           >
+                          <div className="flex flex-col items-center justify-center gap-0.5 py-0.5">
+                            {/* Eerste keuze */}
                             <div
-                              className={`w-full h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-transform hover:scale-105 select-none ${
+                              className={`w-full h-7 flex items-center justify-center rounded-lg text-xs font-bold transition-transform hover:scale-105 select-none ${
                                 code ? codeClass : 'bg-slate-50 text-slate-300'
                               }`}
                               title={`${member.user.name} - Dag ${dayNum}: ${
@@ -580,8 +623,26 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                             >
                               {code || '·'}
                             </div>
-                          </td>
-                        );
+
+                          
+                          {/* Tweede keuze */}
+                          <div
+                            className={`w-full h-4 flex items-center justify-center rounded text-[9px] font-bold ${
+                              secondCode
+                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                                : 'text-slate-300'
+                            }`}
+                            title={
+                              secondCode
+                                ? `Tweede keuze: ${secondCode}`
+                                : 'Geen tweede keuze'
+                            }
+                          >
+                        {secondCode || '·'}
+                      </div>
+                    </div>
+                  </td>
+                              );
                       })}
                     </tr>
                   );
@@ -1016,7 +1077,8 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                     </div>
 
                     {/* Shift Selector Buttons */}
-                    <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                    <div className="flex flex-col items-end gap-2 self-end sm:self-auto">
+                      <div className="flex items-center gap-1.5">
                       {/* Quick remove button if in conflict */}
                       {(() => {
                         const shiftCounts = Object.values(dayEditState).reduce((acc, code) => {
@@ -1084,9 +1146,65 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
                         Geen
                       </button>
                     </div>
+                                        {/* Tweede keuze */}
+                      <div className="flex items-center gap-1 mt-2">
+                        <span className="text-[10px] font-semibold text-slate-500 mr-1">
+                          2e
+                        </span>
+
+                        {(['V', 'D', 'L', 'R', 'X'] as const).map((code) => {
+                          const selectedSecond = daySecondChoiceState[m.user.id] || '';
+                          const isSelected = selectedSecond === code;
+                          const isPrimaryChoice = currentShift === code;
+
+                          return (
+                            <button
+                              key={`second-${code}`}
+                              type="button"
+                              disabled={isPrimaryChoice}
+                              onClick={() => {
+                                setDaySecondChoiceState((prev) => ({
+                                  ...prev,
+                                  [m.user.id]: prev[m.user.id] === code ? '' : code,
+                                }));
+                                setDaySaveMessage(null);
+                              }}
+                              className={`w-7 h-6 rounded-md text-[10px] font-bold border transition-all ${
+                                isSelected
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'bg-white text-slate-600 border-slate-200 hover:bg-indigo-50'
+                              } disabled:opacity-30 disabled:cursor-not-allowed`}
+                              title={
+                                isPrimaryChoice
+                                  ? 'Deze code is al de eerste keuze'
+                                  : `Tweede keuze ${code}`
+                              }
+                            >
+                              {code}
+                            </button>
+                          );
+                        })}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDaySecondChoiceState((prev) => ({
+                              ...prev,
+                              [m.user.id]: '',
+                            }));
+                            setDaySaveMessage(null);
+                          }}
+                          className="px-2 h-6 rounded-md text-[10px] text-slate-500 border border-slate-200 hover:bg-red-50 hover:text-red-600"
+                          title="Tweede keuze wissen"
+                        >
+                          Geen
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
+
             </div>
 
             {/* Modal Footer Actions */}
