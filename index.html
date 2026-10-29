@@ -1,18 +1,348 @@
+
 <!doctype html>
 <html lang="nl">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mijn Planning</title>
-    <meta name="description" content="Veilige en overzichtelijke maandplanning webapplicatie met toegangscode-login." />
+    <meta name="theme-color" content="#17202b" />
+
+    <title>Koerwerking-planning</title>
+    <meta
+      name="description"
+      content="Veilige en overzichtelijke planning voor de koerwerking."
+    />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      #recovery-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        display: none;
+        overflow: auto;
+        box-sizing: border-box;
+        padding: 24px;
+        align-items: center;
+        justify-content: center;
+        background: #17202b;
+        color: #f8fafc;
+        font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+      }
+
+      #recovery-screen.visible {
+        display: flex;
+      }
+
+      #recovery-card {
+        width: 100%;
+        max-width: 540px;
+        padding: 30px;
+        box-sizing: border-box;
+        border: 1px solid #3b4655;
+        border-radius: 20px;
+        background: #202b39;
+        box-shadow: 0 24px 80px rgb(0 0 0 / 25%);
+      }
+
+      #recovery-card h1 {
+        margin: 0 0 12px;
+        font-size: 26px;
+        line-height: 1.25;
+      }
+
+      #recovery-card p {
+        color: #cbd5e1;
+        line-height: 1.7;
+      }
+
+      .recovery-button {
+        display: block;
+        width: 100%;
+        margin-top: 12px;
+        padding: 14px 18px;
+        border: 0;
+        border-radius: 10px;
+        background: #ffdc00;
+        color: #17202b;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .recovery-button.secondary {
+        border: 1px solid #64748b;
+        background: transparent;
+        color: #f8fafc;
+      }
+
+      .recovery-button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+
+      #recovery-status {
+        min-height: 24px;
+        font-size: 14px;
+      }
+    </style>
   </head>
-  <body class="bg-slate-50 text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white min-h-screen">
+
+  <body
+    class="bg-slate-50 text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white min-h-screen"
+  >
     <div id="root"></div>
+
+    <!-- Statische foutpagina: werkt ook als React niet opstart. -->
+    <section id="recovery-screen" role="alert" aria-live="assertive">
+      <div id="recovery-card">
+        <p>KOERWERKING-PLANNING</p>
+        <h1>De website kon niet goed opstarten</h1>
+
+        <p>
+          Mogelijk is er een probleem met een recente update of met tijdelijk
+          opgeslagen websitebestanden. Probeer eerst de website opnieuw te
+          laden. Je planning en opgeslagen login worden bij de veilige
+          opschoning niet bewust verwijderd.
+        </p>
+
+        <button id="retry-button" class="recovery-button" type="button">
+          Website opnieuw laden
+        </button>
+
+        <button
+          id="cleanup-button"
+          class="recovery-button secondary"
+          type="button"
+        >
+          Veilige opschoning uitvoeren
+        </button>
+
+        <p id="recovery-status" role="status"></p>
+
+        <p>
+          Werkt de website daarna nog niet? Neem contact op met de beheerder
+          en vermeld dat de app of een JavaScript-bestand niet kon laden.
+        </p>
+      </div>
+    </section>
+
+    <script>
+      (() => {
+        const screen = document.getElementById("recovery-screen");
+        const status = document.getElementById("recovery-status");
+        const retryButton = document.getElementById("retry-button");
+        const cleanupButton = document.getElementById("cleanup-button");
+        const root = document.getElementById("root");
+
+        let recoveryStarted = false;
+        let appStarted = false;
+        let failureDetected = false;
+
+        function showRecovery(message) {
+          screen.classList.add("visible");
+
+          if (message) {
+            status.textContent = message;
+          }
+        }
+
+        function hideRecovery() {
+          screen.classList.remove("visible");
+        }
+
+        function reloadPage(addCacheBuster = false) {
+          if (addCacheBuster) {
+            const url = new URL(window.location.href);
+            url.searchParams.set("_recovery", String(Date.now()));
+            window.location.replace(url.toString());
+          } else {
+            window.location.reload();
+          }
+        }
+
+        // Eén automatische herstelpoging per tab/sessie.
+        function attemptOneRecovery() {
+          if (recoveryStarted) return;
+
+          recoveryStarted = true;
+
+          try {
+            if (sessionStorage.getItem("kw_module_recovery_attempted") === "1") {
+              showRecovery(
+                "Automatisch herstel is al geprobeerd. Gebruik de knoppen hieronder."
+              );
+              return;
+            }
+
+            sessionStorage.setItem("kw_module_recovery_attempted", "1");
+          } catch {
+            // Herstel blijft mogelijk als sessionStorage niet beschikbaar is.
+          }
+
+          showRecovery("Er wordt één herstelpoging uitgevoerd…");
+
+          window.setTimeout(() => {
+            reloadPage(true);
+          }, 500);
+        }
+
+        // Detecteer mislukte modulebestanden.
+        window.addEventListener(
+          "error",
+          (event) => {
+            const target = event.target;
+
+            const failedResource =
+              target instanceof HTMLScriptElement ||
+              target instanceof HTMLLinkElement;
+
+            const moduleFailure =
+              failedResource &&
+              (
+                target instanceof HTMLScriptElement ||
+                target.rel === "stylesheet"
+              );
+
+            if (moduleFailure) {
+              failureDetected = true;
+
+              if (!appStarted) {
+                attemptOneRecovery();
+              }
+            }
+          },
+          true
+        );
+
+        // Ook JavaScript-fouten detecteren die de app verhinderen te starten.
+        window.addEventListener("error", (event) => {
+          if (!event.target || event.target === window) {
+            if (!appStarted) {
+              failureDetected = true;
+              showRecovery(
+                "Er is een JavaScript-fout opgetreden. Je kunt de website veilig opnieuw proberen te laden."
+              );
+            }
+          }
+        });
+
+        window.addEventListener("unhandledrejection", () => {
+          if (!appStarted) {
+            showRecovery(
+              "De website kon niet volledig opstarten. Probeer opnieuw te laden."
+            );
+          }
+        });
+
+        // Als React inhoud in #root plaatst, verberg de foutpagina.
+        const observer = new MutationObserver(() => {
+          if (root && root.childElementCount > 0) {
+            appStarted = true;
+            hideRecovery();
+
+            try {
+              sessionStorage.removeItem("kw_module_recovery_attempted");
+            } catch {
+              // Geen actie nodig.
+            }
+
+            observer.disconnect();
+          }
+        });
+
+        observer.observe(root, {
+          childList: true,
+          subtree: true
+        });
+
+        // Vang ook het geval op waarin de app helemaal niet start.
+        window.setTimeout(() => {
+          if (!appStarted && !failureDetected) {
+            showRecovery(
+              "De website reageert niet zoals verwacht. Je kunt opnieuw laden of een veilige opschoning uitvoeren."
+            );
+          }
+        }, 10000);
+
+        retryButton.addEventListener("click", () => {
+          retryButton.disabled = true;
+          status.textContent = "De website wordt opnieuw geladen…";
+          reloadPage();
+        });
+
+        cleanupButton.addEventListener("click", async () => {
+          cleanupButton.disabled = true;
+          retryButton.disabled = true;
+          status.textContent =
+            "Tijdelijke websitecaches worden opgeschoond…";
+
+          const problems = [];
+
+          try {
+            if ("caches" in window) {
+              const cacheNames = await caches.keys();
+              const results = await Promise.allSettled(
+                cacheNames.map((name) => caches.delete(name))
+              );
+
+              if (results.some((result) => result.status === "rejected")) {
+                problems.push("Niet alle caches konden worden gewist");
+              }
+            }
+          } catch {
+            problems.push("Cache-opruiming is niet beschikbaar");
+          }
+
+          // Verwijder alleen service workers van deze website.
+          // Dit wist geen localStorage, login of planningsgegevens.
+          try {
+            if ("serviceWorker" in navigator) {
+              const registrations =
+                await navigator.serviceWorker.getRegistrations();
+
+              const results = await Promise.allSettled(
+                registrations.map((registration) =>
+                  registration.unregister()
+                )
+              );
+
+              if (results.some((result) => result.status === "rejected")) {
+                problems.push("Niet alle service workers konden worden gestopt");
+              }
+            }
+          } catch {
+            problems.push("Service-worker-opruiming is niet beschikbaar");
+          }
+
+          // Verwijder uitsluitend onze herstelvlag, geen appgegevens.
+          try {
+            sessionStorage.removeItem("kw_module_recovery_attempted");
+          } catch {
+            // Geen actie nodig.
+          }
+
+          if (problems.length) {
+            status.textContent =
+              problems.join(". ") +
+              ". De website wordt opnieuw geladen; sommige tijdelijke gegevens kunnen blijven bestaan.";
+          } else {
+            status.textContent =
+              "Opschoning voltooid. De website wordt opnieuw geladen…";
+          }
+
+          window.setTimeout(() => {
+            reloadPage(true);
+          }, 800);
+        });
+      })();
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
-

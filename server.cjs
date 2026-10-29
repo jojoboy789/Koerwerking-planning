@@ -90,7 +90,7 @@ async function saveRemoteDatabase(data) {
 }
 
 // server.ts
-import_dotenv.default.config();
+import_dotenv.default.config({ path: [".env.local", ".env"] });
 var PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3e3;
 var HASH_SALT = process.env.ACCESS_CODE_SALT || "NEON_TOKYO_SALT_v1_99x#";
 var DATA_DIR = import_path.default.join(process.cwd(), "data");
@@ -603,6 +603,307 @@ async function startServer() {
       message: "Je toegangscode is succesvol gewijzigd. Je wordt nu uitgelogd en kunt met de nieuwe code inloggen."
     });
   });
+  const OC_PLANNING_BASE_URL = "https://oc-gbr.meta-technics.be";
+  let previousOCPlanningFingerprint = null;
+  let ocPlanningMonitorStarted = false;
+  async function fetchOCPlanningManifest() {
+    const apiToken = process.env.OC_PLANNING_API_TOKEN;
+    if (!apiToken) {
+      throw new Error("OC_PLANNING_API_TOKEN ontbreekt.");
+    }
+    const response = await fetch(
+      `${OC_PLANNING_BASE_URL}/kiosk/manifest.json`,
+      {
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          Accept: "application/json"
+        },
+        signal: AbortSignal.timeout(15e3)
+      }
+    );
+    if (!response.ok) {
+      throw new Error(`OC Planning manifest gaf HTTP ${response.status}.`);
+    }
+    const manifest = await response.json();
+    if (!Array.isArray(manifest.slides)) {
+      throw new Error("Ongeldige OC Planning manifest ontvangen.");
+    }
+    return manifest;
+  }
+  async function fetchOCPlanningSlideHtml(slideId) {
+    const apiToken = process.env.OC_PLANNING_API_TOKEN;
+    if (!apiToken) {
+      throw new Error("OC_PLANNING_API_TOKEN ontbreekt.");
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(slideId)) {
+      throw new Error("Ongeldige OC Planning slide-ID.");
+    }
+    const response = await fetch(
+      `${OC_PLANNING_BASE_URL}/kiosk/slides/${encodeURIComponent(slideId)}.html`,
+      {
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          Accept: "text/html"
+        },
+        signal: AbortSignal.timeout(15e3)
+      }
+    );
+    if (!response.ok) {
+      throw new Error(`OC Planning slide gaf HTTP ${response.status}.`);
+    }
+    return response.text();
+  }
+  function escapeTelegramHtml(value) {
+    return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function htmlToTelegramText(html) {
+    return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|section|article|h[1-6]|li|tr)>/gi, "\n").replace(/<li\b[^>]*>/gi, "\u2022 ").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+  async function sendOCPlanningUpdateToTelegram(slides) {
+    const changedSlides = slides.filter((slide) => slide.dated);
+    if (changedSlides.length === 0) {
+      console.log("OC Planning gewijzigd, maar er zijn geen dagplanningsslides.");
+      return;
+    }
+    const heading = "\u{1F68C} <b>OC BUS GBR \xB7 DAGPLANNING GEWIJZIGD</b>\n\n";
+    let message = heading;
+    for (const slide of changedSlides) {
+      const content = htmlToTelegramText(slide.html);
+      const section = `<b>${escapeTelegramHtml(slide.title)}</b>
+${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}
+
+`;
+      if ((message + section).length > 3500) {
+        await sendTelegramNotification(message.trim());
+        message = heading;
+      }
+      message += section;
+    }
+    if (message.trim() !== heading.trim()) {
+      await sendTelegramNotification(message.trim());
+    }
+  }
+  async function checkOCPlanningForChanges() {
+    const manifest = await fetchOCPlanningManifest();
+    const fingerprint = JSON.stringify(
+      manifest.slides.map((slide) => ({
+        id: slide.id,
+        title: slide.title,
+        version: slide.version,
+        updated_at: slide.updated_at,
+        dated: slide.dated
+      }))
+    );
+    if (previousOCPlanningFingerprint === null) {
+      previousOCPlanningFingerprint = fingerprint;
+      console.log("OC Planning-monitor gestart; huidige toestand opgeslagen.");
+      return;
+    }
+    if (fingerprint === previousOCPlanningFingerprint) {
+      return;
+    }
+    const slides = await Promise.all(
+      manifest.slides.map(async (slide) => ({
+        ...slide,
+        html: await fetchOCPlanningSlideHtml(slide.id)
+      }))
+    );
+    await sendOCPlanningUpdateToTelegram(slides);
+    previousOCPlanningFingerprint = fingerprint;
+    console.log("OC Planning-wijziging verwerkt.");
+  }
+  function startOCPlanningMonitor() {
+    if (ocPlanningMonitorStarted) return;
+    ocPlanningMonitorStarted = true;
+    const check = async () => {
+      try {
+        await checkOCPlanningForChanges();
+      } catch (error) {
+        console.error("OC Planning-monitor mislukt:", error);
+      }
+    };
+    void check();
+    setInterval(() => {
+      void check();
+    }, 6e4);
+  }
+  app2.get(
+    "/api/oc-planning",
+    authMiddleware,
+    async (_req, res) => {
+      const apiToken = process.env.OC_PLANNING_API_TOKEN;
+      if (!apiToken) {
+        console.error("OC Planning API-token ontbreekt in de serveromgeving.");
+        return res.status(503).json({
+          error: "OC Planning is momenteel niet geconfigureerd."
+        });
+      }
+      try {
+        const headers = {
+          Authorization: `Bearer ${apiToken}`,
+          Accept: "application/json"
+        };
+        const manifestResponse = await fetch(
+          `${OC_PLANNING_BASE_URL}/kiosk/manifest.json`,
+          {
+            headers,
+            signal: AbortSignal.timeout(15e3)
+          }
+        );
+        if (!manifestResponse.ok) {
+          console.error(
+            "OC Planning manifest mislukt:",
+            manifestResponse.status
+          );
+          return res.status(502).json({
+            error: manifestResponse.status === 401 ? "De toegang tot de OC Planning API is geweigerd." : "De OC Planning kan momenteel niet worden opgehaald."
+          });
+        }
+        const manifest = await manifestResponse.json();
+        if (!Array.isArray(manifest.slides)) {
+          return res.status(502).json({
+            error: "De OC Planning API stuurde een ongeldig antwoord."
+          });
+        }
+        const slides = await Promise.all(
+          manifest.slides.map(async (slide) => {
+            if (!/^[a-zA-Z0-9_-]+$/.test(slide.id)) {
+              throw new Error("Ongeldige slide-ID ontvangen.");
+            }
+            const response = await fetch(
+              `${OC_PLANNING_BASE_URL}/kiosk/slides/${encodeURIComponent(slide.id)}.html`,
+              {
+                headers: {
+                  Authorization: `Bearer ${apiToken}`,
+                  Accept: "text/html"
+                },
+                signal: AbortSignal.timeout(15e3)
+              }
+            );
+            if (!response.ok) {
+              throw new Error(
+                `Slide kon niet worden opgehaald: ${response.status}`
+              );
+            }
+            const html = await response.text();
+            return {
+              ...slide,
+              html
+            };
+          })
+        );
+        res.setHeader("Cache-Control", "private, no-store");
+        return res.json({
+          generated_at: manifest.generated_at,
+          poll_seconds: manifest.poll_seconds || 60,
+          staleness: manifest.staleness,
+          slides
+        });
+      } catch (error) {
+        console.error("Fout bij ophalen OC Planning:", error);
+        return res.status(502).json({
+          error: "De verbinding met OC Planning is mislukt. Probeer het later opnieuw."
+        });
+      }
+    }
+  );
+  app2.post(
+    "/api/oc-planning/send-telegram",
+    authMiddleware,
+    requireAdminMiddleware,
+    async (_req, res) => {
+      try {
+        const manifest = await fetchOCPlanningManifest();
+        if (!manifest.slides || manifest.slides.length === 0) {
+          return res.status(404).json({
+            error: "Er zijn momenteel geen actieve planningsslides beschikbaar."
+          });
+        }
+        const slides = await Promise.all(
+          manifest.slides.map(async (slide) => ({
+            ...slide,
+            html: await fetchOCPlanningSlideHtml(slide.id)
+          }))
+        );
+        const heading = "\u{1F68C} <b>OC BUS GBR \xB7 ACTUELE DAGPLANNING</b>\n\n";
+        const sections = slides.map((slide) => {
+          const category = slide.dated ? "Dagplanning" : "Mededeling";
+          const content = htmlToTelegramText(slide.html);
+          return `<b>${escapeTelegramHtml(category)}: ${escapeTelegramHtml(slide.title)}</b>
+${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}`;
+        });
+        const maxLength = 3500;
+        const messages = [];
+        let message = heading;
+        for (const section of sections) {
+          const block = `${section}
+
+`;
+          if ((message + block).length > maxLength && message !== heading) {
+            messages.push(message.trim());
+            message = heading;
+          }
+          let remaining = block;
+          while ((message + remaining).length > maxLength) {
+            const available = maxLength - message.length;
+            if (available <= 0) {
+              messages.push(message.trim());
+              message = heading;
+              continue;
+            }
+            messages.push((message + remaining.slice(0, available)).trim());
+            remaining = remaining.slice(available);
+            message = heading;
+          }
+          message += remaining;
+        }
+        if (message.trim() !== heading.trim()) {
+          messages.push(message.trim());
+        }
+        if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
+          return res.status(503).json({
+            error: "Telegram is niet correct geconfigureerd op de server."
+          });
+        }
+        for (const telegramMessage of messages) {
+          const telegramResponse = await fetch(
+            `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                chat_id: process.env.TELEGRAM_CHAT_ID,
+                text: telegramMessage,
+                parse_mode: "HTML"
+              }),
+              signal: AbortSignal.timeout(15e3)
+            }
+          );
+          const telegramResult = await telegramResponse.json();
+          if (!telegramResponse.ok || !telegramResult.ok) {
+            console.error(
+              "OC Planning Telegram-verzending mislukt:",
+              telegramResult.description || telegramResponse.status
+            );
+            return res.status(502).json({
+              error: "Telegram kon de volledige dagplanning niet versturen. Controleer de Telegram-configuratie."
+            });
+          }
+        }
+        return res.json({
+          success: true,
+          message: `De actuele dagplanning en mededelingen zijn naar Telegram verstuurd (${slides.length} slides, ${messages.length} berichten).`
+        });
+      } catch (error) {
+        console.error("Handmatig versturen OC Planning naar Telegram mislukt:", error);
+        return res.status(502).json({
+          error: "De actuele OC BUS GBR-planning kon niet naar Telegram worden verstuurd."
+        });
+      }
+    }
+  );
   app2.get("/api/planning/:year/:month", authMiddleware, (req, res) => {
     const year = parseInt(req.params.year, 10);
     const month = parseInt(req.params.month, 10);
@@ -633,8 +934,8 @@ async function startServer() {
     const year = parseInt(req.params.year, 10);
     const month = parseInt(req.params.month, 10);
     const userId = req.user.id;
-    const { days } = req.body;
-    if (isNaN(year) || isNaN(month) || month < 1 || month > 12 || typeof days !== "object" || days === null) {
+    const { days, secondChoices } = req.body;
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12 || typeof days !== "object" || days === null || Array.isArray(days) || secondChoices !== void 0 && (typeof secondChoices !== "object" || secondChoices === null || Array.isArray(secondChoices))) {
       return res.status(400).json({ error: "Ongeldige planningsgegevens ontvangen." });
     }
     const now = /* @__PURE__ */ new Date();
@@ -642,25 +943,54 @@ async function startServer() {
     if (!isPlanner) {
       const deadline = new Date(year, month - 2, 8);
       if (now >= deadline) {
-        const monthNames = ["Januari", "Februari", "Maart", "April", "Mei", "Juni", "Juli", "Augustus", "September", "Oktober", "November", "December"];
+        const monthNames = [
+          "Januari",
+          "Februari",
+          "Maart",
+          "April",
+          "Mei",
+          "Juni",
+          "Juli",
+          "Augustus",
+          "September",
+          "Oktober",
+          "November",
+          "December"
+        ];
         const targetMonthName = monthNames[month - 1];
-        return res.status(403).json({ error: `De deadline voor het aanpassen van de planning voor ${targetMonthName} is verstreken (7e van de vorige maand).` });
+        return res.status(403).json({
+          error: `De deadline voor het aanpassen van de planning voor ${targetMonthName} is verstreken (7e van de vorige maand).`
+        });
       }
     }
-    const cleanDays = {};
     const validCodes = ["V", "D", "L", "R", "X", ""];
+    const cleanDays = {};
     for (const [key, value] of Object.entries(days)) {
-      const dayNum = parseInt(key, 10);
-      if (dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value)) {
+      const dayNum = Number(key);
+      if (Number.isInteger(dayNum) && dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value)) {
         if (value !== "") {
           cleanDays[dayNum] = value;
         }
       }
     }
+    const cleanSecondChoices = {};
+    if (secondChoices) {
+      for (const [key, value] of Object.entries(secondChoices)) {
+        const dayNum = Number(key);
+        if (Number.isInteger(dayNum) && dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value)) {
+          if (value !== "" && value !== cleanDays[dayNum]) {
+            cleanSecondChoices[dayNum] = value;
+          }
+        }
+      }
+    }
     const updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-    const existingIndex = db2.plannings.findIndex((p) => p.userId === userId && p.year === year && p.month === month);
+    const existingIndex = db2.plannings.findIndex(
+      (p) => p.userId === userId && p.year === year && p.month === month
+    );
     if (existingIndex >= 0) {
       db2.plannings[existingIndex].days = cleanDays;
+      db2.plannings[existingIndex].secondChoices = cleanSecondChoices;
       db2.plannings[existingIndex].updatedAt = updatedAt;
       db2.plannings[existingIndex].updatedBy = req.user.name;
     } else {
@@ -671,16 +1001,18 @@ async function startServer() {
         year,
         month,
         days: cleanDays,
+        secondChoices: cleanSecondChoices,
         updatedAt,
         updatedBy: req.user.name,
         isFinal: false
       });
     }
     saveDatabase(db2);
-    res.json({
+    const savedPlanning = existingIndex >= 0 ? db2.plannings[existingIndex] : db2.plannings[db2.plannings.length - 1];
+    return res.json({
       success: true,
       message: "Planning succesvol opgeslagen.",
-      planning: existingIndex >= 0 ? db2.plannings[existingIndex] : db2.plannings[db2.plannings.length - 1]
+      planning: savedPlanning
     });
   });
   app2.get("/api/overview/:year/:month", authMiddleware, (req, res) => {
@@ -934,13 +1266,22 @@ ${message.trim()}`;
     const { id, year, month } = req.params;
     const y = parseInt(year, 10);
     const m = parseInt(month, 10);
-    const { days } = req.body;
+    const { days, secondChoices } = req.body;
     const targetUser = db2.users.find((u) => u.id === id);
     if (!targetUser) {
       return res.status(404).json({ error: "Gebruiker niet gevonden." });
     }
     const cleanDays = {};
     const validCodes = ["V", "D", "L", "R", "X", ""];
+    const cleanSecondChoices = {};
+    for (const [key, value] of Object.entries(secondChoices || {})) {
+      const dayNum = parseInt(key, 10);
+      if (dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value)) {
+        if (value !== "") {
+          cleanSecondChoices[dayNum] = value;
+        }
+      }
+    }
     for (const [key, value] of Object.entries(days || {})) {
       const dayNum = parseInt(key, 10);
       if (dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value)) {
@@ -953,6 +1294,7 @@ ${message.trim()}`;
     const existingIndex = db2.plannings.findIndex((p) => p.userId === id && p.year === y && p.month === m);
     if (existingIndex >= 0) {
       db2.plannings[existingIndex].days = cleanDays;
+      db2.plannings[existingIndex].secondChoices = cleanSecondChoices;
       db2.plannings[existingIndex].updatedAt = now;
       db2.plannings[existingIndex].updatedBy = `${req.user.name} (Planner Wijziging)`;
     } else {
@@ -963,6 +1305,7 @@ ${message.trim()}`;
         year: y,
         month: m,
         days: cleanDays,
+        secondChoices: cleanSecondChoices,
         updatedAt: now,
         updatedBy: `${req.user.name} (Planner Ingevuld)`,
         isFinal: false
@@ -1035,6 +1378,7 @@ ${message.trim()}`;
       res.sendFile(import_path.default.join(distPath, "index.html"));
     });
   }
+  startOCPlanningMonitor();
   app2.listen(PORT, "0.0.0.0", () => {
     console.log(`Neon Tokyo Planner server running at http://0.0.0.0:${PORT}`);
   });
