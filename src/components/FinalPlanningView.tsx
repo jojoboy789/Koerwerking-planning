@@ -270,21 +270,75 @@ export const FinalPlanningView: React.FC = () => {
         },
       });
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('l', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const ratio = canvas.width / canvas.height;
-      let width = pdfWidth - 20;
-      let height = width / ratio;
+      
+const pdf = new jsPDF('l', 'mm', 'a4');
 
-      if (height > pdfHeight - 20) {
-        height = pdfHeight - 20;
-        width = height * ratio;
-      }
+const pdfWidth = pdf.internal.pageSize.getWidth();
+const pdfHeight = pdf.internal.pageSize.getHeight();
 
-      pdf.addImage(imgData, 'PNG', (pdfWidth - width) / 2, (pdfHeight - height) / 2, width, height);
-      pdf.save(`definitieve-planning-${currentYear}-week-${weekNumber}.pdf`);
+const margin = 10;
+const contentWidth = pdfWidth - margin * 2;
+const contentHeight = pdfHeight - margin * 2;
+
+const pixelsPerMm = canvas.width / contentWidth;
+const pageHeightPx = Math.floor(contentHeight * pixelsPerMm);
+
+let sourceY = 0;
+let pageNumber = 0;
+
+while (sourceY < canvas.height) {
+  const sliceHeight = Math.min(
+    pageHeightPx,
+    canvas.height - sourceY,
+  );
+
+  const pageCanvas = document.createElement('canvas');
+  pageCanvas.width = canvas.width;
+  pageCanvas.height = sliceHeight;
+
+  const context = pageCanvas.getContext('2d');
+
+  if (!context) {
+    throw new Error('PDF-pagina kon niet worden opgebouwd.');
+  }
+
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+
+  context.drawImage(
+    canvas,
+    0,
+    sourceY,
+    canvas.width,
+    sliceHeight,
+    0,
+    0,
+    canvas.width,
+    sliceHeight,
+  );
+
+  if (pageNumber > 0) {
+    pdf.addPage('a4', 'landscape');
+  }
+
+  const imageData = pageCanvas.toDataURL('image/png');
+  const imageHeight = sliceHeight / pixelsPerMm;
+
+  pdf.addImage(
+    imageData,
+    'PNG',
+    margin,
+    margin,
+    contentWidth,
+    imageHeight,
+  );
+
+  sourceY += sliceHeight;
+  pageNumber += 1;
+}
+
+pdf.save(`definitieve-planning-${currentYear}-week-${weekNumber}.pdf`);
+
     } catch (error) {
       console.error('PDF exporteren is mislukt:', error);
     } finally {
