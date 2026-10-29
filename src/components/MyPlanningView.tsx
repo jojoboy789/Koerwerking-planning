@@ -374,7 +374,7 @@ setInitialSecondChoices({ ...secondChoices });
 
                   {/* Tweede keuze */}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold text-slate-400 mr-1">2e</span>
+                    <span className="text-[10px] font-semibold text-slate-400 mr-1">2de keuze mogelijkheid</span>
 
                     {(['V', 'D', 'L', 'R', 'X'] as ShiftCode[]).map((code) => {
                       const shiftDef = SHIFT_DEFINITIONS[code as Exclude<ShiftCode, ''>];
