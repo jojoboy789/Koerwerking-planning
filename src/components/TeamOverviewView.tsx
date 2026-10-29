@@ -1149,7 +1149,7 @@ const handleSaveDayResolutions = async () => {
                                         {/* Tweede keuze */}
                       <div className="flex items-center gap-1 mt-2">
                         <span className="text-[10px] font-semibold text-slate-500 mr-1">
-                          2e
+                          2 de Keuze
                         </span>
 
                         {(['V', 'D', 'L', 'R', 'X'] as const).map((code) => {

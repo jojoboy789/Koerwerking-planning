@@ -1166,7 +1166,7 @@ app.get(
     });
   });
 
-  // Save own planning
+    // Save own planning
   app.post('/api/planning/:year/:month', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
     if (!req.user!.canEditPlanning && !req.user!.isAdmin) {
       return res.status(403).json({ error: 'Je hebt geen rechten om een planning in te vullen.' });
@@ -1617,7 +1617,7 @@ app.get(
     const { id, year, month } = req.params;
     const y = parseInt(year, 10);
     const m = parseInt(month, 10);
-    const { days } = req.body;
+    const { days, secondChoices } = req.body;
 
     const targetUser = db.users.find(u => u.id === id);
     if (!targetUser) {
@@ -1626,6 +1626,22 @@ app.get(
 
     const cleanDays: Record<number, string> = {};
     const validCodes = ['V', 'D', 'L', 'R', 'X', ''];
+    const cleanSecondChoices: Record<number, string> = {};
+
+for (const [key, value] of Object.entries(secondChoices || {})) {
+  const dayNum = parseInt(key, 10);
+
+  if (
+    dayNum >= 1 &&
+    dayNum <= 31 &&
+    typeof value === 'string' &&
+    validCodes.includes(value)
+  ) {
+    if (value !== '') {
+      cleanSecondChoices[dayNum] = value;
+    }
+  }
+}
     for (const [key, value] of Object.entries(days || {})) {
       const dayNum = parseInt(key, 10);
       if (dayNum >= 1 && dayNum <= 31 && typeof value === 'string' && validCodes.includes(value)) {
@@ -1638,23 +1654,25 @@ app.get(
     const now = new Date().toISOString();
     const existingIndex = db.plannings.findIndex(p => p.userId === id && p.year === y && p.month === m);
 
-    if (existingIndex >= 0) {
-      db.plannings[existingIndex].days = cleanDays;
-      db.plannings[existingIndex].updatedAt = now;
-      db.plannings[existingIndex].updatedBy = `${req.user!.name} (Planner Wijziging)`;
-    } else {
-      db.plannings.push({
-        id: `pln-${id}-${y}-${m}`,
-        userId: id,
-        userName: targetUser.name,
-        year: y,
-        month: m,
-        days: cleanDays,
-        updatedAt: now,
-        updatedBy: `${req.user!.name} (Planner Ingevuld)`,
-        isFinal: false,
-      });
-    }
+      if (existingIndex >= 0) {
+        db.plannings[existingIndex].days = cleanDays;
+        db.plannings[existingIndex].secondChoices = cleanSecondChoices;
+        db.plannings[existingIndex].updatedAt = now;
+        db.plannings[existingIndex].updatedBy = `${req.user!.name} (Planner Wijziging)`;
+        } else {
+        db.plannings.push({
+          id: `pln-${id}-${y}-${m}`,
+          userId: id,
+          userName: targetUser.name,
+          year: y,
+          month: m,
+          days: cleanDays,
+          secondChoices: cleanSecondChoices,
+          updatedAt: now,
+          updatedBy: `${req.user!.name} (Planner Ingevuld)`,
+          isFinal: false,
+        });
+      }
 
     saveDatabase(db);
     res.json({
