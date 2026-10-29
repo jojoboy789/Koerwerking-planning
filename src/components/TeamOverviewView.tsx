@@ -31,6 +31,59 @@ const MONTH_NAMES = [
 
 const DAY_NAMES = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
 
+// Belgische wettelijke feestdagen (10), met Pasen berekend voor elk kalenderjaar.
+function getEasterSunday(year: number): Date {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+function getBelgianHolidayName(year: number, month: number, day: number): string | null {
+  const fixed: Record<string, string> = {
+    '1-1': 'Nieuwjaar',
+    '5-1': 'Dag van de Arbeid',
+    '7-21': 'Nationale feestdag',
+    '8-15': 'O.L.V. Hemelvaart',
+    '11-1': 'Allerheiligen',
+    '11-11': 'Wapenstilstand',
+    '12-25': 'Kerstmis',
+  };
+  const fixedName = fixed[`${month}-${day}`];
+  if (fixedName) return fixedName;
+
+  const easter = getEasterSunday(year);
+  const easterMonday = new Date(year, easter.getMonth(), easter.getDate() + 1);
+  const ascension = new Date(year, easter.getMonth(), easter.getDate() + 39);
+  const whitMonday = new Date(year, easter.getMonth(), easter.getDate() + 50);
+  const matches = [
+    { date: easterMonday, name: 'Paasmaandag' },
+    { date: ascension, name: 'O.H. Hemelvaart' },
+    { date: whitMonday, name: 'Pinkstermaandag' },
+  ];
+  return matches.find(({ date }) =>
+    date.getFullYear() === year && date.getMonth() + 1 === month && date.getDate() === day
+  )?.name ?? null;
+}
+
+function getNonWorkingDayInfo(date: Date): { isWeekend: boolean; holidayName: string | null } {
+  return {
+    isWeekend: date.getDay() === 0 || date.getDay() === 6,
+    holidayName: getBelgianHolidayName(date.getFullYear(), date.getMonth() + 1, date.getDate()),
+  };
+}
+
 interface TeamOverviewViewProps {
   onNavigateToTeamPlanning?: () => void;
 }
@@ -147,6 +200,8 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
         hasConflict: boolean;
         isMissing: boolean;
         isWeekend: boolean;
+        isHoliday: boolean;
+        holidayName: string | null;
         missingShifts: ShiftCode[];
         conflictShifts: ShiftCode[];
       }
@@ -155,7 +210,8 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(currentYear, currentMonth - 1, d);
       const dayOfWeek = date.getDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
+      const isHoliday = holidayName !== null;
 
       totals[d] = {
         V: 0,
@@ -169,6 +225,8 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
         hasConflict: false,
         isMissing: false,
         isWeekend,
+        isHoliday,
+        holidayName,
         missingShifts: [],
         conflictShifts: [],
       };
@@ -179,6 +237,9 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
       for (let d = 1; d <= daysInMonth; d++) {
         const code = days[d];
         const memberInfo = { userId: m.user.id, name: m.user.name, role: m.user.role };
+        if (totals[d].isWeekend || totals[d].isHoliday) {
+          continue;
+        }
         if (code === 'V') {
           totals[d].V++;
           totals[d].byShift.V.push(memberInfo);
@@ -208,7 +269,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
       const conflicts: ShiftCode[] = [];
 
       // Weekends do not require shifts by default (no shortage/missing for weekends)
-      if (!t.isWeekend) {
+      if (!t.isWeekend && !t.isHoliday) {
         if (t.V === 0) missing.push('V');
         if (t.D === 0) missing.push('D');
         if (t.L === 0) missing.push('L');
@@ -221,9 +282,9 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
       t.missingShifts = missing;
       t.conflictShifts = conflicts;
       t.hasConflict = conflicts.length > 0;
-      t.isMissing = !t.isWeekend && missing.length > 0;
-      // Ideal for weekdays = exactly 1 V, 1 D, 1 L. For weekends: no conflicts.
-      t.isIdeal = !t.isWeekend && t.V === 1 && t.D === 1 && t.L === 1;
+      t.isMissing = !t.isWeekend && !t.isHoliday && missing.length > 0;
+      // Alleen gewone werkdagen hebben een verplichte shiftbezetting.
+      t.isIdeal = !t.isWeekend && !t.isHoliday && t.V === 1 && t.D === 1 && t.L === 1;
     }
 
     return totals;
@@ -239,6 +300,9 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
 
     for (let d = 1; d <= daysInMonth; d++) {
       const t = dailyTotals[d];
+      if (t.isHoliday) {
+        continue;
+      }
       if (t.isWeekend) {
         weekendCount++;
         if (t.hasConflict) {
@@ -261,6 +325,9 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
 
   // Open day detail modal
   const handleOpenDayModal = (day: number) => {
+    const selectedDate = new Date(currentYear, currentMonth - 1, day);
+    const dayInfo = getNonWorkingDayInfo(selectedDate);
+    if (dayInfo.isWeekend || dayInfo.holidayName) return;
     setSelectedDayDetail(day);
     setDaySaveMessage(null);
 
@@ -292,6 +359,9 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
 // Nieuwe handling 
 const handleSaveDayResolutions = async () => {
 if (selectedDayDetail === null) return;
+const selectedDate = new Date(currentYear, currentMonth - 1, selectedDayDetail);
+const selectedDayInfo = getNonWorkingDayInfo(selectedDate);
+if (selectedDayInfo.isWeekend || selectedDayInfo.holidayName) return;
 
 setIsSavingDay(true);
 setDaySaveMessage(null);
@@ -445,6 +515,14 @@ setIsSavingDay(false);
             <span className="w-3.5 h-3.5 rounded-sm code-X inline-block"></span>
             <span className="text-slate-600 font-medium">Niet inplannen (X)</span>
           </div>
+          <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 shadow-sm">
+            <span className="h-3.5 w-3.5 rounded-sm bg-[#0072bc] inline-block"></span>
+            <span className="text-[#0057a8] font-medium">Weekend: geen geplande koerdienst</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 shadow-sm">
+            <span className="h-3.5 w-3.5 rounded-sm bg-amber-400 inline-block"></span>
+            <span className="text-amber-900 font-medium">Belgische feestdag: geen geplande koerdienst</span>
+          </div>
         </div>
 
         {/* Search & Role Filter */}
@@ -506,7 +584,8 @@ setIsSavingDay(false);
                     const dayNum = idx + 1;
                     const date = new Date(currentYear, currentMonth - 1, dayNum);
                     const dayOfWeek = date.getDay();
-                    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                    const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
+                    const isHoliday = holidayName !== null;
                     const dayName = DAY_NAMES[dayOfWeek];
 
                     const isToday =
@@ -518,14 +597,17 @@ setIsSavingDay(false);
                       <th
                         key={dayNum}
                         onClick={() => handleOpenDayModal(dayNum)}
-                        className={`p-2 border-r border-slate-100 text-center text-[11px] min-w-[42px] cursor-pointer transition-colors hover:bg-yellow-50 ${
-                          isToday
-                            ? 'border-b-2 border-b-[#ffdc00] bg-yellow-50 font-extrabold text-slate-950'
+                        aria-disabled={isWeekend || isHoliday}
+                        className={`p-2 border-r border-slate-100 text-center text-[11px] min-w-[42px] transition-colors ${
+                          isHoliday
+                            ? 'bg-amber-100 text-amber-900 border-b-2 border-amber-300'
                             : isWeekend
-                            ? 'text-slate-500 bg-slate-300/40'
-                            : 'text-slate-600'
+                            ? 'bg-[#dbeafe] text-[#0057a8] border-b-2 border-[#0072bc]'
+                            : isToday
+                            ? 'border-b-2 border-b-[#ffdc00] bg-yellow-50 font-extrabold text-slate-950 cursor-pointer'
+                            : 'text-slate-600 cursor-pointer hover:bg-yellow-50'
                         }`}
-                        title={`Klik om bezetting en shifts van Dag ${dayNum} te inspecteren en bewerken`}
+                        title={isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : isWeekend ? 'Weekend geen geplande koerdienst' : `Klik om bezetting en shifts van Dag ${dayNum} te inspecteren en bewerken`}
                       >
                         <div className="text-[9px] uppercase font-medium">{dayName}</div>
                         <div className="font-bold text-xs mt-0.5">{dayNum}</div>
@@ -576,7 +658,8 @@ setIsSavingDay(false);
                       {Array.from({ length: daysInMonth }, (_, idx) => {
                         const dayNum = idx + 1;
                         const date = new Date(currentYear, currentMonth - 1, dayNum);
-                        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                        const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
+                        const isHoliday = holidayName !== null;
                         const code = pln[dayNum] || '';
                         const secondCode = secondPln[dayNum] || '';
                         const thirdCode = thirdPln[dayNum] || '';
@@ -597,10 +680,23 @@ setIsSavingDay(false);
                           <td
                             key={dayNum}
                             onClick={() => handleOpenDayModal(dayNum)}
-                            className={`p-1 text-center border-r border-slate-100 last:border-r-0 cursor-pointer hover:bg-yellow-50/70 ${
-                              isToday ? 'bg-yellow-50/50' : isWeekend ? 'bg-slate-300/40' : ''
+                            aria-disabled={isWeekend || isHoliday}
+                            className={`p-1 text-center border-r border-slate-100 last:border-r-0 ${
+                              isHoliday
+                                ? 'bg-amber-50 text-amber-900'
+                                : isWeekend
+                                ? 'bg-[#eaf4ff] text-[#0057a8]'
+                                : isToday
+                                ? 'bg-yellow-50/50 cursor-pointer hover:bg-yellow-50/70'
+                                : 'cursor-pointer hover:bg-yellow-50/70'
                             }`}
+                            title={isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : isWeekend ? 'Weekend geen geplande koerdienst' : undefined}
                           >
+                          {(isWeekend || isHoliday) ? (
+                            <span className={`flex h-[3.75rem] items-center justify-center text-[10px] font-bold ${
+                              isHoliday ? 'text-amber-700' : 'text-[#0072bc]'
+                            }`} title={isHoliday ? holidayName || undefined : 'Weekend geen geplande koerdienst'}>—</span>
+                          ) : (
                           <div className="flex flex-col items-center justify-center gap-0.5 py-0.5">
                             {/* Eerste keuze */}
                             <div
@@ -656,9 +752,9 @@ setIsSavingDay(false);
                         >
                           {thirdCode || '·'}
                         </div>
-
-                    </div>
-                  </td>
+                          </div>
+                          )}
+                    </td>
                               );
                       })}
                     </tr>
@@ -679,16 +775,22 @@ setIsSavingDay(false);
                     const isCovered = tot.isIdeal;
                     const hasConflict = tot.hasConflict;
                     const date = new Date(currentYear, currentMonth - 1, dayNum);
-                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                    const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
+                    const isHoliday = holidayName !== null;
 
                     return (
                       <td
                         key={dayNum}
                         onClick={() => handleOpenDayModal(dayNum)}
-                        className={`p-1.5 text-center border-r border-slate-100 cursor-pointer hover:bg-indigo-100/50 transition-colors ${
-                          hasConflict ? 'bg-amber-50/60' : isCovered ? 'bg-emerald-50/40' : ''
-                        }${isWeekend ? ' bg-slate-300/40' : ''}`}
-                        title={`Dag ${dayNum}: V:${tot.V}, D:${tot.D}, L:${tot.L} (Klik om te bekijken)`}
+                        aria-disabled={isWeekend || isHoliday}
+                        title={isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : isWeekend ? 'Weekend geen geplande koerdienst' : `Dag ${dayNum}: V:${tot.V}, D:${tot.D}, L:${tot.L} (Klik om te bekijken)`}
+                        className={`p-1.5 text-center border-r border-slate-100 transition-colors ${
+                          isHoliday
+                            ? 'bg-amber-100 text-amber-800'
+                            : isWeekend
+                            ? 'bg-[#dbeafe] text-[#0057a8]'
+                            : 'cursor-pointer hover:bg-indigo-100/50'
+                        } ${!isWeekend && !isHoliday && hasConflict ? 'bg-amber-50/60' : !isWeekend && !isHoliday && isCovered ? 'bg-emerald-50/40' : ''}`}
                       >
                         <div className="flex items-center justify-center gap-1">
                           <span className="text-slate-900 font-bold">{working}</span>
@@ -798,7 +900,8 @@ setIsSavingDay(false);
             const date = new Date(currentYear, currentMonth - 1, dayNum);
             const dayOfWeek = date.getDay();
             const dayName = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'][dayOfWeek];
-            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+            const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
+            const isHoliday = holidayName !== null;
             const isIdeal = tot.isIdeal;
             const hasConflict = tot.hasConflict;
             const isMissing = tot.isMissing;
@@ -806,23 +909,30 @@ setIsSavingDay(false);
             // Apply filter
             if (statusFilter === 'ok' && !isIdeal) return null;
             if (statusFilter === 'conflict' && (!hasConflict || isMissing)) return null;
-            if (statusFilter === 'missing' && (!isMissing || isWeekend)) return null;
+            if (statusFilter === 'missing' && (!isMissing || isWeekend || isHoliday)) return null;
 
             return (
               <div
                 key={dayNum}
                 onClick={() => handleOpenDayModal(dayNum)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); handleOpenDayModal(dayNum); } }}
-                className={`group relative flex cursor-pointer flex-col justify-between rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00] ${
-                  hasConflict
-                    ? 'bg-amber-50/40 border-amber-300 hover:border-amber-500'
-                    : isIdeal
-                    ? 'bg-emerald-50/40 border-emerald-300 hover:border-emerald-500'
+                role={isWeekend || isHoliday ? undefined : 'button'}
+                tabIndex={isWeekend || isHoliday ? -1 : 0}
+                aria-disabled={isWeekend || isHoliday}
+                onKeyDown={(event) => { if (!isWeekend && !isHoliday && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); handleOpenDayModal(dayNum); } }}
+                className={`group relative flex flex-col justify-between rounded-2xl border p-4 transition-all ${
+                  isHoliday
+                    ? 'cursor-default bg-amber-50 border-amber-300'
                     : isWeekend
-                    ? 'bg-slate-50/60 border-slate-200/80 hover:border-slate-300 hover:bg-slate-100/50 opacity-85'
-                    : 'bg-slate-50/70 border-slate-200 hover:border-indigo-300 hover:bg-yellow-50/40'
+                    ? 'cursor-default bg-[#eaf4ff] border-[#93c5fd]'
+                    : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00]'
+                } ${
+                  !isWeekend && !isHoliday && hasConflict
+                    ? 'bg-amber-50/40 border-amber-300 hover:border-amber-500'
+                    : !isWeekend && !isHoliday && isIdeal
+                    ? 'bg-emerald-50/40 border-emerald-300 hover:border-emerald-500'
+                    : !isWeekend && !isHoliday
+                    ? 'bg-slate-50/70 border-slate-200 hover:border-indigo-300 hover:bg-yellow-50/40'
+                    : ''
                 }`}
               >
                 <div>
@@ -832,13 +942,21 @@ setIsSavingDay(false);
                       <span className="text-sm font-black font-mono text-slate-800">
                         {dayNum}
                       </span>
-                      <span className={`text-[11px] font-bold uppercase ${isWeekend ? 'text-amber-800' : 'text-slate-500'}`}>
+                      <span className={`text-[11px] font-bold uppercase ${isHoliday ? 'text-amber-800' : isWeekend ? 'text-[#0057a8]' : 'text-slate-500'}`}>
                         {dayName}
                       </span>
                     </div>
 
                     {/* Status Badge */}
-                    {hasConflict ? (
+                    {isHoliday ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300">
+                        {holidayName}
+                      </span>
+                    ) : isWeekend ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-[#0057a8] border border-blue-200">
+                        Weekend
+                      </span>
+                    ) : hasConflict ? (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3 text-amber-600" />
                         Dubbel
@@ -848,10 +966,6 @@ setIsSavingDay(false);
                         <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                         In Orde
                       </span>
-                    ) : isWeekend ? (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
-                        Weekend
-                      </span>
                     ) : (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-50 text-rose-700 border border-rose-200">
                         Onvolledig
@@ -859,6 +973,18 @@ setIsSavingDay(false);
                     )}
                   </div>
 
+                  {(isWeekend || isHoliday) ? (
+                    <div className={`mt-3 rounded-xl border p-3 text-xs font-bold ${
+                      isHoliday
+                        ? 'border-amber-200 bg-amber-100/80 text-amber-900'
+                        : 'border-blue-200 bg-blue-100/80 text-[#0057a8]'
+                    }`}>
+                      {isHoliday
+                        ? `${holidayName}: Deze dag geen geplande koerdienst`
+                        : 'Weekend geen geplande koerdienst'}
+                    </div>
+                  ) : (
+                    <>
                   {/* Shift Coverage Pills */}
                   <div className="grid grid-cols-3 gap-1.5 mt-3 text-center">
                     {/* Vroeg */}
@@ -934,13 +1060,17 @@ setIsSavingDay(false);
                       </div>
                     )}
                   </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Footer action hint */}
+                {!isWeekend && !isHoliday && (
                 <div className="mt-3 pt-2 border-t border-slate-200/50 flex items-center justify-between text-[10px] text-slate-400 group-hover:text-indigo-600 transition-colors">
                   <span>Klik voor details & aanpassen</span>
                   <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
                 </div>
+                )}
               </div>
             );
           })}

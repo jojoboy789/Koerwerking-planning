@@ -38,6 +38,62 @@ function getWeekNumber(d: Date): number {
   return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
 
+// Bereken Paaszondag volgens de gregoriaanse kalender.
+function getEasterSunday(year: number): Date {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+function getDateKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
+// De tien Belgische wettelijke feestdagen.
+function getBelgianHolidays(year: number): Map<string, string> {
+  const holidays = new Map<string, string>();
+  const add = (date: Date, name: string) => holidays.set(getDateKey(date), name);
+
+  [
+    [1, 1, 'Nieuwjaar'],
+    [5, 1, 'Dag van de Arbeid'],
+    [7, 21, 'Nationale feestdag'],
+    [8, 15, 'O.L.V. Hemelvaart'],
+    [11, 1, 'Allerheiligen'],
+    [11, 11, 'Wapenstilstand'],
+    [12, 25, 'Kerstmis'],
+  ].forEach(([month, day, name]) => {
+    add(new Date(year, Number(month) - 1, Number(day)), String(name));
+  });
+
+  const easter = getEasterSunday(year);
+  const easterMonday = new Date(easter);
+  easterMonday.setDate(easterMonday.getDate() + 1);
+  add(easterMonday, 'Paasmaandag');
+
+  const ascension = new Date(easter);
+  ascension.setDate(ascension.getDate() + 39);
+  add(ascension, 'O.H. Hemelvaart');
+
+  const whitMonday = new Date(easter);
+  whitMonday.setDate(whitMonday.getDate() + 50);
+  add(whitMonday, 'Pinkstermaandag');
+
+  return holidays;
+}
+
 export const TeamPlanningView: React.FC = () => {
   const { user: currentUser, canPlannerMode, isAdmin } = useAuth();
 
@@ -71,6 +127,25 @@ export const TeamPlanningView: React.FC = () => {
   const daysInMonth = useMemo(() => {
     return new Date(currentYear, currentMonth, 0).getDate();
   }, [currentYear, currentMonth]);
+
+  const belgianHolidays = useMemo(
+    () => getBelgianHolidays(currentYear),
+    [currentYear]
+  );
+
+  const getDayStatus = useCallback((date: Date) => {
+    const holidayName = belgianHolidays.get(getDateKey(date));
+    const dayOfWeek = date.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const isHoliday = Boolean(holidayName);
+
+    return {
+      holidayName,
+      isWeekend,
+      isHoliday,
+      isUnavailable: isWeekend || isHoliday,
+    };
+  }, [belgianHolidays]);
 
   // Load list of members
   const fetchMembers = useCallback(async () => {
@@ -183,8 +258,11 @@ export const TeamPlanningView: React.FC = () => {
     return false;
   }, [daysState, initialDaysState, daysInMonth]);
 
-  // Set shift for single day
+  // Zet een dienst. Weekends en wettelijke feestdagen zijn niet planbaar.
   const handleSetShift = (day: number, code: ShiftCode) => {
+    const date = new Date(currentYear, currentMonth - 1, day);
+    if (getDayStatus(date).isUnavailable) return;
+
     setDaysState((prev) => {
       const next = { ...prev };
       if (!code) {
@@ -199,6 +277,9 @@ export const TeamPlanningView: React.FC = () => {
 
   // Toggle shift with active brush
   const handleDayClick = (day: number) => {
+    const date = new Date(currentYear, currentMonth - 1, day);
+    if (getDayStatus(date).isUnavailable) return;
+
     const current = daysState[day] || '';
     if (current === activeBrushCode) {
       handleSetShift(day, '');
@@ -213,8 +294,7 @@ export const TeamPlanningView: React.FC = () => {
       const next = { ...prev };
       for (let day = 1; day <= daysInMonth; day++) {
         const dateObj = new Date(currentYear, currentMonth - 1, day);
-        const dayOfWeek = dateObj.getDay(); // 0 = Zo, 6 = Za
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        if (!getDayStatus(dateObj).isUnavailable) {
           next[day] = code;
         }
       }
@@ -306,6 +386,9 @@ export const TeamPlanningView: React.FC = () => {
     let workDaysCount = 0;
 
     for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(currentYear, currentMonth - 1, d);
+      if (getDayStatus(date).isUnavailable) continue;
+
       const code = daysState[d];
       if (code === 'V') {
         vCount++;
@@ -325,7 +408,7 @@ export const TeamPlanningView: React.FC = () => {
 
     const totalHours = workDaysCount * 8;
     return { vCount, dCount, lCount, rCount, xCount, workDaysCount, totalHours };
-  }, [daysState, daysInMonth]);
+  }, [daysState, daysInMonth, currentYear, currentMonth, getDayStatus]);
 
   // Calendar weeks computation
   const calendarWeeks = useMemo(() => {
@@ -379,7 +462,7 @@ export const TeamPlanningView: React.FC = () => {
   }, [currentYear, currentMonth, daysInMonth]);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-3 sm:p-5 lg:p-6 max-w-[1600px] mx-auto space-y-4 sm:space-y-5">
       {/* Top Header Card */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -436,9 +519,9 @@ export const TeamPlanningView: React.FC = () => {
       </div>
 
       {/* Main 2-Column Split: Left = User List, Right = Interactive Planner Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
         {/* Left Column: All Employees List (Span 4) */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col h-[750px]">
+        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[420px] lg:max-h-[calc(100vh-190px)] lg:sticky lg:top-4">
           {/* Header of user list */}
           <div className="p-4 border-b border-slate-100 bg-slate-50/70 space-y-3">
             <div className="flex items-center justify-between">
@@ -600,9 +683,9 @@ export const TeamPlanningView: React.FC = () => {
         </div>
 
         {/* Right Column: Active Planning Grid & Controls (Span 8) */}
-        <div className="lg:col-span-8 space-y-4">
+        <div className="lg:col-span-8 min-w-0 space-y-4">
           {selectedUser ? (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-5">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 sm:p-5 space-y-4 sm:space-y-5">
               {/* Member banner & switcher */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
                 <div className="flex items-center gap-3">
@@ -763,7 +846,7 @@ export const TeamPlanningView: React.FC = () => {
                   </div>
 
                   {/* Calendar Days Matrix */}
-                  <div className="grid grid-cols-7 gap-1.5">
+                  <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
                     {calendarWeeks.flatMap((week) =>
                       week.map((item, index) => {
                         if (!item.isCurrentMonth) {
@@ -780,38 +863,45 @@ export const TeamPlanningView: React.FC = () => {
                         const dayNum = item.day;
                         const shiftCode = daysState[dayNum] || '';
                         const dateObj = item.date;
-                        const dayOfWeek = dateObj.getDay();
-                        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                        const { isWeekend, isHoliday, holidayName, isUnavailable } = getDayStatus(dateObj);
+
+                        const dayStyle = isHoliday
+                          ? 'bg-amber-100 border-amber-400 text-amber-950'
+                          : isWeekend
+                          ? 'bg-[#e5f2ff] border-[#007bc4] text-[#005a96]'
+                          : shiftCode === 'V'
+                          ? 'bg-emerald-50/60 border-emerald-300 hover:border-emerald-500'
+                          : shiftCode === 'D'
+                          ? 'bg-amber-50/60 border-amber-300 hover:border-amber-500'
+                          : shiftCode === 'L'
+                          ? 'bg-indigo-50/60 border-indigo-300 hover:border-indigo-500'
+                          : shiftCode === 'R'
+                          ? 'bg-sky-50/60 border-sky-300 hover:border-sky-500'
+                          : shiftCode === 'X'
+                          ? 'bg-slate-100 border-slate-300 hover:border-slate-400'
+                          : 'bg-white border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30';
 
                         return (
                           <div
                             key={`curr-${dayNum}`}
-                            onClick={() => handleDayClick(dayNum)}
-                            className={`min-h-[72px] p-2 rounded-xl border transition-all flex flex-col justify-between cursor-pointer group hover:shadow-xs relative ${
-                              shiftCode === 'V'
-                                ? 'bg-emerald-50/60 border-emerald-300 hover:border-emerald-500'
-                                : shiftCode === 'D'
-                                ? 'bg-amber-50/60 border-amber-300 hover:border-amber-500'
-                                : shiftCode === 'L'
-                                ? 'bg-indigo-50/60 border-indigo-300 hover:border-indigo-500'
-                                : shiftCode === 'R'
-                                ? 'bg-sky-50/60 border-sky-300 hover:border-sky-500'
-                                : shiftCode === 'X'
-                                ? 'bg-slate-100 border-slate-300 hover:border-slate-400'
-                                : isWeekend
-                                ? 'bg-amber-50/20 border-slate-200 hover:bg-slate-50'
-                                : 'bg-white border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30'
-                            }`}
+                            onClick={() => {
+                              if (!isUnavailable) handleDayClick(dayNum);
+                            }}
+                            aria-label={`${dayNum} ${MONTH_NAMES[currentMonth - 1]}${isHoliday ? `, feestdag ${holidayName}` : isWeekend ? ', weekend' : ''}`}
+                            aria-disabled={isUnavailable}
+                            className={`min-h-[82px] sm:min-h-[92px] p-1.5 sm:p-2 rounded-xl border transition-all flex flex-col justify-between group relative ${
+                              isUnavailable ? 'cursor-not-allowed' : 'cursor-pointer hover:shadow-sm'
+                            } ${dayStyle}`}
                           >
                             <div className="flex items-center justify-between">
                               <span
                                 className={`text-xs font-bold font-mono ${
-                                  isWeekend ? 'text-amber-700' : 'text-slate-700'
+                                  isHoliday ? 'text-amber-950' : isWeekend ? 'text-[#005a96]' : 'text-slate-700'
                                 }`}
                               >
                                 {dayNum}
                               </span>
-                              {shiftCode && (
+                              {shiftCode && !isUnavailable && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -826,9 +916,40 @@ export const TeamPlanningView: React.FC = () => {
                               )}
                             </div>
 
-                            {/* Shift Badge display */}
+                            {/* Status of the day or assigned shift */}
                             <div className="mt-1">
-                              {shiftCode ? (
+                              {isHoliday ? (
+                                <div className="text-center">
+                                  <span className="inline-block rounded-md bg-amber-200 px-1 py-0.5 text-[8px] sm:text-[9px] font-extrabold text-amber-950">
+                                    FEESTDAG
+                                  </span>
+                                  <p className="mt-1 text-[8px] sm:text-[9px] font-semibold leading-tight text-amber-950">
+                                    Geen geplande koerdienst
+                                  </p>
+                                  <p className="text-[8px] leading-tight text-amber-800">
+                                    {holidayName}
+                                  </p>
+                                  {shiftCode && (
+                                    <p className="mt-1 text-[8px] font-bold text-red-700" title="Er staat nog een opgeslagen dienst op deze niet-planbare dag">
+                                      Opgeslagen: {shiftCode}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : isWeekend ? (
+                                <div className="text-center">
+                                  <span className="inline-block rounded-md bg-[#c6e4ff] px-1 py-0.5 text-[8px] sm:text-[9px] font-extrabold text-[#005a96]">
+                                    WEEKEND
+                                  </span>
+                                  <p className="mt-1 text-[8px] sm:text-[9px] font-semibold leading-tight text-[#005a96]">
+                                    Geen geplande koerdienst
+                                  </p>
+                                  {shiftCode && (
+                                    <p className="mt-1 text-[8px] font-bold text-red-700" title="Er staat nog een opgeslagen dienst op deze niet-planbare dag">
+                                      Opgeslagen: {shiftCode}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : shiftCode ? (
                                 <div
                                   className={`px-1.5 py-0.5 rounded-lg text-center font-mono font-bold text-xs ${
                                     shiftCode === 'V'

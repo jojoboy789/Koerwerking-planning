@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { ShiftCode, SHIFT_DEFINITIONS } from '../types';
-import { ChevronLeft, ChevronRight, Save, CheckCircle2, AlertTriangle, Loader2, Sparkles, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Save, CheckCircle2, AlertTriangle, Loader2, CalendarDays, ClipboardList } from 'lucide-react';
 
 const MONTH_NAMES = [
   'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
@@ -10,6 +10,54 @@ const MONTH_NAMES = [
 ];
 
 const DAY_NAMES = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
+
+// Belgische wettelijke feestdagen, inclusief de verplaatsbare feestdagen.
+function getBelgianHolidays(year: number): Map<string, string> {
+  const holidays = new Map<string, string>();
+  const add = (month: number, day: number, name: string) => {
+    const key = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    holidays.set(key, name);
+  };
+
+  add(1, 1, 'Nieuwjaar');
+  add(5, 1, 'Dag van de Arbeid');
+  add(7, 21, 'Nationale feestdag');
+  add(8, 15, 'O.L.V. Hemelvaart');
+  add(11, 1, 'Allerheiligen');
+  add(11, 11, 'Wapenstilstand');
+  add(12, 25, 'Kerstmis');
+
+  // Meeus/Jones/Butcher algorithm calculates Easter Sunday.
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const easterMonth = Math.floor((h + l - 7 * m + 114) / 31);
+  const easterDay = ((h + l - 7 * m + 114) % 31) + 1;
+  const easter = new Date(year, easterMonth - 1, easterDay);
+  const addOffset = (offset: number, name: string) => {
+    const date = new Date(easter);
+    date.setDate(date.getDate() + offset);
+    add(date.getMonth() + 1, date.getDate(), name);
+  };
+  addOffset(1, 'Paasmaandag');
+  addOffset(39, 'O.H. Hemelvaart');
+  addOffset(50, 'Pinkstermaandag');
+
+  return holidays;
+}
+
+function dateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 
 // Helper to get ISO week number
 function getWeekNumber(d: Date): number {
@@ -65,18 +113,27 @@ export const MyPlanningView: React.FC = () => {
       const res = await api.getPlanning(currentYear, currentMonth);
 
       const days = (res.planning?.days as Record<number, ShiftCode>) || {};
-            const loadedSecondChoices =
-        (res.planning?.secondChoices as Record<number, ShiftCode>) || {};
-      const loadedThirdChoices =
-        (res.planning?.thirdChoices as Record<number, ShiftCode>) || {};
+      const loadedSecondChoices = (res.planning?.secondChoices as Record<number, ShiftCode>) || {};
+      const loadedThirdChoices = (res.planning?.thirdChoices as Record<number, ShiftCode>) || {};
+      const holidays = getBelgianHolidays(currentYear);
+      const holidayDayNumbers = Array.from({ length: new Date(currentYear, currentMonth, 0).getDate() }, (_, i) => i + 1)
+        .filter((day) => holidays.has(dateKey(new Date(currentYear, currentMonth - 1, day))));
+      const withoutHolidayChoices = (choices: Record<number, ShiftCode>) => {
+        const cleaned = { ...choices };
+        holidayDayNumbers.forEach((day) => { delete cleaned[day]; });
+        return cleaned;
+      };
 
-      setDaysState(days);
-      setInitialDaysState(days);
-
-      setSecondChoices(loadedSecondChoices);
-      setInitialSecondChoices(loadedSecondChoices);
-      setThirdChoices(loadedThirdChoices);
-      setInitialThirdChoices(loadedThirdChoices);
+      // Holiday preferences are cleared locally; saving the planning removes any old stored selections too.
+      const cleanDays = withoutHolidayChoices(days);
+      const cleanSecondChoices = withoutHolidayChoices(loadedSecondChoices);
+      const cleanThirdChoices = withoutHolidayChoices(loadedThirdChoices);
+      setDaysState(cleanDays);
+      setInitialDaysState(cleanDays);
+      setSecondChoices(cleanSecondChoices);
+      setInitialSecondChoices(cleanSecondChoices);
+      setThirdChoices(cleanThirdChoices);
+      setInitialThirdChoices(cleanThirdChoices);
       setLastUpdatedInfo({
         at: res.planning?.updatedAt,
         by: res.planning?.updatedBy,
@@ -142,8 +199,14 @@ export const MyPlanningView: React.FC = () => {
     }
   };
 
+  const handleGoToToday = () => {
+    const today = new Date();
+    setCurrentYear(today.getFullYear());
+    setCurrentMonth(today.getMonth() + 1);
+  };
+
   // Toggle shift for a day
-    const handleSetShift = (day: number, code: ShiftCode) => {
+  const handleSetShift = (day: number, code: ShiftCode) => {
     if (isLockedForEditing || (!canEditPlanning && !isAdmin)) return;
 
     const nextCode = daysState[day] === code ? '' : code;
@@ -164,27 +227,6 @@ export const MyPlanningView: React.FC = () => {
     }
 
     setSaveSuccessMessage(null);
-  };
-
-  // Batch auto-fill helpers
-  const handleFillPattern = (pattern: 'weekdays-D' | 'weekends-X' | 'clear') => {
-    if (isLockedForEditing || (!canEditPlanning && !isAdmin)) return;
-    setDaysState((prev) => {
-      const updated = { ...prev };
-      for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(currentYear, currentMonth - 1, day);
-        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-
-        if (pattern === 'weekdays-D' && !isWeekend) {
-          updated[day] = 'D';
-        } else if (pattern === 'weekends-X' && isWeekend) {
-          updated[day] = 'X';
-        } else if (pattern === 'clear') {
-          delete updated[day];
-        }
-      }
-      return updated;
-    });
   };
 
   // Save planning
@@ -240,327 +282,327 @@ setInitialThirdChoices({ ...thirdChoices });
 
   const monthTitle = `${MONTH_NAMES[currentMonth - 1]} ${currentYear}`.toUpperCase();
 
-  return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-36 space-y-6 font-sans">
-      <div className="flex items-center justify-between bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
-        <button
-          id="btn-prev-month"
-          onClick={handlePrevMonth}
-          className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-200 hover:border-indigo-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all cursor-pointer shadow-xs"
-          title="Vorige maand"
-        >
-          <ChevronLeft className="w-5 h-5 text-slate-600 hover:text-indigo-600" />
-        </button>
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === currentYear && today.getMonth() + 1 === currentMonth;
+  const completionPercentage = Math.round((stats.filledCount / daysInMonth) * 100);
+  const canEdit = (canEditPlanning || isAdmin) && !isLockedForEditing;
 
-        <div className="text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{monthTitle}</h2>
-          <p className="text-xs text-slate-500 mt-1 font-medium">{stats.filledCount} van de {daysInMonth} dagen ingevuld</p>
+  return (
+    <div className="mx-auto max-w-6xl space-y-4 px-3 py-4 pb-32 font-sans sm:px-5 sm:py-5">
+      {/* Month header */}
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-600 px-5 py-5 text-white sm:px-7 sm:py-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-100">
+                <ClipboardList className="h-4 w-4" />
+                Mijn planning
+              </div>
+              <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{MONTH_NAMES[currentMonth - 1]} {currentYear}</h2>
+              <p className="mt-1.5 text-sm text-indigo-100">
+                {stats.filledCount} van {daysInMonth} dagen ingevuld
+                <span className="mx-2 text-indigo-300">•</span>
+                {stats.emptyCount === 0 ? 'Maand volledig ingevuld' : `Nog ${stats.emptyCount} ${stats.emptyCount === 1 ? 'dag' : 'dagen'} open`}
+              </p>
+            </div>
+            <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/10 sm:flex">
+              <CalendarDays className="h-7 w-7" />
+            </div>
+          </div>
+          <div className="mt-5 h-2 overflow-hidden rounded-full bg-black/20" role="progressbar" aria-label="Ingevulde dagen" aria-valuemin={0} aria-valuemax={daysInMonth} aria-valuenow={stats.filledCount}>
+            <div className="h-full rounded-full bg-white transition-all duration-300" style={{ width: `${completionPercentage}%` }} />
+          </div>
+          <div className="mt-2 flex justify-between text-[11px] font-medium text-indigo-100">
+            <span>Voortgang</span>
+            <span>{completionPercentage}%</span>
+          </div>
         </div>
 
-        <button
-          id="btn-next-month"
-          onClick={handleNextMonth}
-          className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-200 hover:border-indigo-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all cursor-pointer shadow-xs"
-          title="Volgende maand"
-        >
-          <ChevronRight className="w-5 h-5 text-slate-600 hover:text-indigo-600" />
-        </button>
-      </div>
+        <div className="flex items-center justify-between gap-2 p-3 sm:p-4">
+          <button
+            id="btn-prev-month"
+            type="button"
+            onClick={handlePrevMonth}
+            className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            title="Vorige maand"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Vorige</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleGoToToday}
+            disabled={isCurrentMonth}
+            className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-default disabled:opacity-50"
+          >
+            Vandaag
+          </button>
+          <button
+            id="btn-next-month"
+            type="button"
+            onClick={handleNextMonth}
+            className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            title="Volgende maand"
+          >
+            <span className="hidden sm:inline">Volgende</span>
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </section>
 
       {!isLockedForEditing && !canEditPlanning && !isAdmin && (
-        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center gap-3 text-amber-800 text-xs font-medium">
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>Je hebt momenteel alleen leesrechten. Vraag een beheerder om <strong>Planning invullen</strong> in te schakelen om wijzigingen te kunnen opslaan.</span>
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div>
+            <p className="font-bold">Alleen-lezen</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-amber-800">Je kunt je planning bekijken, maar momenteel geen wijzigingen opslaan. Vraag een beheerder om <strong>Planning invullen</strong> in te schakelen.</p>
+          </div>
         </div>
       )}
 
       {isLockedForEditing && (
-        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-center gap-4 text-rose-800 text-sm">
-          <AlertTriangle className="w-6 h-6 text-rose-500 shrink-0" />
+        <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-900">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
           <div>
-            <h4 className="font-bold text-rose-900">Planning is vergrendeld</h4>
-            <p className="text-xs mt-0.5">De deadline voor het invullen van deze planning was {deadlineFormatted}. Aanpassingen kunnen alleen nog door een planner worden gedaan.</p>
+            <h4 className="font-bold">Planning is vergrendeld</h4>
+            <p className="mt-1 text-xs leading-relaxed text-rose-800">De deadline voor het invullen was {deadlineFormatted}. Aanpassingen kunnen alleen nog door een planner worden gedaan.</p>
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Vroeg (V)</div>
-            <div className="text-xl font-bold text-emerald-700 mt-0.5">{stats.vCount} <span className="text-xs font-normal text-slate-400">dagen</span></div>
-          </div>
-          <div className="w-8 h-8 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center font-bold text-emerald-700">V</div>
+      {/* Compact monthly summary */}
+      <section aria-label="Maandoverzicht" className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-bold text-slate-800">Maandoverzicht</h3>
+          <span className="text-[11px] font-medium text-slate-400">Aantal dagen per keuze</span>
         </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Dag (D)</div>
-            <div className="text-xl font-bold text-amber-700 mt-0.5">{stats.dCount} <span className="text-xs font-normal text-slate-400">dagen</span></div>
-          </div>
-          <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center font-bold text-amber-700">D</div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Laat (L)</div>
-            <div className="text-xl font-bold text-purple-700 mt-0.5">{stats.lCount} <span className="text-xs font-normal text-slate-400">dagen</span></div>
-          </div>
-          <div className="w-8 h-8 rounded-xl bg-purple-100 border border-purple-200 flex items-center justify-center font-bold text-purple-700">L</div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Rust (R)</div>
-            <div className="text-xl font-bold text-sky-700 mt-0.5">{stats.rCount} <span className="text-xs font-normal text-slate-400">dagen</span></div>
-          </div>
-          <div className="w-8 h-8 rounded-xl bg-sky-100 border border-sky-200 flex items-center justify-center font-bold text-sky-700">R</div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="text-slate-500 uppercase text-[10px] font-semibold tracking-wider">Niet inplannen (X)</div>
-            <div className="text-xl font-bold text-slate-700 mt-0.5">{stats.xCount} <span className="text-xs font-normal text-slate-400">dagen</span></div>
-          </div>
-          <div className="w-8 h-8 rounded-xl bg-slate-200 border border-slate-300 flex items-center justify-center font-bold text-slate-700">X</div>
-        </div>
-      </div>
-
-      {(canEditPlanning || isAdmin) && !isLockedForEditing && (
-        <div className="flex flex-wrap items-center justify-between gap-2 p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs text-xs">
-          <div className="flex items-center gap-1.5 text-slate-500 font-medium">
-            <Sparkles className="w-4 h-4 text-indigo-600" />
-            <span>Snelle hulpknoppen:</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => handleFillPattern('weekdays-D')} className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 border border-slate-200 hover:border-indigo-200 transition-colors font-medium cursor-pointer">Weekdagen op Dag (D)</button>
-            <button onClick={() => handleFillPattern('weekends-X')} className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 hover:text-slate-900 text-slate-700 border border-slate-200 transition-colors font-medium cursor-pointer">Weekenden op Vrij (X)</button>
-            <button onClick={() => handleFillPattern('clear')} className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-red-50 hover:text-red-700 text-slate-700 border border-slate-200 hover:border-red-200 transition-colors font-medium cursor-pointer inline-flex items-center gap-1"><RotateCcw className="w-3.5 h-3.5" />Wis maand</button>
-          </div>
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="py-20 flex flex-col items-center justify-center space-y-4">
-          <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-          <p className="text-sm text-slate-500">Planning laden...</p>
-        </div>
-      ) : (
-        <div className="space-y-2.5">
-          {Array.from({ length: daysInMonth }, (_, i) => {
-            const dayNum = i + 1;
-            const date = new Date(currentYear, currentMonth - 1, dayNum);
-            const dayOfWeekIndex = date.getDay();
-            const dayName = DAY_NAMES[dayOfWeekIndex];
-            const isWeekend = dayOfWeekIndex === 0 || dayOfWeekIndex === 6;
-            const weekNumber = getWeekNumber(date);
-            const selectedShift = daysState[dayNum] || '';
-            const selectedSecondChoice = secondChoices[dayNum] || '';
-            const selectedThirdChoice = thirdChoices[dayNum] || '';
-            const showWeekNumber = dayOfWeekIndex === 1 || dayNum === 1;
-            const isToday = new Date().getFullYear() === currentYear && new Date().getMonth() + 1 === currentMonth && new Date().getDate() === dayNum;
-
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {[
+            { code: 'V', label: 'Vroeg', count: stats.vCount, color: 'emerald' },
+            { code: 'D', label: 'Dag', count: stats.dCount, color: 'amber' },
+            { code: 'L', label: 'Laat', count: stats.lCount, color: 'purple' },
+            { code: 'R', label: 'Rust', count: stats.rCount, color: 'sky' },
+            { code: 'X', label: 'Niet inplannen', count: stats.xCount, color: 'slate' },
+          ].map((item) => {
+            const colorClasses: Record<string, string> = {
+              emerald: 'bg-emerald-50 text-emerald-800 border-emerald-100',
+              amber: 'bg-amber-50 text-amber-800 border-amber-100',
+              purple: 'bg-purple-50 text-purple-800 border-purple-100',
+              sky: 'bg-sky-50 text-sky-800 border-sky-100',
+              slate: 'bg-slate-100 text-slate-700 border-slate-200',
+            };
             return (
-              <div key={dayNum} className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 rounded-2xl transition-all duration-150 border ${isToday ? 'bg-indigo-50/40 border-indigo-200 shadow-xs' : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'}`}>
-                <div className="flex items-center gap-4 mb-3 sm:mb-0">
-                  <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center border font-sans transition-all ${isWeekend ? 'bg-slate-100 border-slate-200 text-slate-600' : isToday ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-800'}`}>
-                    <span className="text-[10px] font-bold uppercase tracking-wider">{dayName}</span>
-                    <span className="text-base font-bold leading-none mt-0.5">{String(dayNum).padStart(2, '0')}</span>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-slate-900">{dayNum} {MONTH_NAMES[currentMonth - 1]}</span>
-                      {isToday && <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase tracking-wider">Vandaag</span>}
-                    </div>
-                    {showWeekNumber && <p className="text-xs text-slate-400 mt-0.5 font-medium">Week {weekNumber}</p>}
-                  </div>
+              <div key={item.code} className={`flex min-w-0 items-center gap-2.5 rounded-xl border p-3 ${colorClasses[item.color]}`}>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/80 text-sm font-extrabold shadow-sm">{item.code}</span>
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] font-semibold opacity-80">{item.label}</p>
+                  <p className="text-lg font-extrabold leading-tight">{item.count} <span className="text-[10px] font-medium">dagen</span></p>
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                  {/* Eerste keuze */}
-                  <div className="flex items-center gap-2">
-                    {(['V', 'D', 'L', 'R', 'X'] as ShiftCode[]).map((code) => {
-                      const shiftDef = SHIFT_DEFINITIONS[code as Exclude<ShiftCode, ''>];
-                      const isSelected = selectedShift === code;
-
-                      return (
-                        <button
-                          key={code}
-                          id={`btn-shift-${dayNum}-${code}`}
-                          type="button"
-                          disabled={isLockedForEditing || (!canEditPlanning && !isAdmin)}
-                          onClick={() => handleSetShift(dayNum, code)}
-                          title={`${shiftDef.label}: ${shiftDef.description}`}
-                          className={`w-11 h-10 sm:w-12 sm:h-10 rounded-xl font-bold text-sm transition-all duration-150 cursor-pointer flex items-center justify-center border ${isSelected ? `${shiftDef.activeClass} scale-105` : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-100'} disabled:opacity-50 disabled:cursor-not-allowed active:scale-95`}
-                        >
-                          {code}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Tweede keuze */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold text-slate-400 mr-1">2de keuze mogelijkheid</span>
-
-                    {(['V', 'D', 'L', 'R', 'X'] as ShiftCode[]).map((code) => {
-                      const shiftDef = SHIFT_DEFINITIONS[code as Exclude<ShiftCode, ''>];
-                      const isSelected = selectedSecondChoice === code;
-                      const isPrimaryChoice = selectedShift === code;
-                      const isThirdChoice = selectedThirdChoice === code;
-
-                      return (
-                        <button
-                          key={`second-${code}`}
-                          id={`btn-second-shift-${dayNum}-${code}`}
-                          type="button"
-                          disabled={
-                            isLockedForEditing ||
-                            (!canEditPlanning && !isAdmin) ||
-                            isPrimaryChoice ||
-                            isThirdChoice
-
-                          }
-                          onClick={() => {
-                            const nextChoice = secondChoices[dayNum] === code ? '' : code;
-
-                            setSecondChoices((prev) => ({
-                              ...prev,
-                              [dayNum]: nextChoice,
-                            }));
-
-                            if (nextChoice) {
-                              setThirdChoices((prev) =>
-                                prev[dayNum] === nextChoice
-                                  ? { ...prev, [dayNum]: '' }
-                                  : prev
-                              );
-                            }
-
-                            setSaveSuccessMessage(null);
-                          }}
-                          title={
-                            isPrimaryChoice
-                              ? 'Deze keuze is al je eerste keuze'
-                              : `Tweede keuze: ${shiftDef.label}`
-                          }
-                          className={`w-7 h-6 rounded-md text-[10px] font-bold transition-all border ${
-                            isSelected
-                              ? `${shiftDef.activeClass} border-current`
-                              : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                          } disabled:opacity-30 disabled:cursor-not-allowed`}
-                        >
-                          {code}
-                        </button>
-                      );
-                    })}
-                  </div>
-                                    {/* Derde keuze */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold text-slate-400 mr-1">
-                      3de keuze
-                    </span>
-
-                    {(['V', 'D', 'L', 'R', 'X'] as ShiftCode[]).map((code) => {
-                      const shiftDef =
-                        SHIFT_DEFINITIONS[code as Exclude<ShiftCode, ''>];
-                      const isSelected = selectedThirdChoice === code;
-                      const isPrimaryChoice = selectedShift === code;
-                      const isSecondChoice = selectedSecondChoice === code;
-                      const isThirdChoice = selectedThirdChoice === code;
-
-                      return (
-                        <button
-                          key={`third-${code}`}
-                          id={`btn-third-shift-${dayNum}-${code}`}
-                          type="button"
-                          disabled={
-                            isLockedForEditing ||
-                            (!canEditPlanning && !isAdmin) ||
-                            isPrimaryChoice ||
-                            isSecondChoice
-
-                          }
-                          onClick={() => {
-                            setThirdChoices((prev) => ({
-                              ...prev,
-                              [dayNum]: prev[dayNum] === code ? '' : code,
-                            }));
-                            setSaveSuccessMessage(null);
-                          }}
-                          title={
-                            isPrimaryChoice
-                              ? 'Deze keuze is al je eerste keuze'
-                              : isSecondChoice
-                                ? 'Deze keuze is al je tweede keuze'
-                                : `Derde keuze: ${shiftDef.label}`
-                          }
-                          className={`w-7 h-6 rounded-md text-[10px] font-bold transition-all border ${
-                            isSelected
-                              ? `${shiftDef.activeClass} border-current`
-                              : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                          } disabled:opacity-30 disabled:cursor-not-allowed`}
-                        >
-                          {code}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
               </div>
             );
           })}
         </div>
-      )}
+      </section>
 
-      {(canEditPlanning || isAdmin) && (
-        <div className="fixed bottom-0 left-0 md:left-64 right-0 p-4 bg-white/95 backdrop-blur-xl border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 z-30 shadow-lg px-6 md:px-10">
-          <div className="text-xs text-slate-500 text-center sm:text-left">
-            {lastUpdatedInfo.at ? (
-              <span>
-                Laatst opgeslagen: <strong className="text-slate-800 font-semibold">{new Date(lastUpdatedInfo.at).toLocaleDateString('nl-NL')} {new Date(lastUpdatedInfo.at).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}</strong>
-                {lastUpdatedInfo.by && ` (${lastUpdatedInfo.by})`}
-              </span>
-            ) : (
-              <span>Nog niet opgeslagen voor deze maand</span>
-            )}
-            {hasUnsavedChanges && (
-              <span className="block sm:inline sm:ml-2 text-amber-600 font-semibold">
-                • Niet-opgeslagen wijzigingen
-              </span>
-            )}
-            {isLockedForEditing && (
-                 <span className="block sm:inline sm:ml-2 text-rose-600 font-semibold">
-                 • Planning vergrendeld
-               </span>
-            )}
+      {/* Daily planning */}
+      <section>
+        <div className="mb-2 flex items-end justify-between gap-3 px-1">
+          <div>
+            <h3 className="text-lg font-extrabold tracking-tight text-slate-900">Dagplanning</h3>
+            <p className="mt-0.5 text-xs text-slate-500">Kies per dag je eerste, tweede en derde voorkeur.</p>
           </div>
-          <div className="flex items-center gap-3">
-            {saveSuccessMessage && (
-              <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-medium animate-in fade-in">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>{saveSuccessMessage}</span>
-              </div>
-            )}
-            {errorMessage && (
-              <div className="flex items-center gap-1.5 text-xs text-red-700 font-medium animate-in fade-in">
-                <AlertTriangle className="w-4 h-4 text-red-600" />
-                <span>{errorMessage}</span>
-              </div>
-            )}
+          <div className="hidden items-center gap-1.5 text-[10px] font-medium text-slate-400 sm:flex">
+            <span className="h-2 w-2 rounded-full bg-amber-400" /> Feestdag
+            <span className="ml-2 h-2 w-2 rounded-full bg-indigo-500" /> Vandaag
+            <span className="ml-2 h-2 w-2 rounded-full bg-slate-300" /> Weekend
+          </div>
+        </div>
 
-            <button
-              id="save-planning-button"
-              onClick={handleSave}
-              disabled={isSaving || isLockedForEditing || !hasUnsavedChanges}
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-indigo-100 transition-all duration-150 flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-98"
-            >
-              {isSaving ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /><span>Opslaan...</span></>
-              ) : (
-                <><Save className="w-4 h-4" /><span>Planning opslaan</span></>
-              )}
-            </button>
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white py-20 shadow-sm">
+            <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+            <p className="mt-3 text-sm font-medium text-slate-500">Planning laden...</p>
+          </div>
+        ) : errorMessage ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center">
+            <AlertTriangle className="mx-auto h-7 w-7 text-rose-600" />
+            <p className="mt-2 font-bold text-rose-900">Planning kon niet geladen worden</p>
+            <p className="mt-1 text-sm text-rose-800">{errorMessage}</p>
+            <button type="button" onClick={fetchPlanning} className="mt-4 rounded-xl bg-rose-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-800">Opnieuw proberen</button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {Array.from({ length: daysInMonth }, (_, i) => {
+              const dayNum = i + 1;
+              const date = new Date(currentYear, currentMonth - 1, dayNum);
+              const dayOfWeekIndex = date.getDay();
+              const dayName = DAY_NAMES[dayOfWeekIndex];
+              const isWeekend = dayOfWeekIndex === 0 || dayOfWeekIndex === 6;
+              const holidayName = getBelgianHolidays(currentYear).get(dateKey(date));
+              const isHoliday = Boolean(holidayName);
+              const weekNumber = getWeekNumber(date);
+              const selectedShift = daysState[dayNum] || '';
+              const selectedSecondChoice = secondChoices[dayNum] || '';
+              const selectedThirdChoice = thirdChoices[dayNum] || '';
+              const showWeekNumber = dayOfWeekIndex === 1 || dayNum === 1;
+              const isToday = today.getFullYear() === currentYear && today.getMonth() + 1 === currentMonth && today.getDate() === dayNum;
+
+              const renderChoiceButtons = (choiceType: 'primary' | 'second' | 'third') => {
+                const selectedCode = choiceType === 'primary' ? selectedShift : choiceType === 'second' ? selectedSecondChoice : selectedThirdChoice;
+                return (['V', 'D', 'L', 'R', 'X'] as ShiftCode[]).map((code) => {
+                  const shiftDef = SHIFT_DEFINITIONS[code as Exclude<ShiftCode, ''>];
+                  const isSelected = selectedCode === code;
+                  const isPrimaryChoice = selectedShift === code;
+                  const isSecondChoice = selectedSecondChoice === code;
+                  const isThirdChoice = selectedThirdChoice === code;
+                  const isDisabled = !canEdit || isHoliday || isWeekend ||
+                    (choiceType === 'second' && (isPrimaryChoice || isThirdChoice)) ||
+                    (choiceType === 'third' && (isPrimaryChoice || isSecondChoice));
+
+                  const handleClick = () => {
+                    if (choiceType === 'primary') {
+                      handleSetShift(dayNum, code);
+                    } else if (choiceType === 'second') {
+                      const nextChoice = secondChoices[dayNum] === code ? '' : code;
+                      setSecondChoices((prev) => ({ ...prev, [dayNum]: nextChoice }));
+                      if (nextChoice) {
+                        setThirdChoices((prev) => prev[dayNum] === nextChoice ? { ...prev, [dayNum]: '' } : prev);
+                      }
+                      setSaveSuccessMessage(null);
+                    } else {
+                      setThirdChoices((prev) => ({ ...prev, [dayNum]: prev[dayNum] === code ? '' : code }));
+                      setSaveSuccessMessage(null);
+                    }
+                  };
+
+                  const title = isPrimaryChoice && choiceType !== 'primary'
+                    ? 'Deze keuze is al je eerste keuze'
+                    : isSecondChoice && choiceType === 'third'
+                      ? 'Deze keuze is al je tweede keuze'
+                      : `${choiceType === 'primary' ? 'Eerste' : choiceType === 'second' ? 'Tweede' : 'Derde'} keuze: ${shiftDef.label}${shiftDef.description ? `, ${shiftDef.description}` : ''}`;
+
+                  return (
+                    <button
+                      key={`${choiceType}-${dayNum}-${code}`}
+                      id={`btn-${choiceType === 'primary' ? 'shift' : `${choiceType}-shift`}-${dayNum}-${code}`}
+                      type="button"
+                      disabled={isDisabled}
+                      onClick={handleClick}
+                      title={title}
+                      aria-label={`${title}${isSelected ? ', geselecteerd' : ''}`}
+                      aria-pressed={isSelected}
+                      className={choiceType === 'primary'
+                        ? `flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 text-sm font-extrabold transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:h-10 sm:w-10 sm:text-sm ${isSelected ? `${shiftDef.activeClass} scale-[1.03] shadow-md ring-2 ring-current/10` : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50 hover:shadow-sm'} disabled:cursor-not-allowed disabled:opacity-35 active:scale-95`
+                        : `flex h-8 w-8 shrink-0 items-center justify-center rounded-md border text-xs font-bold transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 sm:h-8 sm:w-8 ${isSelected ? `${shiftDef.activeClass} border-current shadow-sm ring-1 ring-current/10` : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50 hover:shadow-sm'} disabled:cursor-not-allowed disabled:opacity-30 active:scale-95`}
+                    >
+                      {code}
+                    </button>
+                  );
+                });
+              };
+
+              return (
+                <article key={dayNum} className={`overflow-hidden rounded-xl border transition-colors ${isHoliday ? 'border-amber-300 bg-amber-50 ring-1 ring-amber-100' : isToday ? 'border-indigo-300 bg-indigo-50/40 ring-1 ring-indigo-100' : isWeekend ? 'border-blue-200 bg-blue-50/80 hover:border-blue-300' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                  <div className="flex flex-col gap-3 px-3 py-3 sm:px-4 md:flex-row md:items-center md:gap-4">
+                    {/* Daggegevens */}
+                    <div className="flex min-w-0 items-center gap-3 md:w-40 md:shrink-0">
+                      <div className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl border ${isHoliday ? 'border-amber-400 bg-amber-300 text-amber-950' : isToday ? 'border-indigo-600 bg-indigo-600 text-white' : isWeekend ? 'border-blue-300 bg-blue-100 text-blue-800' : 'border-slate-200 bg-slate-50 text-slate-800'}`}>
+                        <span className="text-[9px] font-bold uppercase tracking-wide">{dayName}</span>
+                        <span className="text-base font-extrabold leading-4">{String(dayNum).padStart(2, '0')}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-sm font-bold text-slate-900">{dayNum} {MONTH_NAMES[currentMonth - 1]}</span>
+                          {isHoliday && <span className="rounded-full bg-amber-300 px-1.5 py-0.5 text-[9px] font-bold text-amber-950">Feestdag</span>}
+                          {isToday && <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[9px] font-bold text-indigo-700">Vandaag</span>}
+                          {isWeekend && !isHoliday && <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold text-blue-800">Weekend</span>}
+                        </div>
+                        <p className={`mt-0.5 text-[10px] ${isHoliday ? 'font-semibold text-amber-800' : 'text-slate-500'}`}>{isHoliday ? holidayName : showWeekNumber ? `Week ${weekNumber}` : isWeekend ? 'Weekenddag' : 'Werkdag'}</p>
+                      </div>
+                    </div>
+
+                    {/* Keuzes: drie kolommen op brede schermen, compacte rijen op mobiel */}
+                    {isHoliday || isWeekend ? (
+                      <div className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg border px-4 py-4 sm:px-5 ${isHoliday ? 'border-amber-300 bg-amber-100/80 text-amber-950' : 'border-blue-200 bg-blue-100/80 text-blue-950'}`}>
+                        <CalendarDays className={`h-5 w-5 shrink-0 ${isHoliday ? 'text-amber-700' : 'text-blue-700'}`} />
+                        <div>
+                          <p className="text-sm font-extrabold">{isHoliday ? 'Deze dag geen geplande koerdienst' : 'Weekend geen geplande koerdienst'}</p>
+                          <p className={`mt-0.5 text-xs ${isHoliday ? 'text-amber-800' : 'text-blue-800'}`}>{isHoliday ? `Belgische wettelijke feestdag: ${holidayName}. Dienstkeuzes zijn uitgeschakeld.` : 'Zaterdag en zondag zijn niet beschikbaar voor koerdienst. Dienstkeuzes zijn uitgeschakeld.'}</p>
+                        </div>
+                      </div>
+                    ) : (
+                    <div className="grid min-w-0 flex-1 grid-cols-1 gap-1.5 lg:grid-cols-3 lg:gap-2">
+                      {([
+                        { type: 'primary' as const, label: 'Eerste keuze', selected: selectedShift },
+                        { type: 'second' as const, label: 'Tweede keuze', selected: selectedSecondChoice },
+                        { type: 'third' as const, label: 'Derde keuze', selected: selectedThirdChoice },
+                      ]).map((choice) => (
+                        <div
+                          key={choice.type}
+                          className={`min-w-0 rounded-lg border px-2 py-1.5 lg:px-2.5 lg:py-2 ${
+                            choice.type === 'primary'
+                              ? 'border-indigo-100 bg-indigo-50/80'
+                              : 'border-slate-100 bg-slate-50/70'
+                          }`}
+                        >
+                          <div className="flex min-w-0 items-center justify-between gap-1.5 lg:mb-2">
+                            <span className={`text-[9px] font-extrabold uppercase tracking-wide sm:text-[10px] ${choice.type === 'primary' ? 'text-indigo-800' : 'text-slate-600'}`}>
+                              {choice.label}
+                            </span>
+                            {choice.type === 'primary' ? (
+                              <span className="shrink-0 text-[9px] font-medium text-indigo-500">Verplicht</span>
+                            ) : (
+                              <span className="shrink-0 text-[9px] text-slate-400">Optioneel</span>
+                            )}
+                          </div>
+                          <div className="flex min-w-0 items-center gap-1 sm:gap-1.5">
+                            {renderChoiceButtons(choice.type)}
+                          </div>
+                          {choice.selected && (
+                            <p className={`mt-1 hidden truncate text-[10px] font-medium lg:block ${choice.type === 'primary' ? 'text-indigo-700' : 'text-slate-500'}`}>
+                              {SHIFT_DEFINITIONS[choice.selected as Exclude<ShiftCode, ''>]?.label || choice.selected}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Sticky save bar */}
+      {(canEditPlanning || isAdmin) && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 px-3 py-3 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl md:left-64 md:px-8">
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 text-center text-xs sm:text-left">
+              {lastUpdatedInfo.at ? (
+                <p className="text-slate-500">
+                  Laatst opgeslagen <strong className="font-semibold text-slate-800">{new Date(lastUpdatedInfo.at).toLocaleDateString('nl-BE')} om {new Date(lastUpdatedInfo.at).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}</strong>
+                  {lastUpdatedInfo.by && <span> door {lastUpdatedInfo.by}</span>}
+                </p>
+              ) : <p className="text-slate-500">Nog niet opgeslagen voor deze maand</p>}
+              {hasUnsavedChanges && <p className="mt-0.5 font-bold text-amber-600">● Je hebt niet-opgeslagen wijzigingen</p>}
+              {!hasUnsavedChanges && !isLockedForEditing && <p className="mt-0.5 inline-flex items-center gap-1 font-semibold text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> Alles opgeslagen</p>}
+              {isLockedForEditing && <p className="mt-0.5 font-bold text-rose-600">Planning vergrendeld</p>}
+            </div>
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+              {saveSuccessMessage && <div role="status" className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-700"><CheckCircle2 className="h-4 w-4" />{saveSuccessMessage}</div>}
+              {errorMessage && !isLoading && <div role="alert" className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-rose-700"><AlertTriangle className="h-4 w-4 shrink-0" /><span className="max-w-xs">{errorMessage}</span></div>}
+              <button
+                id="save-planning-button"
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving || isLockedForEditing || !hasUnsavedChanges || (!canEditPlanning && !isAdmin)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-extrabold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
+              >
+                {isSaving ? <><Loader2 className="h-4 w-4 animate-spin" /><span>Opslaan...</span></> : <><Save className="h-4 w-4" /><span>Planning opslaan</span></>}
+              </button>
+            </div>
           </div>
         </div>
       )}
