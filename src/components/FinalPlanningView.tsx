@@ -168,6 +168,7 @@ export const FinalPlanningView: React.FC = () => {
   const [teamData, setTeamData] = useState<TeamMemberOverview[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isPrinting, setIsPrinting] = useState<number | null>(null);
+  const [isPrintingMonth, setIsPrintingMonth] = useState(false);
 
   const fetchTeamOverview = useCallback(async () => {
     setIsLoading(true);
@@ -345,6 +346,84 @@ pdf.save(`definitieve-planning-${currentYear}-week-${weekNumber}.pdf`);
       setIsPrinting(null);
     }
   };
+
+const handleDownloadMonthPdf = async () => {
+  setIsPrintingMonth(true);
+
+  try {
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+
+    const margin = 10;
+    const contentWidth = pdfWidth - margin * 2;
+    const contentHeight = pdfHeight - margin * 2;
+
+    let pageAdded = false;
+
+    for (const { week } of weeks) {
+      const input = document.getElementById(`printable-week-${week}`);
+
+      if (!input) {
+        console.warn(`Week ${week} werd niet gevonden en is overgeslagen.`);
+        continue;
+      }
+
+      const canvas = await html2canvas(input, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        onclone: (clonedDoc) => {
+          const head = clonedDoc.head;
+
+          if (head) {
+            head
+              .querySelectorAll('style, link[rel="stylesheet"]')
+              .forEach((style) => style.remove());
+          }
+        },
+      });
+
+      const imageData = canvas.toDataURL('image/png');
+
+      const scale = Math.min(
+        contentWidth / canvas.width,
+        contentHeight / canvas.height,
+      );
+
+      const imageWidth = canvas.width * scale;
+      const imageHeight = canvas.height * scale;
+
+      const x = (pdfWidth - imageWidth) / 2;
+      const y = (pdfHeight - imageHeight) / 2;
+
+      if (pageAdded) {
+        pdf.addPage('a4', 'landscape');
+      }
+
+      pdf.addImage(
+        imageData,
+        'PNG',
+        x,
+        y,
+        imageWidth,
+        imageHeight,
+      );
+
+      pageAdded = true;
+    }
+
+    if (pageAdded) {
+      pdf.save(`definitieve-planning-${currentYear}-maand-${currentMonth + 1}.pdf`);
+    } else {
+      console.error('Er werden geen weektabellen gevonden voor de maand-PDF.');
+    }
+  } catch (error) {
+    console.error('Maand-PDF exporteren is mislukt:', error);
+  } finally {
+    setIsPrintingMonth(false);
+  }
+};
 
   const handleMonthChange = (direction: 1 | -1) => {
     const newDate = new Date(currentYear, currentMonth - 1 + direction, 1);
@@ -536,9 +615,25 @@ pdf.save(`definitieve-planning-${currentYear}-week-${weekNumber}.pdf`);
             >
               <ChevronRight className="h-5 w-5" />
             </button>
+          
           </div>
+
+          <button
+            type="button"
+            onClick={handleDownloadMonthPdf}
+            disabled={isPrintingMonth || isPrinting !== null || isLoading || weeks.length === 0}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#ffdc00] px-4 py-3 text-sm font-extrabold text-[#17202b] transition-colors hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isPrintingMonth ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {isPrintingMonth ? 'Maand-PDF maken…' : 'Maand-PDF downloaden'}
+          </button>
         </div>
       </header>
+
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label="Planningstatistieken">
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
