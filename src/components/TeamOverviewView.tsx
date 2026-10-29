@@ -291,73 +291,69 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   };
 // Nieuwe handling 
 const handleSaveDayResolutions = async () => {
-  if (!selectedDayDetail) return;
+if (selectedDayDetail === null) return;
 
-  setIsSavingDay(true);
-  setDaySaveMessage(null);
+setIsSavingDay(true);
+setDaySaveMessage(null);
 
-  try {
-    const promises = filteredMembers.map(async (m) => {
-      const currentCode = m.planning?.days?.[selectedDayDetail] || '';
-      const newCode = dayEditState[m.user.id] || '';
+try {
+const promises = filteredMembers.map(async (m) => {
+const currentCode = m.planning?.days?.[selectedDayDetail] || '';
+const newCode = dayEditState[m.user.id] || '';
 
-      const currentSecondCode =
-        m.planning?.secondChoices?.[selectedDayDetail] || '';
-      const newSecondCode =
-        daySecondChoiceState[m.user.id] || '';
-
-      const primaryChanged = currentCode !== newCode;
-      const secondChanged = currentSecondCode !== newSecondCode;
-
-      if (primaryChanged || secondChanged) {
-        const updatedDays = { ...(m.planning?.days || {}) };
-        const updatedSecondChoices = {
-          ...(m.planning?.secondChoices || {}),
-        };
-
-        if (!newCode) {
-          delete updatedDays[selectedDayDetail];
-        } else {
-          updatedDays[selectedDayDetail] = newCode;
-        }
-
-        if (!newSecondCode) {
-          delete updatedSecondChoices[selectedDayDetail];
-        } else {
-          updatedSecondChoices[selectedDayDetail] = newSecondCode;
-        }
-
-        return api.saveUserPlanningAsAdmin(
-          m.user.id,
-          currentYear,
-          currentMonth,
-          updatedDays,
-          updatedSecondChoices
-        );
-      }
-
-      return Promise.resolve();
-    });
-
-    await Promise.all(promises);
-
-    setDaySaveMessage('Wijzigingen voor deze dag zijn direct opgeslagen!');
-    await fetchOverview();
-
-    setTimeout(() => {
-      setSelectedDayDetail(null);
-      setDaySaveMessage(null);
-    }, 1200);
-  } catch (err: unknown) {
-    const msg =
-      err instanceof Error
-        ? err.message
-        : 'Opslaan van dagwijzigingen mislukt.';
-
-    setErrorMessage(msg);
-  } finally {
-    setIsSavingDay(false);
+  // Alleen de eerste keuze wordt gewijzigd.
+  if (currentCode === newCode) {
+    return Promise.resolve();
   }
+
+  const updatedDays = { ...(m.planning?.days || {}) };
+
+  if (!newCode) {
+    delete updatedDays[selectedDayDetail];
+  } else {
+    updatedDays[selectedDayDetail] = newCode;
+  }
+
+  // Bestaande tweede en derde keuzes volledig behouden.
+  const updatedSecondChoices = {
+    ...(m.planning?.secondChoices || {}),
+  };
+
+  const updatedThirdChoices = {
+    ...(m.planning?.thirdChoices || {}),
+  };
+
+  return api.saveUserPlanningAsAdmin(
+    m.user.id,
+    currentYear,
+    currentMonth,
+    updatedDays,
+    updatedSecondChoices,
+    updatedThirdChoices
+  );
+});
+
+await Promise.all(promises);
+
+setDaySaveMessage('Eerste keuzes succesvol opgeslagen!');
+await fetchOverview();
+
+setTimeout(() => {
+  setSelectedDayDetail(null);
+  setDaySaveMessage(null);
+}, 1200);
+
+} catch (err: unknown) {
+const msg =
+err instanceof Error
+? err.message
+: 'Opslaan van dagwijzigingen mislukt.';
+
+setErrorMessage(msg);
+
+} finally {
+setIsSavingDay(false);
+}
 };
 
   const monthDisplay = `${MONTH_NAMES[currentMonth - 1]} ${currentYear}`.toUpperCase();
@@ -545,6 +541,7 @@ const handleSaveDayResolutions = async () => {
                   const isCurrentLoggedUser = member.user.id === user?.id;
                   const pln = member.planning?.days || {};
                   const secondPln = member.planning?.secondChoices || {};
+                  const thirdPln = member.planning?.thirdChoices || {};
 
                   return (
                     <tr
@@ -582,6 +579,7 @@ const handleSaveDayResolutions = async () => {
                         const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                         const code = pln[dayNum] || '';
                         const secondCode = secondPln[dayNum] || '';
+                        const thirdCode = thirdPln[dayNum] || '';
 
                         const isToday =
                           new Date().getFullYear() === currentYear &&
@@ -642,6 +640,23 @@ const handleSaveDayResolutions = async () => {
                           >
                         {secondCode || '·'}
                       </div>
+                      {/* Derde keuze: alleen-lezen */}
+
+                        <div
+                          className={`w-full h-4 flex items-center justify-center rounded text-[9px] font-bold ${
+                            thirdCode
+                              ? 'border border-indigo-200 bg-indigo-50 text-indigo-800'
+                              : 'text-slate-300'
+                          }`}
+                          title={
+                            thirdCode
+                              ? `Derde keuze: ${thirdCode}`
+                              : 'Geen derde keuze'
+                          }
+                        >
+                          {thirdCode || '·'}
+                        </div>
+
                     </div>
                   </td>
                               );
@@ -1049,6 +1064,10 @@ const handleSaveDayResolutions = async () => {
 
               {filteredMembers.map((m) => {
                 const currentShift = dayEditState[m.user.id] || '';
+                const secondChoice =
+               m.planning?.secondChoices?.[selectedDayDetail] || '';
+                const thirdChoice =
+               m.planning?.thirdChoices?.[selectedDayDetail] || '';
                 const shiftCounts = Object.values(dayEditState).reduce((acc, code) => {
                   if (code && (code === 'V' || code === 'D' || code === 'L')) {
                     acc[code] = (acc[code] || 0) + 1;
@@ -1151,68 +1170,59 @@ const handleSaveDayResolutions = async () => {
                         Geen
                       </button>
                     </div>
-                                        {/* Tweede keuze */}
-                      <div className="flex items-center gap-1 mt-2">
-                        <span className="text-[10px] font-semibold text-slate-500 mr-1">
-                          2 de Keuze
-                        </span>
+                    {/* Tweede en derde keuze: alleen-lezen */}
+<div className="mt-3 flex flex-col gap-2 border-t border-slate-200 pt-3">
+  {/* Tweede keuze */}
+  <div className="flex items-center justify-between gap-3">
+    <span className="text-[10px] font-semibold text-slate-500">
+      Tweede keuze
+    </span>
 
-                        {(['V', 'D', 'L', 'R', 'X'] as const).map((code) => {
-                          const selectedSecond = daySecondChoiceState[m.user.id] || '';
-                          const isSelected = selectedSecond === code;
-                          const isPrimaryChoice = currentShift === code;
+    <span
+      className={`flex h-7 w-9 items-center justify-center rounded-lg border text-xs font-bold ${
+        secondChoice
+          ? 'border-yellow-200 bg-yellow-50 text-slate-800'
+          : 'border-slate-200 bg-white text-slate-300'
+      }`}
+      title={
+        secondChoice
+          ? `Tweede keuze: ${secondChoice}`
+          : 'Geen tweede keuze'
+      }
+    >
+      {secondChoice || '·'}
+    </span>
+  </div>
 
-                          return (
-                            <button
-                              key={`second-${code}`}
-                              type="button"
-                              disabled={isPrimaryChoice}
-                              onClick={() => {
-                                setDaySecondChoiceState((prev) => ({
-                                  ...prev,
-                                  [m.user.id]: prev[m.user.id] === code ? '' : code,
-                                }));
-                                setDaySaveMessage(null);
-                              }}
-                              className={`w-7 h-6 rounded-md text-[10px] font-bold border transition-all ${
-                                isSelected
-                                  ? 'bg-indigo-600 text-white border-indigo-600'
-                                  : 'bg-white text-slate-600 border-slate-200 hover:bg-indigo-50'
-                              } disabled:opacity-30 disabled:cursor-not-allowed`}
-                              title={
-                                isPrimaryChoice
-                                  ? 'Deze code is al de eerste keuze'
-                                  : `Tweede keuze ${code}`
-                              }
-                            >
-                              {code}
-                            </button>
-                          );
-                        })}
+  {/* Derde keuze */}
+  <div className="flex items-center justify-between gap-3">
+    <span className="text-[10px] font-semibold text-slate-500">
+      Derde keuze
+    </span>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDaySecondChoiceState((prev) => ({
-                              ...prev,
-                              [m.user.id]: '',
-                            }));
-                            setDaySaveMessage(null);
-                          }}
-                          className="px-2 h-6 rounded-md text-[10px] text-slate-500 border border-slate-200 hover:bg-red-50 hover:text-red-600"
-                          title="Tweede keuze wissen"
-                        >
-                          Geen
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+    <span
+      className={`flex h-7 w-9 items-center justify-center rounded-lg border text-xs font-bold ${
+        thirdChoice
+          ? 'border-indigo-200 bg-indigo-50 text-indigo-800'
+          : 'border-slate-200 bg-white text-slate-300'
+      }`}
+      title={
+        thirdChoice
+          ? `Derde keuze: ${thirdChoice}`
+          : 'Geen derde keuze'
+      }
+    >
+      {thirdChoice || '·'}
+    </span>
+      </div>
+</div>
+</div>
+</div>
+);
+})}
+</div>
 
-            </div>
-
-            {/* Modal Footer Actions */}
+{/* Modal Footer Actions */}
             <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
               <span className="text-xs text-slate-500">
                 Als planner kun je direct de definitieve keuze maken wie welke dienst draait.
