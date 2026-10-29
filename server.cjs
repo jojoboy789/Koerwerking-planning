@@ -416,28 +416,30 @@ async function sendTelegramNotification(message) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!botToken || !chatId) {
-    console.warn("Telegram bot token or chat ID not configured in .env file. Skipping notification.");
-    return;
+    console.error("Telegram-verzending mislukt: TELEGRAM_BOT_TOKEN of TELEGRAM_CHAT_ID ontbreekt.");
+    return false;
   }
   const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
   try {
     const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
         text: message,
         parse_mode: "HTML"
-      })
+      }),
+      signal: AbortSignal.timeout(15e3)
     });
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Failed to send Telegram notification:", errorData);
+    const result = await response.json();
+    if (!response.ok || result.ok !== true) {
+      console.error("Telegram heeft het bericht niet verstuurd:", result.description || `HTTP ${response.status}`);
+      return false;
     }
+    return true;
   } catch (error) {
-    console.error("Error sending Telegram notification:", error);
+    console.error("Fout bij verzenden van Telegram-bericht:", error);
+    return false;
   }
 }
 async function startServer() {
@@ -674,14 +676,116 @@ ${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}
 
 `;
       if ((message + section).length > 3500) {
-        await sendTelegramNotification(message.trim());
+        const sent = await sendTelegramNotification(message.trim());
+        if (!sent) throw new Error("Telegram kon de wijzigingsmelding niet versturen.");
         message = heading;
       }
       message += section;
     }
     if (message.trim() !== heading.trim()) {
-      await sendTelegramNotification(message.trim());
+      const sent = await sendTelegramNotification(message.trim());
+      if (!sent) throw new Error("Telegram kon de wijzigingsmelding niet versturen.");
     }
+  }
+  const OC_PLANNING_DAILY_UPDATE_TIMES = /* @__PURE__ */ new Set(["04:50", "12:30", "21:00"]);
+  const OC_PLANNING_TIME_ZONE = "Europe/Brussels";
+  let ocPlanningScheduleStarted = false;
+  let lastOCPlanningScheduledRunKey = null;
+  let scheduledOCPlanningSendInProgress = false;
+  function getBelgianDateTimeParts(date) {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: OC_PLANNING_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return {
+      dateKey: `${values.year}-${values.month}-${values.day}`,
+      timeKey: `${values.hour}:${values.minute}`
+    };
+  }
+  async function sendCurrentOCPlanningToTelegram() {
+    const manifest = await fetchOCPlanningManifest();
+    if (!manifest.slides || manifest.slides.length === 0) {
+      throw new Error("Er zijn geen actieve OC Planning-slides om te versturen.");
+    }
+    const slides = await Promise.all(
+      manifest.slides.map(async (slide) => ({
+        ...slide,
+        html: await fetchOCPlanningSlideHtml(slide.id)
+      }))
+    );
+    const heading = `\u{1F68C} <b>OC BUS GBR \xB7 ACTUELE DAGPLANNING</b>\\n<i>Automatische update \xB7 ${new Intl.DateTimeFormat("nl-BE", {
+      timeZone: OC_PLANNING_TIME_ZONE,
+      dateStyle: "full",
+      timeStyle: "short"
+    }).format(/* @__PURE__ */ new Date())}</i>\\n\\n`;
+    const maxLength = 3500;
+    const messages = [];
+    let message = heading;
+    for (const slide of slides) {
+      const category = slide.dated ? "Dagplanning" : "Mededeling";
+      const content = htmlToTelegramText(slide.html);
+      const section = `<b>${escapeTelegramHtml(category)}: ${escapeTelegramHtml(slide.title)}</b>\\n${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}\\n\\n`;
+      if ((message + section).length > maxLength && message !== heading) {
+        messages.push(message.trim());
+        message = heading;
+      }
+      let remaining = section;
+      while ((message + remaining).length > maxLength) {
+        const available = maxLength - message.length;
+        if (available <= 0) {
+          messages.push(message.trim());
+          message = heading;
+          continue;
+        }
+        messages.push((message + remaining.slice(0, available)).trim());
+        remaining = remaining.slice(available);
+        message = heading;
+      }
+      message += remaining;
+    }
+    if (message.trim() !== heading.trim()) {
+      messages.push(message.trim());
+    }
+    if (messages.length === 0) {
+      throw new Error("De OC Planning leverde geen inhoud op om te versturen.");
+    }
+    for (const telegramMessage of messages) {
+      const sent = await sendTelegramNotification(telegramMessage);
+      if (!sent) {
+        throw new Error("Minstens \xE9\xE9n Telegram-bericht kon niet worden verstuurd.");
+      }
+    }
+    console.log(`Automatische OC Planning-update verstuurd (${messages.length} Telegram-bericht(en)).`);
+  }
+  function startOCPlanningScheduledUpdates() {
+    if (ocPlanningScheduleStarted) return;
+    ocPlanningScheduleStarted = true;
+    const checkSchedule = async () => {
+      const { dateKey, timeKey } = getBelgianDateTimeParts(/* @__PURE__ */ new Date());
+      if (!OC_PLANNING_DAILY_UPDATE_TIMES.has(timeKey)) return;
+      const runKey = `${dateKey}-${timeKey}`;
+      if (lastOCPlanningScheduledRunKey === runKey || scheduledOCPlanningSendInProgress) return;
+      scheduledOCPlanningSendInProgress = true;
+      try {
+        await sendCurrentOCPlanningToTelegram();
+        lastOCPlanningScheduledRunKey = runKey;
+      } catch (error) {
+        console.error(`Automatische OC Planning-update mislukt voor ${runKey}:`, error);
+      } finally {
+        scheduledOCPlanningSendInProgress = false;
+      }
+    };
+    void checkSchedule();
+    setInterval(() => {
+      void checkSchedule();
+    }, 15e3);
+    console.log("Automatische OC Planning-updates ingepland: 04:50, 12:30 en 21:00 (Europe/Brussels).");
   }
   async function checkOCPlanningForChanges() {
     const manifest = await fetchOCPlanningManifest();
@@ -1383,6 +1487,7 @@ ${message.trim()}`;
     });
   }
   startOCPlanningMonitor();
+  startOCPlanningScheduledUpdates();
   app2.listen(PORT, "0.0.0.0", () => {
     console.log(`Neon Tokyo Planner server running at http://0.0.0.0:${PORT}`);
   });
