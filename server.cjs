@@ -934,8 +934,8 @@ ${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}`;
     const year = parseInt(req.params.year, 10);
     const month = parseInt(req.params.month, 10);
     const userId = req.user.id;
-    const { days, secondChoices } = req.body;
-    if (isNaN(year) || isNaN(month) || month < 1 || month > 12 || typeof days !== "object" || days === null || Array.isArray(days) || secondChoices !== void 0 && (typeof secondChoices !== "object" || secondChoices === null || Array.isArray(secondChoices))) {
+    const { days, secondChoices, thirdChoices } = req.body;
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12 || typeof days !== "object" || days === null || Array.isArray(days) || secondChoices !== void 0 && (typeof secondChoices !== "object" || secondChoices === null || Array.isArray(secondChoices)) || thirdChoices !== void 0 && (typeof thirdChoices !== "object" || thirdChoices === null || Array.isArray(thirdChoices))) {
       return res.status(400).json({ error: "Ongeldige planningsgegevens ontvangen." });
     }
     const now = /* @__PURE__ */ new Date();
@@ -965,23 +965,24 @@ ${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}`;
     }
     const validCodes = ["V", "D", "L", "R", "X", ""];
     const cleanDays = {};
-    for (const [key, value] of Object.entries(days)) {
+    const cleanSecondChoices = {};
+    const cleanThirdChoices = {};
+    for (const [key, value] of Object.entries(days || {})) {
       const dayNum = Number(key);
-      if (Number.isInteger(dayNum) && dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value)) {
-        if (value !== "") {
-          cleanDays[dayNum] = value;
-        }
+      if (Number.isInteger(dayNum) && dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value) && value !== "") {
+        cleanDays[dayNum] = value;
       }
     }
-    const cleanSecondChoices = {};
-    if (secondChoices) {
-      for (const [key, value] of Object.entries(secondChoices)) {
-        const dayNum = Number(key);
-        if (Number.isInteger(dayNum) && dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value)) {
-          if (value !== "" && value !== cleanDays[dayNum]) {
-            cleanSecondChoices[dayNum] = value;
-          }
-        }
+    for (const [key, value] of Object.entries(secondChoices || {})) {
+      const dayNum = Number(key);
+      if (Number.isInteger(dayNum) && dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value) && value !== "" && cleanDays[dayNum] !== value) {
+        cleanSecondChoices[dayNum] = value;
+      }
+    }
+    for (const [key, value] of Object.entries(thirdChoices || {})) {
+      const dayNum = Number(key);
+      if (Number.isInteger(dayNum) && dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value) && value !== "" && cleanDays[dayNum] !== value && cleanSecondChoices[dayNum] !== value) {
+        cleanThirdChoices[dayNum] = value;
       }
     }
     const updatedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -991,6 +992,7 @@ ${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}`;
     if (existingIndex >= 0) {
       db2.plannings[existingIndex].days = cleanDays;
       db2.plannings[existingIndex].secondChoices = cleanSecondChoices;
+      db2.plannings[existingIndex].thirdChoices = cleanThirdChoices;
       db2.plannings[existingIndex].updatedAt = updatedAt;
       db2.plannings[existingIndex].updatedBy = req.user.name;
     } else {
@@ -1002,6 +1004,7 @@ ${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}`;
         month,
         days: cleanDays,
         secondChoices: cleanSecondChoices,
+        thirdChoices: cleanThirdChoices,
         updatedAt,
         updatedBy: req.user.name,
         isFinal: false
@@ -1266,7 +1269,7 @@ ${message.trim()}`;
     const { id, year, month } = req.params;
     const y = parseInt(year, 10);
     const m = parseInt(month, 10);
-    const { days, secondChoices } = req.body;
+    const { days, secondChoices, thirdChoices } = req.body;
     const targetUser = db2.users.find((u) => u.id === id);
     if (!targetUser) {
       return res.status(404).json({ error: "Gebruiker niet gevonden." });
@@ -1274,6 +1277,7 @@ ${message.trim()}`;
     const cleanDays = {};
     const validCodes = ["V", "D", "L", "R", "X", ""];
     const cleanSecondChoices = {};
+    const cleanThirdChoices = {};
     for (const [key, value] of Object.entries(secondChoices || {})) {
       const dayNum = parseInt(key, 10);
       if (dayNum >= 1 && dayNum <= 31 && typeof value === "string" && validCodes.includes(value)) {

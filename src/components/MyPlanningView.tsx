@@ -30,6 +30,8 @@ export const MyPlanningView: React.FC = () => {
   const [initialDaysState, setInitialDaysState] = useState<Record<number, ShiftCode>>({});
   const [secondChoices, setSecondChoices] = useState<Record<number, ShiftCode>>({});
   const [initialSecondChoices, setInitialSecondChoices] = useState<Record<number, ShiftCode>>({});
+  const [thirdChoices, setThirdChoices] = useState<Record<number, ShiftCode>>({});
+  const [initialThirdChoices, setInitialThirdChoices] = useState<Record<number, ShiftCode>>({});
   const [lastUpdatedInfo, setLastUpdatedInfo] = useState<{ at?: string; by?: string }>({});
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -63,14 +65,18 @@ export const MyPlanningView: React.FC = () => {
       const res = await api.getPlanning(currentYear, currentMonth);
 
       const days = (res.planning?.days as Record<number, ShiftCode>) || {};
-      const loadedSecondChoices =
+            const loadedSecondChoices =
         (res.planning?.secondChoices as Record<number, ShiftCode>) || {};
+      const loadedThirdChoices =
+        (res.planning?.thirdChoices as Record<number, ShiftCode>) || {};
 
       setDaysState(days);
       setInitialDaysState(days);
 
       setSecondChoices(loadedSecondChoices);
       setInitialSecondChoices(loadedSecondChoices);
+      setThirdChoices(loadedThirdChoices);
+      setInitialThirdChoices(loadedThirdChoices);
       setLastUpdatedInfo({
         at: res.planning?.updatedAt,
         by: res.planning?.updatedBy,
@@ -99,17 +105,23 @@ export const MyPlanningView: React.FC = () => {
       if ((secondChoices[d] || '') !== (initialSecondChoices[d] || '')) {
         return true;
       }
+
+      if ((thirdChoices[d] || '') !== (initialThirdChoices[d] || '')) {
+        return true;
+      }
     }
 
     return false;
   }, [
-    daysState,
-    initialDaysState,
-    secondChoices,
-    initialSecondChoices,
-    daysInMonth,
-    isLockedForEditing,
-  ]);
+  daysState,
+  initialDaysState,
+  secondChoices,
+  initialSecondChoices,
+  thirdChoices,
+  initialThirdChoices,
+  daysInMonth,
+  isLockedForEditing,
+]);
 
   // Navigate months
   const handlePrevMonth = () => {
@@ -131,16 +143,27 @@ export const MyPlanningView: React.FC = () => {
   };
 
   // Toggle shift for a day
-  const handleSetShift = (day: number, code: ShiftCode) => {
+    const handleSetShift = (day: number, code: ShiftCode) => {
     if (isLockedForEditing || (!canEditPlanning && !isAdmin)) return;
-    setDaysState((prev) => {
-      const current = prev[day];
-      if (current === code) {
-        return { ...prev, [day]: '' };
-      }
-      return { ...prev, [day]: code };
-    });
-    if (saveSuccessMessage) setSaveSuccessMessage(null);
+
+    const nextCode = daysState[day] === code ? '' : code;
+
+    setDaysState((prev) => ({
+      ...prev,
+      [day]: nextCode,
+    }));
+
+    if (nextCode) {
+      setSecondChoices((prev) =>
+        prev[day] === nextCode ? { ...prev, [day]: '' } : prev
+      );
+
+      setThirdChoices((prev) =>
+        prev[day] === nextCode ? { ...prev, [day]: '' } : prev
+      );
+    }
+
+    setSaveSuccessMessage(null);
   };
 
   // Batch auto-fill helpers
@@ -176,11 +199,13 @@ const res = await api.savePlanning(
   currentYear,
   currentMonth,
   daysState,
-  secondChoices
+  secondChoices,
+  thirdChoices
 );
 
 setInitialDaysState({ ...daysState });
 setInitialSecondChoices({ ...secondChoices });
+setInitialThirdChoices({ ...thirdChoices });
 
       setLastUpdatedInfo({
         at: res.planning.updatedAt,
@@ -331,6 +356,7 @@ setInitialSecondChoices({ ...secondChoices });
             const weekNumber = getWeekNumber(date);
             const selectedShift = daysState[dayNum] || '';
             const selectedSecondChoice = secondChoices[dayNum] || '';
+            const selectedThirdChoice = thirdChoices[dayNum] || '';
             const showWeekNumber = dayOfWeekIndex === 1 || dayNum === 1;
             const isToday = new Date().getFullYear() === currentYear && new Date().getMonth() + 1 === currentMonth && new Date().getDate() === dayNum;
 
@@ -380,6 +406,7 @@ setInitialSecondChoices({ ...secondChoices });
                       const shiftDef = SHIFT_DEFINITIONS[code as Exclude<ShiftCode, ''>];
                       const isSelected = selectedSecondChoice === code;
                       const isPrimaryChoice = selectedShift === code;
+                      const isThirdChoice = selectedThirdChoice === code;
 
                       return (
                         <button
@@ -389,10 +416,72 @@ setInitialSecondChoices({ ...secondChoices });
                           disabled={
                             isLockedForEditing ||
                             (!canEditPlanning && !isAdmin) ||
-                            isPrimaryChoice
+                            isPrimaryChoice ||
+                            isThirdChoice
+
                           }
                           onClick={() => {
+                            const nextChoice = secondChoices[dayNum] === code ? '' : code;
+
                             setSecondChoices((prev) => ({
+                              ...prev,
+                              [dayNum]: nextChoice,
+                            }));
+
+                            if (nextChoice) {
+                              setThirdChoices((prev) =>
+                                prev[dayNum] === nextChoice
+                                  ? { ...prev, [dayNum]: '' }
+                                  : prev
+                              );
+                            }
+
+                            setSaveSuccessMessage(null);
+                          }}
+                          title={
+                            isPrimaryChoice
+                              ? 'Deze keuze is al je eerste keuze'
+                              : `Tweede keuze: ${shiftDef.label}`
+                          }
+                          className={`w-7 h-6 rounded-md text-[10px] font-bold transition-all border ${
+                            isSelected
+                              ? `${shiftDef.activeClass} border-current`
+                              : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                          } disabled:opacity-30 disabled:cursor-not-allowed`}
+                        >
+                          {code}
+                        </button>
+                      );
+                    })}
+                  </div>
+                                    {/* Derde keuze */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold text-slate-400 mr-1">
+                      3de keuze
+                    </span>
+
+                    {(['V', 'D', 'L', 'R', 'X'] as ShiftCode[]).map((code) => {
+                      const shiftDef =
+                        SHIFT_DEFINITIONS[code as Exclude<ShiftCode, ''>];
+                      const isSelected = selectedThirdChoice === code;
+                      const isPrimaryChoice = selectedShift === code;
+                      const isSecondChoice = selectedSecondChoice === code;
+                      const isThirdChoice = selectedThirdChoice === code;
+
+                      return (
+                        <button
+                          key={`third-${code}`}
+                          id={`btn-third-shift-${dayNum}-${code}`}
+                          type="button"
+                          disabled={
+                            isLockedForEditing ||
+                            (!canEditPlanning && !isAdmin) ||
+                            isPrimaryChoice ||
+                            isSecondChoice
+
+                          }
+                          onClick={() => {
+                            setThirdChoices((prev) => ({
                               ...prev,
                               [dayNum]: prev[dayNum] === code ? '' : code,
                             }));
@@ -401,7 +490,9 @@ setInitialSecondChoices({ ...secondChoices });
                           title={
                             isPrimaryChoice
                               ? 'Deze keuze is al je eerste keuze'
-                              : `Tweede keuze: ${shiftDef.label}`
+                              : isSecondChoice
+                                ? 'Deze keuze is al je tweede keuze'
+                                : `Derde keuze: ${shiftDef.label}`
                           }
                           className={`w-7 h-6 rounded-md text-[10px] font-bold transition-all border ${
                             isSelected

@@ -109,11 +109,12 @@ class ApiClient {
     return this.request<{ year: number; month: number; planning: MonthlyPlanning }>(`/planning/${year}/${month}`);
   }
 
-  async savePlanning(
+    async savePlanning(
     year: number,
     month: number,
     days: Record<number, string>,
-    secondChoices: Record<number, string> = {}
+    secondChoices: Record<number, string> = {},
+    thirdChoices: Record<number, string> = {}
   ) {
     return this.request<{
       success: boolean;
@@ -121,10 +122,13 @@ class ApiClient {
       planning: MonthlyPlanning;
     }>(`/planning/${year}/${month}`, {
       method: 'POST',
-      body: JSON.stringify({ days, secondChoices }),
+      body: JSON.stringify({
+        days,
+        secondChoices,
+        thirdChoices,
+      }),
     });
   }
-
   // Team Overview
   async getTeamOverview(year: number, month: number) {
     return this.request<{ year: number; month: number; teamData: TeamMemberOverview[] }>(`/overview/${year}/${month}`);
@@ -206,28 +210,30 @@ class ApiClient {
     );
   }
 
-async saveUserPlanningAsAdmin(
-  userId: string,
-  year: number,
-  month: number,
-  days: Record<number, string>,
-  secondChoices?: Record<number, string>
-) {
-  return this.request<{
-    success: boolean;
-    message: string;
-    planning: MonthlyPlanning;
-  }>(
-    `/admin/users/${userId}/planning/${year}/${month}`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        days,
-        secondChoices: secondChoices || {},
-      }),
-    }
-  );
-}
+  async saveUserPlanningAsAdmin(
+    userId: string,
+    year: number,
+    month: number,
+    days: Record<number, string>,
+    secondChoices: Record<number, string> = {},
+    thirdChoices: Record<number, string> = {}
+  ) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      planning: MonthlyPlanning;
+    }>(
+      `/admin/users/${userId}/planning/${year}/${month}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          days,
+          secondChoices,
+          thirdChoices,
+        }),
+      }
+    );
+  }
 
   async getFirebaseStatus() {
     return this.request<{

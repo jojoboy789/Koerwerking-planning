@@ -46,6 +46,7 @@ interface StoredPlanning {
   month: number;
   days: Record<number, string>;
   secondChoices?: Record<number, string>;
+  thirdChoices?: Record<number, string>;
   finalDays?: Record<number, string>;
   isFinal: boolean;
   updatedAt: string;
@@ -1175,7 +1176,7 @@ app.get(
     const year = parseInt(req.params.year, 10);
     const month = parseInt(req.params.month, 10);
     const userId = req.user!.id;
-    const { days, secondChoices } = req.body;
+    const { days, secondChoices, thirdChoices } = req.body;
 
     if (
       isNaN(year) ||
@@ -1188,7 +1189,11 @@ app.get(
       (secondChoices !== undefined &&
         (typeof secondChoices !== 'object' ||
           secondChoices === null ||
-          Array.isArray(secondChoices)))
+          Array.isArray(secondChoices))) ||
+      (thirdChoices !== undefined &&
+        (typeof thirdChoices !== 'object' ||
+          thirdChoices === null ||
+          Array.isArray(thirdChoices)))
     ) {
       return res.status(400).json({ error: 'Ongeldige planningsgegevens ontvangen.' });
     }
@@ -1216,10 +1221,13 @@ app.get(
     // Geldige dienstcodes
     const validCodes = ['V', 'D', 'L', 'R', 'X', ''];
 
-    // Eerste keuze per dag valideren
+    // Eerste, tweede en derde keuze per dag valideren
     const cleanDays: Record<number, string> = {};
+    const cleanSecondChoices: Record<number, string> = {};
+    const cleanThirdChoices: Record<number, string> = {};
 
-    for (const [key, value] of Object.entries(days)) {
+    // Eerste keuze
+    for (const [key, value] of Object.entries(days || {})) {
       const dayNum = Number(key);
 
       if (
@@ -1227,33 +1235,45 @@ app.get(
         dayNum >= 1 &&
         dayNum <= 31 &&
         typeof value === 'string' &&
-        validCodes.includes(value)
+        validCodes.includes(value) &&
+        value !== ''
       ) {
-        if (value !== '') {
-          cleanDays[dayNum] = value;
-        }
+        cleanDays[dayNum] = value;
       }
     }
 
-    // Tweede keuze per dag valideren
-    const cleanSecondChoices: Record<number, string> = {};
+    // Tweede keuze: mag niet gelijk zijn aan de eerste keuze
+    for (const [key, value] of Object.entries(secondChoices || {})) {
+      const dayNum = Number(key);
 
-    if (secondChoices) {
-      for (const [key, value] of Object.entries(secondChoices)) {
-        const dayNum = Number(key);
+      if (
+        Number.isInteger(dayNum) &&
+        dayNum >= 1 &&
+        dayNum <= 31 &&
+        typeof value === 'string' &&
+        validCodes.includes(value) &&
+        value !== '' &&
+        cleanDays[dayNum] !== value
+      ) {
+        cleanSecondChoices[dayNum] = value;
+      }
+    }
 
-        if (
-          Number.isInteger(dayNum) &&
-          dayNum >= 1 &&
-          dayNum <= 31 &&
-          typeof value === 'string' &&
-          validCodes.includes(value)
-        ) {
-          // Een tweede keuze mag niet identiek zijn aan de eerste keuze.
-          if (value !== '' && value !== cleanDays[dayNum]) {
-            cleanSecondChoices[dayNum] = value;
-          }
-        }
+    // Derde keuze: mag niet gelijk zijn aan de eerste of tweede keuze
+    for (const [key, value] of Object.entries(thirdChoices || {})) {
+      const dayNum = Number(key);
+
+      if (
+        Number.isInteger(dayNum) &&
+        dayNum >= 1 &&
+        dayNum <= 31 &&
+        typeof value === 'string' &&
+        validCodes.includes(value) &&
+        value !== '' &&
+        cleanDays[dayNum] !== value &&
+        cleanSecondChoices[dayNum] !== value
+      ) {
+        cleanThirdChoices[dayNum] = value;
       }
     }
 
@@ -1266,6 +1286,7 @@ app.get(
     if (existingIndex >= 0) {
       db.plannings[existingIndex].days = cleanDays;
       db.plannings[existingIndex].secondChoices = cleanSecondChoices;
+      db.plannings[existingIndex].thirdChoices = cleanThirdChoices;
       db.plannings[existingIndex].updatedAt = updatedAt;
       db.plannings[existingIndex].updatedBy = req.user!.name;
     } else {
@@ -1277,6 +1298,7 @@ app.get(
         month,
         days: cleanDays,
         secondChoices: cleanSecondChoices,
+        thirdChoices: cleanThirdChoices,
         updatedAt,
         updatedBy: req.user!.name,
         isFinal: false,
@@ -1617,7 +1639,7 @@ app.get(
     const { id, year, month } = req.params;
     const y = parseInt(year, 10);
     const m = parseInt(month, 10);
-    const { days, secondChoices } = req.body;
+    const { days, secondChoices, thirdChoices } = req.body;
 
     const targetUser = db.users.find(u => u.id === id);
     if (!targetUser) {
@@ -1627,7 +1649,7 @@ app.get(
     const cleanDays: Record<number, string> = {};
     const validCodes = ['V', 'D', 'L', 'R', 'X', ''];
     const cleanSecondChoices: Record<number, string> = {};
-
+    const cleanThirdChoices: Record<number, string> = {};
 for (const [key, value] of Object.entries(secondChoices || {})) {
   const dayNum = parseInt(key, 10);
 
