@@ -54,7 +54,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               Wat moet je doen?
             </h4>
             <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside">
-              <li>Neem contact op met Jonas.</li>
+              <li>Neem contact op met Jonas. 0476286766</li>
               <li>De beheerder kan in het Adminportaal jouw toegangscode direct inzien of een nieuwe genereren.</li>
               <li>Zodra een nieuwe code wordt gegenereerd, is je oude code automatisch direct ongeldig.</li>
             </ul>
