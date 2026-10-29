@@ -135,9 +135,14 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
       <div style={{ border: '1px solid #cbd5e1', borderRadius: '8px', overflow: 'hidden' }}>
         <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '12px' }}>
           <colgroup>
-            <col style={{ width: '235px' }} />
-            {weekData.map(({ day }) => <col key={day} />)}
-          </colgroup>
+              <col style={{ width: '25%' }} />
+              {weekData.map(({ day }) => (
+                <col
+                  key={day}
+                  style={{ width: `${75 / weekData.length}%` }}
+                />
+              ))}
+            </colgroup>
           <thead>
             <tr>
               <th
@@ -167,6 +172,8 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
                     style={{
                       padding: '8px 4px',
                       textAlign: 'center',
+                      verticalAlign: 'middle',
+                      boxSizing: 'border-box',
                       color: holidayName ? '#78350f' : isWeekend ? '#334155' : '#ffffff',
                       backgroundColor: holidayName ? '#fde68a' : isWeekend ? '#cbd5e1' : '#17202b',
                       borderLeft: '1px solid #ffffff30',
@@ -181,13 +188,16 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
                         {DAY_NAMES[date.getDay()]}
                       </div>
 
-                      <div style={{
-                        marginTop: '4px',
-                        fontSize: '17px',
-                        fontWeight: 800,
-                        textAlign: 'center',
-                        lineHeight: 1.2,
-                      }}>
+                      <div
+                        style={{
+                          marginTop: '5px',
+                          fontSize: '19px',
+                          fontWeight: 800,
+                          textAlign: 'center',
+                          lineHeight: 1.3,
+                          padding: '2px 0',
+                        }}
+                      >
                         {day}
                       </div>
                     {holidayName && (
@@ -210,6 +220,7 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
                   padding: '8px 10px',
                   borderBottom: '1px solid #e2e8f0',
                   borderRight: '1px solid #cbd5e1',
+                  boxSizing: 'border-box',
                   verticalAlign: 'middle',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
@@ -266,7 +277,7 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
                     <span
                       style={{
                         width: '100%',
-                        height: '32px',
+                        height: '36px',
                         boxSizing: 'border-box',
                         display: 'flex',
                         alignItems: 'center',
@@ -279,11 +290,11 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
                         border: `1px solid ${shiftCode ? colors.background : '#e2e8f0'}`,
                         backgroundColor: colors.background,
                         color: colors.foreground,
-                        fontWeight: 800,
-                        fontSize: '13px',
+                        fontWeight: 700,
+                        fontSize: '15px',
                       }}
                     >
-                      {shiftCode || '·'}
+                      {shiftCode || ''}
                     </span>
                   </td>
                   );

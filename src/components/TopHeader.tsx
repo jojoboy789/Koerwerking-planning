@@ -83,7 +83,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             <div className="hidden lg:block text-left">
               <div className="text-xs font-semibold text-slate-900 truncate max-w-[130px] flex items-center gap-1">
                 {user?.name}
-                {user?.isAdmin && <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" title="Admin" />}
+                {user?.isAdmin && (
+                  <span title="Admin">
+                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                  </span>
+                )}
               </div>
               <div className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">
                 {user?.isAdmin ? 'Beheerder' : user?.role || 'Teamlid'}

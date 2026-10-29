@@ -207,7 +207,7 @@ setInitialSecondChoices({ ...secondChoices });
       else if (code === 'L') lCount++;
       else if (code === 'R') rCount++;
       else if (code === 'X') xCount++;
-      if (code && code !== '') filledCount++;
+      if (code) filledCount++;
     }
 
     return { vCount, dCount, lCount, rCount, xCount, filledCount, emptyCount: daysInMonth - filledCount };
