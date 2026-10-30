@@ -32,6 +32,8 @@ var import_dotenv = __toESM(require("dotenv"), 1);
 // server/firebaseService.ts
 var import_app = require("firebase/app");
 var import_firestore = require("firebase/firestore");
+var import_app2 = require("firebase-admin/app");
+var import_firestore2 = require("firebase-admin/firestore");
 var firebaseConfig = {
   apiKey: "AIzaSyCneVtJOGHwwoXhug4kqlUNo3EksQ-cFXQ",
   authDomain: "planning-koer-gbr.firebaseapp.com",
@@ -42,14 +44,23 @@ var firebaseConfig = {
 };
 var app = null;
 var db = null;
+var adminDb = null;
 var isConnected = false;
 function initFirebase() {
   try {
     if (!app) {
-      app = (0, import_app.initializeApp)(firebaseConfig);
+      app = (0, import_app.getApps)().length ? (0, import_app.getApps)()[0] : (0, import_app.initializeApp)(firebaseConfig);
       db = (0, import_firestore.getFirestore)(app);
       isConnected = true;
       console.log("\u{1F525} Firebase initialized successfully for project:", firebaseConfig.projectId);
+    }
+    if (!adminDb) {
+      const adminApp = (0, import_app2.getApps)().length ? (0, import_app2.getApps)()[0] : (0, import_app2.initializeApp)({
+        credential: (0, import_app2.applicationDefault)(),
+        projectId: firebaseConfig.projectId
+      });
+      adminDb = (0, import_firestore2.getFirestore)(adminApp);
+      console.log("\u{1F525} Firebase Admin SDK initialized.");
     }
   } catch (err) {
     console.error("\u26A0\uFE0F Firebase initialization error:", err);
@@ -64,10 +75,7 @@ async function fetchRemoteDatabase() {
   try {
     const docRef = (0, import_firestore.doc)(db, "system", "database");
     const snap = await (0, import_firestore.getDoc)(docRef);
-    if (snap.exists()) {
-      return snap.data();
-    }
-    return null;
+    return snap.exists() ? snap.data() : null;
   } catch (err) {
     console.warn("Could not fetch from Firebase Firestore:", err);
     return null;
@@ -88,8 +96,52 @@ async function saveRemoteDatabase(data) {
     return false;
   }
 }
+async function claimScheduledTelegramRun(runId) {
+  if (!adminDb) {
+    throw new Error("Firebase Admin Firestore is niet ge\xEFnitialiseerd.");
+  }
+  const runRef = adminDb.collection("scheduledTelegramRuns").doc(runId);
+  return adminDb.runTransaction(async (transaction) => {
+    const existing = await transaction.get(runRef);
+    if (existing.exists) {
+      const data = existing.data();
+      if (data?.status === "sent") {
+        return false;
+      }
+      if (data?.status === "claimed") {
+        const claimedAt = Date.parse(data?.createdAt || "");
+        const claimIsRecent = Number.isFinite(claimedAt) && Date.now() - claimedAt < 10 * 60 * 1e3;
+        if (claimIsRecent) {
+          return false;
+        }
+      }
+      transaction.set(runRef, {
+        status: "claimed",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      return true;
+    }
+    transaction.create(runRef, {
+      status: "claimed",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    return true;
+  });
+}
+async function updateScheduledTelegramRun(runId, status, error) {
+  if (!adminDb) {
+    throw new Error("Firebase Admin Firestore is niet ge\xEFnitialiseerd.");
+  }
+  await adminDb.collection("scheduledTelegramRuns").doc(runId).set({
+    status,
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    ...error ? { error } : {}
+  }, { merge: true });
+}
 
 // server.ts
+var import_google_auth_library = require("google-auth-library");
 import_dotenv.default.config({ path: [".env.local", ".env"] });
 var PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3e3;
 var HASH_SALT = process.env.ACCESS_CODE_SALT || "NEON_TOKYO_SALT_v1_99x#";
@@ -605,6 +657,33 @@ async function startServer() {
       message: "Je toegangscode is succesvol gewijzigd. Je wordt nu uitgelogd en kunt met de nieuwe code inloggen."
     });
   });
+  const schedulerAuthClient = new import_google_auth_library.OAuth2Client();
+  async function verifySchedulerRequest(req) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      return false;
+    }
+    const token = authHeader.substring(7).trim();
+    const expectedAudience = process.env.SCHEDULER_OIDC_AUDIENCE;
+    const allowedEmail = process.env.SCHEDULER_SERVICE_ACCOUNT_EMAIL;
+    if (!expectedAudience || !allowedEmail) {
+      console.error("Scheduler OIDC-configuratie ontbreekt.");
+      return false;
+    }
+    try {
+      const ticket = await schedulerAuthClient.verifyIdToken({
+        idToken: token,
+        audience: expectedAudience
+      });
+      const payload = ticket.getPayload();
+      return Boolean(
+        payload && payload.email === allowedEmail && payload.email_verified === true
+      );
+    } catch (error) {
+      console.error("Scheduler-authenticatie mislukt:", error);
+      return false;
+    }
+  }
   const OC_PLANNING_BASE_URL = "https://oc-gbr.meta-technics.be";
   let previousOCPlanningFingerprint = null;
   let ocPlanningMonitorStarted = false;
@@ -763,6 +842,61 @@ ${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}
     }
     console.log(`Automatische OC Planning-update verstuurd (${messages.length} Telegram-bericht(en)).`);
   }
+  app2.post(
+    "/api/oc-planning/scheduled-telegram",
+    async (req, res) => {
+      const authorized = await verifySchedulerRequest(req);
+      if (!authorized) {
+        return res.status(401).json({
+          success: false,
+          error: "Niet-geautoriseerde Scheduler-aanvraag."
+        });
+      }
+      const dateTime = getBelgianDateTimeParts(/* @__PURE__ */ new Date());
+      const requestedTime = req.body?.scheduledTime;
+      const allowedTimes = ["04:50", "12:30", "21:00"];
+      if (!allowedTimes.includes(requestedTime)) {
+        return res.status(400).json({
+          success: false,
+          error: "Ongeldig gepland tijdstip."
+        });
+      }
+      const runId = `${dateTime.dateKey}-${requestedTime.replace(":", "-")}`;
+      try {
+        const claimed = await claimScheduledTelegramRun(runId);
+        if (!claimed) {
+          return res.status(200).json({
+            success: true,
+            duplicate: true,
+            message: "Deze geplande update is al verwerkt."
+          });
+        }
+        try {
+          await sendCurrentOCPlanningToTelegram();
+          await updateScheduledTelegramRun(runId, "sent");
+          console.log(`[Scheduler] Telegram-update verstuurd: ${runId}`);
+          return res.json({
+            success: true,
+            message: "OC Planning succesvol naar Telegram verstuurd.",
+            runId
+          });
+        } catch (error) {
+          await updateScheduledTelegramRun(
+            runId,
+            "failed",
+            error instanceof Error ? error.message : "Onbekende fout"
+          );
+          throw error;
+        }
+      } catch (error) {
+        console.error("[Scheduler] Verzending mislukt:", error);
+        return res.status(500).json({
+          success: false,
+          error: "De automatische Telegram-update is mislukt."
+        });
+      }
+    }
+  );
   function startOCPlanningScheduledUpdates() {
     if (ocPlanningScheduleStarted) return;
     ocPlanningScheduleStarted = true;
@@ -1487,7 +1621,6 @@ ${message.trim()}`;
     });
   }
   startOCPlanningMonitor();
-  startOCPlanningScheduledUpdates();
   app2.listen(PORT, "0.0.0.0", () => {
     console.log(`Neon Tokyo Planner server running at http://0.0.0.0:${PORT}`);
   });

@@ -11,7 +11,11 @@ import {
   saveRemoteDatabase,
   isFirebaseConnected,
   firebaseConfig,
+  claimScheduledTelegramRun,
+  updateScheduledTelegramRun,
 } from './server/firebaseService';
+
+import { OAuth2Client } from 'google-auth-library';
 
 dotenv.config({ path: ['.env.local', '.env'] });
 
@@ -689,6 +693,45 @@ async function startServer() {
 
   // === OC PLANNING API ===
 
+  // === GOOGLE CLOUD SCHEDULER AUTHENTICATION ===
+
+const schedulerAuthClient = new OAuth2Client();
+
+async function verifySchedulerRequest(req: Request): Promise<boolean> {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith('Bearer ')) {
+    return false;
+  }
+
+  const token = authHeader.substring(7).trim();
+  const expectedAudience = process.env.SCHEDULER_OIDC_AUDIENCE;
+  const allowedEmail = process.env.SCHEDULER_SERVICE_ACCOUNT_EMAIL;
+
+  if (!expectedAudience || !allowedEmail) {
+    console.error('Scheduler OIDC-configuratie ontbreekt.');
+    return false;
+  }
+
+  try {
+    const ticket = await schedulerAuthClient.verifyIdToken({
+      idToken: token,
+      audience: expectedAudience,
+    });
+
+    const payload = ticket.getPayload();
+
+    return Boolean(
+      payload &&
+      payload.email === allowedEmail &&
+      payload.email_verified === true
+    );
+  } catch (error) {
+    console.error('Scheduler-authenticatie mislukt:', error);
+    return false;
+  }
+}
+
 const OC_PLANNING_BASE_URL = 'https://oc-gbr.meta-technics.be';
 // === OC PLANNING TELEGRAM MONITOR ===
 
@@ -929,6 +972,76 @@ async function sendCurrentOCPlanningToTelegram(): Promise<void> {
 
   console.log(`Automatische OC Planning-update verstuurd (${messages.length} Telegram-bericht(en)).`);
 }
+
+// === GOOGLE CLOUD SCHEDULER ENDPOINT ===
+
+app.post(
+  '/api/oc-planning/scheduled-telegram',
+  async (req: Request, res: Response) => {
+    const authorized = await verifySchedulerRequest(req);
+
+    if (!authorized) {
+      return res.status(401).json({
+        success: false,
+        error: 'Niet-geautoriseerde Scheduler-aanvraag.',
+      });
+    }
+
+    const dateTime = getBelgianDateTimeParts(new Date());
+    const requestedTime = req.body?.scheduledTime;
+
+    const allowedTimes = ['04:50', '12:30', '21:00'];
+
+    if (!allowedTimes.includes(requestedTime)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Ongeldig gepland tijdstip.',
+      });
+    }
+
+    const runId = `${dateTime.dateKey}-${requestedTime.replace(':', '-')}`;
+
+    try {
+      const claimed = await claimScheduledTelegramRun(runId);
+
+      if (!claimed) {
+        return res.status(200).json({
+          success: true,
+          duplicate: true,
+          message: 'Deze geplande update is al verwerkt.',
+        });
+      }
+
+      try {
+        await sendCurrentOCPlanningToTelegram();
+        await updateScheduledTelegramRun(runId, 'sent');
+
+        console.log(`[Scheduler] Telegram-update verstuurd: ${runId}`);
+
+        return res.json({
+          success: true,
+          message: 'OC Planning succesvol naar Telegram verstuurd.',
+          runId,
+        });
+      } catch (error) {
+        await updateScheduledTelegramRun(
+          runId,
+          'failed',
+          error instanceof Error ? error.message : 'Onbekende fout'
+        );
+
+        throw error;
+      }
+    } catch (error) {
+      console.error('[Scheduler] Verzending mislukt:', error);
+
+      return res.status(500).json({
+        success: false,
+        error: 'De automatische Telegram-update is mislukt.',
+      });
+    }
+  }
+);
 
 function startOCPlanningScheduledUpdates(): void {
   if (ocPlanningScheduleStarted) return;
@@ -1909,7 +2022,6 @@ for (const [key, value] of Object.entries(secondChoices || {})) {
   }
 
   startOCPlanningMonitor();
-  startOCPlanningScheduledUpdates();
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Neon Tokyo Planner server running at http://0.0.0.0:${PORT}`);
