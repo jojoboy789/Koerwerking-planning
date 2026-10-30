@@ -249,97 +249,77 @@ export const FinalPlanningView: React.FC = () => {
     };
   }, [teamData]);
 
-  const handleDownloadPdf = async (weekNumber: number) => {
-    setIsPrinting(weekNumber);
+  const capturePrintableWeek = async (weekNumber: number): Promise<HTMLCanvasElement> => {
     const input = document.getElementById(`printable-week-${weekNumber}`);
 
     if (!input) {
-      setIsPrinting(null);
-      return;
+      throw new Error(`De afdrukweergave voor week ${weekNumber} werd niet gevonden.`);
     }
 
+    return html2canvas(input, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      windowWidth: 1120,
+      onclone: (clonedDoc) => {
+        // De PDF-weergave gebruikt inline stijlen. Externe stylesheets verwijderen
+        // voorkomt dat de website-CSS de afdruklayout onbedoeld beïnvloedt.
+        clonedDoc.head
+          .querySelectorAll('style, link[rel="stylesheet"]')
+          .forEach((style) => style.remove());
+      },
+    });
+  };
+
+  const addCanvasToPdfPage = (pdf: jsPDF, canvas: HTMLCanvasElement, addPage = false) => {
+    if (addPage) {
+      pdf.addPage('a4', 'landscape');
+    }
+
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const margin = 8;
+    const availableWidth = pdfWidth - margin * 2;
+    const availableHeight = pdfHeight - margin * 2;
+
+    // Behoud de verhouding van de afbeelding en centreer ze op A4 liggend.
+    const scale = Math.min(
+      availableWidth / canvas.width,
+      availableHeight / canvas.height,
+    );
+
+    const imageWidth = canvas.width * scale;
+    const imageHeight = canvas.height * scale;
+    const x = (pdfWidth - imageWidth) / 2;
+    const y = (pdfHeight - imageHeight) / 2;
+
+    pdf.addImage(
+      canvas.toDataURL('image/png'),
+      'PNG',
+      x,
+      y,
+      imageWidth,
+      imageHeight,
+      undefined,
+      'FAST',
+    );
+  };
+
+  const handleDownloadPdf = async (weekNumber: number) => {
+    setIsPrinting(weekNumber);
+
     try {
-      const canvas = await html2canvas(input, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        useCORS: true,
-        onclone: (clonedDoc) => {
-          const head = clonedDoc.head;
-          if (head) {
-            head.querySelectorAll('style, link[rel="stylesheet"]').forEach((style) => style.remove());
-          }
-        },
+      const canvas = await capturePrintableWeek(weekNumber);
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4',
+        compress: true,
       });
 
-      
-const pdf = new jsPDF('l', 'mm', 'a4');
-
-const pdfWidth = pdf.internal.pageSize.getWidth();
-const pdfHeight = pdf.internal.pageSize.getHeight();
-
-const margin = 10;
-const contentWidth = pdfWidth - margin * 2;
-const contentHeight = pdfHeight - margin * 2;
-
-const pixelsPerMm = canvas.width / contentWidth;
-const pageHeightPx = Math.floor(contentHeight * pixelsPerMm);
-
-let sourceY = 0;
-let pageNumber = 0;
-
-while (sourceY < canvas.height) {
-  const sliceHeight = Math.min(
-    pageHeightPx,
-    canvas.height - sourceY,
-  );
-
-  const pageCanvas = document.createElement('canvas');
-  pageCanvas.width = canvas.width;
-  pageCanvas.height = sliceHeight;
-
-  const context = pageCanvas.getContext('2d');
-
-  if (!context) {
-    throw new Error('PDF-pagina kon niet worden opgebouwd.');
-  }
-
-  context.fillStyle = '#ffffff';
-  context.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-
-  context.drawImage(
-    canvas,
-    0,
-    sourceY,
-    canvas.width,
-    sliceHeight,
-    0,
-    0,
-    canvas.width,
-    sliceHeight,
-  );
-
-  if (pageNumber > 0) {
-    pdf.addPage('a4', 'landscape');
-  }
-
-  const imageData = pageCanvas.toDataURL('image/png');
-  const imageHeight = sliceHeight / pixelsPerMm;
-
-  pdf.addImage(
-    imageData,
-    'PNG',
-    margin,
-    margin,
-    contentWidth,
-    imageHeight,
-  );
-
-  sourceY += sliceHeight;
-  pageNumber += 1;
-}
-
-pdf.save(`definitieve-planning-${currentYear}-week-${weekNumber}.pdf`);
-
+      addCanvasToPdfPage(pdf, canvas);
+      pdf.save(`definitieve-planning-${currentYear}-week-${weekNumber}.pdf`);
     } catch (error) {
       console.error('PDF exporteren is mislukt:', error);
     } finally {
@@ -347,83 +327,41 @@ pdf.save(`definitieve-planning-${currentYear}-week-${weekNumber}.pdf`);
     }
   };
 
-const handleDownloadMonthPdf = async () => {
-  setIsPrintingMonth(true);
+  const handleDownloadMonthPdf = async () => {
+    setIsPrintingMonth(true);
 
-  try {
-    const pdf = new jsPDF('l', 'mm', 'a4');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-
-    const margin = 10;
-    const contentWidth = pdfWidth - margin * 2;
-    const contentHeight = pdfHeight - margin * 2;
-
-    let pageAdded = false;
-
-    for (const { week } of weeks) {
-      const input = document.getElementById(`printable-week-${week}`);
-
-      if (!input) {
-        console.warn(`Week ${week} werd niet gevonden en is overgeslagen.`);
-        continue;
-      }
-
-      const canvas = await html2canvas(input, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        useCORS: true,
-        onclone: (clonedDoc) => {
-          const head = clonedDoc.head;
-
-          if (head) {
-            head
-              .querySelectorAll('style, link[rel="stylesheet"]')
-              .forEach((style) => style.remove());
-          }
-        },
+    try {
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4',
+        compress: true,
       });
 
-      const imageData = canvas.toDataURL('image/png');
+      let pageAdded = false;
 
-      const scale = Math.min(
-        contentWidth / canvas.width,
-        contentHeight / canvas.height,
-      );
-
-      const imageWidth = canvas.width * scale;
-      const imageHeight = canvas.height * scale;
-
-      const x = (pdfWidth - imageWidth) / 2;
-      const y = (pdfHeight - imageHeight) / 2;
-
-      if (pageAdded) {
-        pdf.addPage('a4', 'landscape');
+      for (const { week } of weeks) {
+        try {
+          const canvas = await capturePrintableWeek(week);
+          addCanvasToPdfPage(pdf, canvas, pageAdded);
+          pageAdded = true;
+        } catch (error) {
+          console.error(`PDF-pagina voor week ${week} kon niet worden aangemaakt:`, error);
+        }
       }
 
-      pdf.addImage(
-        imageData,
-        'PNG',
-        x,
-        y,
-        imageWidth,
-        imageHeight,
-      );
-
-      pageAdded = true;
+      if (pageAdded) {
+        const monthNumber = String(currentMonth).padStart(2, '0');
+        pdf.save(`definitieve-planning-${currentYear}-maand-${monthNumber}.pdf`);
+      } else {
+        console.error('Er werden geen weektabellen gevonden voor de maand-PDF.');
+      }
+    } catch (error) {
+      console.error('Maand-PDF exporteren is mislukt:', error);
+    } finally {
+      setIsPrintingMonth(false);
     }
-
-    if (pageAdded) {
-      pdf.save(`definitieve-planning-${currentYear}-maand-${currentMonth + 1}.pdf`);
-    } else {
-      console.error('Er werden geen weektabellen gevonden voor de maand-PDF.');
-    }
-  } catch (error) {
-    console.error('Maand-PDF exporteren is mislukt:', error);
-  } finally {
-    setIsPrintingMonth(false);
-  }
-};
+  };
 
   const handleMonthChange = (direction: 1 | -1) => {
     const newDate = new Date(currentYear, currentMonth - 1 + direction, 1);
