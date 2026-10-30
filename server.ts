@@ -61,6 +61,11 @@ interface DatabaseSchema {
   users: StoredUser[];
   plannings: StoredPlanning[];
   sessions: Record<string, { userId: string; createdAt: number }>;
+  maintenance: {
+    enabled: boolean;
+    updatedAt: string | null;
+    updatedBy: string | null;
+  };
 }
 
 // Utility: Normalize access code (remove spaces, upper case)
@@ -143,7 +148,14 @@ function loadDatabase(): DatabaseSchema {
         }
       }
     }
-    return data;
+    return {
+  ...data,
+  maintenance: data.maintenance || {
+    enabled: false,
+    updatedAt: null,
+    updatedBy: null,
+  },
+};
   } catch (err) {
     console.error('Error reading db.json:', err);
     return seedInitialDatabase();
@@ -342,10 +354,15 @@ function seedInitialDatabase(): DatabaseSchema {
   });
 
   return {
-    users: initialUsers,
-    plannings: samplePlannings,
-    sessions: {},
-  };
+  users: initialUsers,
+  plannings: samplePlannings,
+  sessions: {},
+  maintenance: {
+    enabled: false,
+    updatedAt: null,
+    updatedBy: null,
+  },
+};
 }
 
 let db = loadDatabase();
@@ -478,10 +495,15 @@ async function startServer() {
     if (remoteData && remoteData.users && remoteData.users.length > 0) {
       console.log('🔥 Loaded database state from Cloud Firestore successfully.');
       db = {
-        users: remoteData.users,
-        plannings: remoteData.plannings || [],
-        sessions: db.sessions || {},
-      };
+  users: remoteData.users,
+  plannings: remoteData.plannings || [],
+  sessions: db.sessions || {},
+  maintenance: remoteData.maintenance || db.maintenance || {
+    enabled: false,
+    updatedAt: null,
+    updatedBy: null,
+  },
+};
       saveDatabase(db);
     } else {
       console.log('🔥 Seeding initial database to Cloud Firestore project:', firebaseConfig.projectId);
@@ -690,6 +712,51 @@ async function startServer() {
       message: 'Je toegangscode is succesvol gewijzigd. Je wordt nu uitgelogd en kunt met de nieuwe code inloggen.',
     });
   });
+
+// === MAINTENANCE MODE ===
+
+// Publieke endpoint: bezoekers mogen de onderhoudsstatus opvragen.
+app.get('/api/maintenance/status', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+
+  res.json({
+    enabled: db.maintenance?.enabled ?? false,
+    updatedAt: db.maintenance?.updatedAt ?? null,
+    updatedBy: db.maintenance?.updatedBy ?? null,
+  });
+});
+
+// Beveiligde endpoint: uitsluitend beheerders mogen wijzigen.
+app.put(
+  '/api/admin/maintenance',
+  authMiddleware,
+  requireAdminMiddleware,
+  (req: AuthenticatedRequest, res: Response) => {
+    const { enabled } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({
+        error: 'Ongeldige onderhoudsinstelling.',
+      });
+    }
+
+    db.maintenance = {
+      enabled,
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.user!.name,
+    };
+
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      maintenance: db.maintenance,
+      message: enabled
+        ? 'Onderhoudsmodus ingeschakeld.'
+        : 'Onderhoudsmodus uitgeschakeld.',
+    });
+  }
+);
 
   // === OC PLANNING API ===
 

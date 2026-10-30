@@ -2,6 +2,12 @@ import { User, MonthlyPlanning, TeamMemberOverview, AdminStats } from '../types'
 
 const API_BASE = '/api';
 
+export interface MaintenanceStatus {
+  enabled: boolean;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
 class ApiClient {
   private memoryToken: string | null = null;
 
@@ -139,6 +145,25 @@ async savePlanning(
   async getPlannerMembers() {
     return this.request<{ members: User[] }>('/planner/members');
   }
+
+// Maintenance Mode
+
+// Publieke status ophalen, ook zonder ingelogde gebruiker.
+async getMaintenanceStatus() {
+  return this.request<MaintenanceStatus>('/maintenance/status');
+}
+
+// Onderhoudsmodus wijzigen, uitsluitend voor beheerders.
+async updateMaintenanceMode(enabled: boolean) {
+  return this.request<{
+    success: boolean;
+    maintenance: MaintenanceStatus;
+    message: string;
+  }>('/admin/maintenance', {
+    method: 'PUT',
+    body: JSON.stringify({ enabled }),
+  });
+}
 
   // Admin Portal
   async getAdminStats() {

@@ -2,11 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { User, AdminStats } from '../types';
 import { api } from '../services/api';
+import type { MaintenanceStatus } from '../services/api';
 import { AdminPlanningModal } from './AdminPlanningModal';
 import {
   Users, UserPlus, Key, Edit3, Trash2, Calendar, Check, X, Shield,
   ShieldCheck, AlertCircle, CheckCircle2, Loader2, Sparkles, RefreshCw,
-  Copy, CheckCheck, Save, Cloud, Database, Send, BusFront
+  Copy, CheckCheck, Save, Cloud, Database, Send, BusFront, Power
 } from 'lucide-react';
 
 export const AdminPortalView: React.FC = () => {
@@ -47,6 +48,12 @@ export const AdminPortalView: React.FC = () => {
   const [newIsActive, setNewIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSendingOcPlanning, setIsSendingOcPlanning] = useState(false);
+  // Onderhoudsmodus
+const [maintenanceStatus, setMaintenanceStatus] =
+  useState<MaintenanceStatus | null>(null);
+
+const [isUpdatingMaintenance, setIsUpdatingMaintenance] =
+  useState<boolean>(false);
 
   // Change Code Form State
   const [generatedNewCode, setGeneratedNewCode] = useState('');
@@ -55,11 +62,13 @@ export const AdminPortalView: React.FC = () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const [usersRes, statsRes, fbStatus] = await Promise.allSettled([
-        api.getAdminUsers(),
-        api.getAdminStats(),
-        api.getFirebaseStatus(),
-      ]);
+      const [usersRes, statsRes, fbStatus, maintenanceRes] =
+  await Promise.allSettled([
+    api.getAdminUsers(),
+    api.getAdminStats(),
+    api.getFirebaseStatus(),
+    api.getMaintenanceStatus(),
+  ]);
 
       if (usersRes.status === 'fulfilled') {
         setUsers(usersRes.value.users || []);
@@ -70,6 +79,9 @@ export const AdminPortalView: React.FC = () => {
       if (fbStatus.status === 'fulfilled') {
         setFirebaseStatus(fbStatus.value);
       }
+      if (maintenanceRes.status === 'fulfilled') {
+  setMaintenanceStatus(maintenanceRes.value);
+}
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Kon gebruikersgegevens niet laden.';
       setErrorMessage(msg);
@@ -95,6 +107,43 @@ export const AdminPortalView: React.FC = () => {
       setIsSyncingFirebase(false);
     }
   };
+
+  // Onderhoudsmodus inschakelen of uitschakelen
+const handleToggleMaintenance = async () => {
+  if (!maintenanceStatus || isUpdatingMaintenance) return;
+
+  const nextStatus = !maintenanceStatus.enabled;
+
+  const confirmed = window.confirm(
+    nextStatus
+      ? 'Wil je de onderhoudsmodus inschakelen? Alle bezoekers krijgen dan een UPDATE IN PROGRESS-melding op de loginpagina.'
+      : 'Wil je de onderhoudsmodus uitschakelen? De melding verdwijnt dan bij de bezoekers.'
+  );
+
+  if (!confirmed) return;
+
+  setIsUpdatingMaintenance(true);
+  setErrorMessage(null);
+  setSuccessMessage(null);
+
+  try {
+    const result = await api.updateMaintenanceMode(nextStatus);
+
+    setMaintenanceStatus(result.maintenance);
+    setSuccessMessage(result.message);
+
+    setTimeout(() => setSuccessMessage(null), 4000);
+  } catch (err: unknown) {
+    const msg =
+      err instanceof Error
+        ? err.message
+        : 'De onderhoudsmodus kon niet worden gewijzigd.';
+
+    setErrorMessage(msg);
+  } finally {
+    setIsUpdatingMaintenance(false);
+  }
+};
 
   // OC BUS GBR Dagplanning handmatig naar Telegram versturen
   const handleSendOcPlanningToTelegram = async () => {
@@ -361,6 +410,101 @@ export const AdminPortalView: React.FC = () => {
           <span>{errorMessage}</span>
         </div>
       )}
+
+{/* ONDERHOUDSMODUS */}
+<div
+  className={`p-4 md:p-5 rounded-3xl border shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors ${
+    maintenanceStatus?.enabled
+      ? 'bg-linear-to-r from-amber-100 via-yellow-50 to-orange-50 border-amber-300'
+      : 'bg-linear-to-r from-emerald-50 via-white to-slate-50 border-emerald-200'
+  }`}
+>
+  <div className="flex items-start sm:items-center gap-3.5">
+    <div
+      className={`p-3 rounded-2xl shadow-sm shrink-0 ${
+        maintenanceStatus?.enabled
+          ? 'bg-amber-400 text-slate-900'
+          : 'bg-emerald-500 text-white'
+      }`}
+    >
+      <Power className="w-5 h-5" />
+    </div>
+
+    <div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <h3 className="text-sm font-bold text-slate-900">
+          Website onderhoudsmodus
+        </h3>
+
+        {maintenanceStatus ? (
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+              maintenanceStatus.enabled
+                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+            }`}
+          >
+            {maintenanceStatus.enabled
+              ? 'UPDATE IN PROGRESS'
+              : 'NORMAAL OPERATIONEEL'}
+          </span>
+        ) : (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+            STATUS LADEN
+          </span>
+        )}
+      </div>
+
+      <p className="text-xs text-slate-600 mt-1 max-w-xl">
+        {maintenanceStatus?.enabled
+          ? 'Bezoekers zien een onderhoudsmelding op de loginpagina. De website blijft gewoon bruikbaar.'
+          : 'Schakel deze modus in wanneer je wijzigingen of verbeteringen aan de website uitvoert.'}
+      </p>
+
+      {maintenanceStatus?.updatedAt && (
+        <p className="text-[10px] text-slate-500 mt-2">
+          Laatste wijziging:{' '}
+          {new Date(maintenanceStatus.updatedAt).toLocaleString('nl-BE')}
+          {maintenanceStatus.updatedBy &&
+            ` door ${maintenanceStatus.updatedBy}`}
+        </p>
+      )}
+    </div>
+  </div>
+
+  <button
+    type="button"
+    onClick={handleToggleMaintenance}
+    disabled={!maintenanceStatus || isUpdatingMaintenance}
+    className={`relative inline-flex h-8 w-14 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
+      maintenanceStatus?.enabled
+        ? 'bg-amber-500'
+        : 'bg-emerald-500'
+    }`}
+    role="switch"
+    aria-checked={maintenanceStatus?.enabled ?? false}
+    aria-label="Onderhoudsmodus wijzigen"
+    title={
+      maintenanceStatus?.enabled
+        ? 'Onderhoudsmodus uitschakelen'
+        : 'Onderhoudsmodus inschakelen'
+    }
+  >
+    <span
+      className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-md transition duration-200 ${
+        maintenanceStatus?.enabled
+          ? 'translate-x-6'
+          : 'translate-x-0'
+      }`}
+    />
+
+    {isUpdatingMaintenance && (
+      <span className="absolute inset-0 flex items-center justify-center">
+        <Loader2 className="w-4 h-4 animate-spin text-slate-700" />
+      </span>
+    )}
+  </button>
+</div>
 
       {/* Stats Cards Row - Bento Style */}
       {stats && (

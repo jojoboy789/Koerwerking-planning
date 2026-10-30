@@ -1,5 +1,5 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
 import {
@@ -17,12 +17,48 @@ import {
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
 
+  // Onderhoudsstatus
+  const [maintenanceActive, setMaintenanceActive] = useState(false);
+
+  // Loginvelden
   const [accessCode, setAccessCode] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Onderhoudsstatus ophalen en elke 15 seconden vernieuwen
+  useEffect(() => {
+    let isActive = true;
+
+    const checkMaintenanceStatus = async () => {
+      try {
+        const status = await api.getMaintenanceStatus();
+
+        if (isActive) {
+          setMaintenanceActive(status.enabled);
+        }
+      } catch (error) {
+        console.warn(
+          'Onderhoudsstatus kon niet worden opgehaald:',
+          error
+        );
+      }
+    };
+
+    void checkMaintenanceStatus();
+
+    const interval = window.setInterval(() => {
+      void checkMaintenanceStatus();
+    }, 15000);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  // Login verwerken
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -49,18 +85,36 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#17202b] px-4 py-8 font-sans text-slate-900 sm:px-6">
+
       {/* Achtergrondaccenten */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#ffdc00]/10 blur-3xl"
       />
+
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-sky-400/10 blur-3xl"
       />
 
+      {/* Onderhoudspatroon met waarschuwingsdriehoeken */}
+      {maintenanceActive && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 overflow-hidden opacity-20"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="90" viewBox="0 0 100 90"><path d="M50 8 L94 82 H6 Z" fill="#ffdc00" stroke="#ffdc00" stroke-width="3"/><text x="50" y="66" font-size="43" font-family="Arial" font-weight="900" text-anchor="middle" fill="#17202b">!</text></svg>'
+            )}")`,
+            backgroundRepeat: 'repeat',
+            backgroundSize: '100px 90px',
+          }}
+        />
+      )}
+
       {/* Login */}
       <main className="relative z-10 w-full max-w-md">
+
         {/* Branding */}
         <div className="mb-7 text-center">
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#ffdc00] text-[#17202b] shadow-lg shadow-black/20">
@@ -80,7 +134,45 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
+        {/* Onderhoudsmelding */}
+        {maintenanceActive && (
+          <div
+            role="status"
+            className="mb-5 overflow-hidden rounded-2xl border-2 border-[#ffdc00] bg-[#ffdc00] shadow-xl shadow-black/20"
+          >
+            <div className="flex items-center gap-3 border-b border-black/10 bg-black/5 px-4 py-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#17202b] text-[#ffdc00]">
+                <AlertCircle className="h-6 w-6" strokeWidth={2.5} />
+              </div>
+
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#17202b]/70">
+                  Koerwerking-planning
+                </p>
+
+                <h2 className="text-lg font-black uppercase tracking-wide text-[#17202b]">
+                  Update in progress
+                </h2>
+              </div>
+            </div>
+
+            <div className="px-4 py-3">
+              <p className="text-sm font-bold leading-relaxed text-[#17202b]">
+                Er worden momenteel updates en verbeteringen uitgevoerd aan
+                de applicatie.
+              </p>
+
+              <p className="mt-1 text-xs font-medium leading-relaxed text-[#17202b]/80">
+                Sommige onderdelen kunnen tijdelijk wijzigen of minder goed
+                werken. Je kunt de applicatie gewoon blijven gebruiken.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Loginformulierkaart */}
         <div className="overflow-hidden rounded-3xl border border-white/10 bg-white shadow-2xl shadow-black/20">
+
           {/* Gele accentlijn */}
           <div className="h-1.5 w-full bg-[#ffdc00]" />
 
@@ -88,6 +180,7 @@ export const LoginPage: React.FC = () => {
             <div className="mb-7">
               <div className="mb-2 flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-slate-700" />
+
                 <h2 className="text-xl font-extrabold text-slate-900">
                   Welkom terug
                 </h2>
@@ -105,6 +198,7 @@ export const LoginPage: React.FC = () => {
                 className="mb-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
               >
                 <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+
                 <span className="leading-relaxed">{errorMessage}</span>
               </div>
             )}
@@ -154,10 +248,14 @@ export const LoginPage: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => setShowPassword((previous) => !previous)}
+                    onClick={() =>
+                      setShowPassword((previous) => !previous)
+                    }
                     disabled={isSubmitting}
                     aria-label={
-                      showPassword ? 'Verberg toegangscode' : 'Toon toegangscode'
+                      showPassword
+                        ? 'Verberg toegangscode'
+                        : 'Toon toegangscode'
                     }
                     aria-pressed={showPassword}
                     className="absolute inset-y-0 right-0 flex items-center rounded-r-2xl px-4 text-slate-400 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#ffdc00] disabled:cursor-not-allowed"
@@ -212,6 +310,7 @@ export const LoginPage: React.FC = () => {
         {/* Beveiligingsmelding */}
         <div className="mt-5 flex items-center justify-center gap-2 text-center text-xs text-slate-400">
           <ShieldCheck className="h-4 w-4 shrink-0 text-[#ffdc00]" />
+
           <span>Persoonlijke toegang tot Koerwerking-planning</span>
         </div>
       </main>
@@ -231,7 +330,7 @@ export const LoginPage: React.FC = () => {
         </p>
       </footer>
 
-      {/* Bestaand venster voor vergeten toegangscode */}
+      {/* Venster voor vergeten toegangscode */}
       <ForgotPasswordModal
         isOpen={showForgotModal}
         onClose={() => setShowForgotModal(false)}
