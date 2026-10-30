@@ -1070,12 +1070,16 @@ app.post(
       const claimed = await claimScheduledTelegramRun(runId);
 
       if (!claimed) {
-        return res.status(200).json({
-          success: true,
-          duplicate: true,
-          message: 'Deze geplande update is al verwerkt.',
-        });
-      }
+  console.warn(
+    `[Scheduler] VERZENDING OVERGESLAGEN: ${runId} bestaat al in Firestore.`
+  );
+
+  return res.status(200).json({
+    success: true,
+    duplicate: true,
+    message: 'Deze geplande update is al verwerkt.',
+  });
+}
 
       try {
         await sendCurrentOCPlanningToTelegram();
