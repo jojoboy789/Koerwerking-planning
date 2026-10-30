@@ -11,6 +11,8 @@ import {
   CalendarDays,
   BriefcaseBusiness,
   Sun,
+  Grid3X3,
+  List,
 } from 'lucide-react';
 import { PrintableWeekView } from './PrintableWeekView';
 import html2canvas from 'html2canvas';
@@ -55,6 +57,27 @@ function dateKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getShiftInfo(shift: ShiftCode | null | undefined) {
+  if (!shift || !Object.prototype.hasOwnProperty.call(SHIFT_DEFINITIONS, shift)) {
+    return undefined;
+  }
+
+  return SHIFT_DEFINITIONS[shift as keyof typeof SHIFT_DEFINITIONS];
+}
+
+// Alleen effectieve koerdiensten tonen in de definitieve planning.
+// R (rust), X (niet inplannen) en lege waarden zijn geen ingeplande diensten.
+function isVisibleWorkShift(
+  shift: unknown
+): shift is keyof typeof SHIFT_DEFINITIONS {
+  return (
+    typeof shift === 'string' &&
+    Object.prototype.hasOwnProperty.call(SHIFT_DEFINITIONS, shift) &&
+    shift !== 'R' &&
+    shift !== 'X'
+  );
 }
 
 function getBelgianHolidays(year: number): Map<string, string> {
@@ -126,7 +149,7 @@ const ShiftCell: React.FC<{
   memberName: string;
   day: number;
 }> = ({ shift, memberName, day }) => {
-  if (!shift) {
+  if (!isVisibleWorkShift(shift)) {
     return (
       <div
         className="flex h-9 w-full items-center justify-center rounded-lg bg-slate-100/70 text-slate-400"
@@ -169,6 +192,11 @@ export const FinalPlanningView: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isPrinting, setIsPrinting] = useState<number | null>(null);
   const [isPrintingMonth, setIsPrintingMonth] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('calendar');
+  const [calendarMode, setCalendarMode] = useState<'month' | 'week' | 'day'>('month');
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(
+    () => new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()),
+  );
 
   const fetchTeamOverview = useCallback(async () => {
     setIsLoading(true);
@@ -179,7 +207,7 @@ export const FinalPlanningView: React.FC = () => {
           return false;
         }
         const shifts = Object.values(member.planning.finalDays);
-        return shifts.some((shift) => shift && shift !== 'X');
+        return shifts.some((shift) => isVisibleWorkShift(shift));
       });
       setTeamData(finalData);
     } catch {
@@ -217,7 +245,7 @@ export const FinalPlanningView: React.FC = () => {
         const weekInfo = weeksMap[Number(weekNum)];
         const hasWorkDayInWeek = weekInfo.days.some(({ day }) => {
           const shift = member.planning?.finalDays?.[day];
-          return Boolean(shift && shift !== 'X');
+          return isVisibleWorkShift(shift);
         });
         if (hasWorkDayInWeek) weekInfo.hasWorkday = true;
       });
@@ -235,7 +263,7 @@ export const FinalPlanningView: React.FC = () => {
 
     teamData.forEach((member) => {
       Object.entries(member.planning?.finalDays || {}).forEach(([dayKey, shift]) => {
-        if (shift && shift !== 'X') {
+        if (isVisibleWorkShift(shift)) {
           plannedShifts += 1;
           staffedDays.add(Number(dayKey));
         }
@@ -367,6 +395,217 @@ export const FinalPlanningView: React.FC = () => {
     const newDate = new Date(currentYear, currentMonth - 1 + direction, 1);
     setCurrentYear(newDate.getFullYear());
     setCurrentMonth(newDate.getMonth() + 1);
+    setSelectedCalendarDate(newDate);
+  };
+
+  const getShiftForDate = (member: TeamMemberOverview, date: Date): ShiftCode | null => {
+    if (date.getMonth() + 1 !== currentMonth || date.getFullYear() !== currentYear) return null;
+    return (member.planning?.finalDays?.[date.getDate()] as ShiftCode | null) || null;
+  };
+
+  const getCalendarDates = (): Date[] => {
+    if (calendarMode === 'day') {
+      return [new Date(currentYear, currentMonth - 1, selectedCalendarDate.getDate())];
+    }
+
+    if (calendarMode === 'week') {
+      const start = new Date(selectedCalendarDate);
+      const mondayOffset = (start.getDay() + 6) % 7;
+      start.setDate(start.getDate() - mondayOffset);
+      return Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(start);
+        date.setDate(start.getDate() + index);
+        return date;
+      });
+    }
+
+    const firstDay = new Date(currentYear, currentMonth - 1, 1);
+    const mondayOffset = (firstDay.getDay() + 6) % 7;
+    const gridStart = new Date(firstDay);
+    gridStart.setDate(firstDay.getDate() - mondayOffset);
+    return Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(gridStart);
+      date.setDate(gridStart.getDate() + index);
+      return date;
+    });
+  };
+
+  const changeCalendarPeriod = (direction: -1 | 1) => {
+    if (calendarMode === 'month') {
+      handleMonthChange(direction);
+      return;
+    }
+
+    const next = new Date(selectedCalendarDate);
+    next.setDate(next.getDate() + (calendarMode === 'week' ? 7 : 1) * direction);
+    setSelectedCalendarDate(next);
+    if (next.getMonth() !== currentMonth - 1 || next.getFullYear() !== currentYear) {
+      setCurrentYear(next.getFullYear());
+      setCurrentMonth(next.getMonth() + 1);
+    }
+  };
+
+  const renderCalendarPlanning = () => {
+    const dates = getCalendarDates();
+    const selectedKey = dateKey(selectedCalendarDate);
+    const shiftOrder: Record<string, number> = { V: 0, D: 1, L: 2 };
+
+    const sortByShiftOrder = <T extends { shift: ShiftCode | null }>(items: T[]) =>
+      [...items].sort((a, b) =>
+        (shiftOrder[a.shift || ''] ?? 99) - (shiftOrder[b.shift || ''] ?? 99)
+      );
+
+    const selectedMembers = sortByShiftOrder(
+      teamData
+        .map((member) => ({ member, shift: getShiftForDate(member, selectedCalendarDate) }))
+        .filter(({ shift }) => isVisibleWorkShift(shift))
+    );
+
+    const periodLabel = calendarMode === 'month'
+      ? `${MONTH_NAMES[currentMonth - 1]} ${currentYear}`
+      : calendarMode === 'week'
+        ? `Week ${getWeekNumber(selectedCalendarDate)} · ${dates[0].getDate()} ${MONTH_NAMES[dates[0].getMonth()]} t.e.m. ${dates[6].getDate()} ${MONTH_NAMES[dates[6].getMonth()]}`
+        : `${selectedCalendarDate.getDate()} ${MONTH_NAMES[selectedCalendarDate.getMonth()]} ${selectedCalendarDate.getFullYear()}`;
+
+    return (
+      <div className="space-y-4">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="font-extrabold text-slate-900">{periodLabel}</h3>
+              <p className="mt-1 text-xs text-slate-500">Selecteer een dag om de definitieve bezetting te bekijken.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => changeCalendarPeriod(-1)} className="rounded-lg border border-slate-200 p-2 text-slate-700 hover:bg-slate-50" aria-label="Vorige periode">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => {
+                const today = new Date();
+                setCurrentYear(today.getFullYear());
+                setCurrentMonth(today.getMonth() + 1);
+                setSelectedCalendarDate(today);
+              }} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                Vandaag
+              </button>
+              <button type="button" onClick={() => changeCalendarPeriod(1)} className="rounded-lg border border-slate-200 p-2 text-slate-700 hover:bg-slate-50" aria-label="Volgende periode">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {calendarMode !== 'day' && (
+            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+              {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((day) => (
+                <div key={day} className="p-2 text-center text-[11px] font-extrabold uppercase text-slate-500">{day}</div>
+              ))}
+            </div>
+          )}
+
+          <div className={calendarMode === 'day' ? 'grid grid-cols-1' : 'grid grid-cols-7'}>
+            {dates.map((date) => {
+              const inCurrentMonth = date.getMonth() + 1 === currentMonth && date.getFullYear() === currentYear;
+              const holidayName = getBelgianHolidays(date.getFullYear()).get(dateKey(date));
+              const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+              const isToday = dateKey(date) === dateKey(new Date());
+              const isSelected = dateKey(date) === selectedKey;
+              const shifts = sortByShiftOrder(
+                teamData
+                  .map((member) => ({ member, shift: getShiftForDate(member, date) }))
+                  .filter(({ shift }) => isVisibleWorkShift(shift))
+              );
+
+              return (
+                <button
+                  type="button"
+                  key={dateKey(date)}
+                  onClick={() => {
+                    setSelectedCalendarDate(date);
+                    if (!inCurrentMonth) {
+                      setCurrentYear(date.getFullYear());
+                      setCurrentMonth(date.getMonth() + 1);
+                    }
+                  }}
+                  className={`min-h-[112px] border-b border-r border-slate-100 p-1.5 text-left transition-colors sm:min-h-[132px] sm:p-2 ${
+                    holidayName ? 'bg-amber-50 hover:bg-amber-100' :
+                    isWeekend ? 'bg-blue-50/70 hover:bg-blue-100' :
+                    'bg-white hover:bg-yellow-50'
+                  } ${!inCurrentMonth ? 'opacity-40' : ''} ${isSelected ? 'ring-2 ring-inset ring-[#ffdc00]' : ''}`}
+                >
+                  <div className="mb-2 flex items-center justify-between gap-1">
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold ${
+                      isToday ? 'bg-[#ffdc00] text-[#17202b]' : holidayName ? 'bg-amber-200 text-amber-950' : isWeekend ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'
+                    }`}>{date.getDate()}</span>
+                    {holidayName && <span className="truncate rounded-full bg-amber-200 px-2 py-1 text-[9px] font-extrabold text-amber-900">Feestdag</span>}
+                    {!holidayName && isWeekend && <span className="truncate rounded-full bg-blue-100 px-2 py-1 text-[9px] font-extrabold text-blue-800">Weekend</span>}
+                  </div>
+
+                  {holidayName ? (
+                    <div className="flex min-h-[76px] items-start gap-2 rounded-lg border border-amber-300 bg-[#fff4cc] p-2 text-amber-950 sm:min-h-[88px] sm:p-2.5">
+                      <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-extrabold leading-tight sm:text-xs">Deze dag geen geplande koerdienst</div>
+                        <div className="mt-1 text-[9px] leading-snug text-amber-800 sm:text-[10px]">
+                          Belgische wettelijke feestdag: {holidayName}. Dienstkeuzes zijn uitgeschakeld.
+                        </div>
+                      </div>
+                    </div>
+                  ) : isWeekend ? (
+                    <div className="flex min-h-[76px] items-start gap-2 rounded-lg border border-blue-200 bg-[#dbeafe] p-2 text-blue-950 sm:min-h-[88px] sm:p-2.5">
+                      <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" />
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-extrabold leading-tight sm:text-xs">Weekend geen geplande koerdienst</div>
+                        <div className="mt-1 text-[9px] leading-snug text-blue-800 sm:text-[10px]">
+                          Zaterdag en zondag zijn niet beschikbaar voor koerdienst. Dienstkeuzes zijn uitgeschakeld.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {shifts.slice(0, 3).map(({ member, shift }) => {
+                        const info = getShiftInfo(shift as ShiftCode | null);
+                        return (
+                          <div key={member.user.id} className={`truncate rounded px-1.5 py-1 text-[9px] font-bold sm:text-[10px] ${info?.colorClass || 'bg-slate-100 text-slate-700'}`}>
+                            <span className="font-black">{shift}</span>
+                            <span className="ml-1 hidden sm:inline">{member.user.name}</span>
+                          </div>
+                        );
+                      })}
+                      {shifts.length > 3 && <div className="px-1 text-[9px] font-bold text-slate-500">+{shifts.length - 3} meer</div>}
+                      {calendarMode === 'day' && shifts.length === 0 && <p className="p-3 text-sm text-slate-400">Geen ingeplande werkdagen.</p>}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 bg-[#17202b] px-4 py-3 text-white">
+            <h3 className="font-bold">Bezetting op {selectedCalendarDate.getDate()} {MONTH_NAMES[selectedCalendarDate.getMonth()]}</h3>
+            <p className="mt-0.5 text-xs text-slate-300">{selectedMembers.length} ingeplande teamleden</p>
+          </div>
+          {selectedMembers.length === 0 ? (
+            <p className="p-5 text-sm text-slate-500">Geen definitieve diensten gevonden voor deze dag.</p>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {selectedMembers.map(({ member, shift }) => {
+                const info = getShiftInfo(shift as ShiftCode | null);
+                return (
+                  <div key={member.user.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-bold text-slate-900">{member.user.name}</div>
+                      <div className="text-xs text-slate-500">{member.user.role || 'Teamlid'}</div>
+                    </div>
+                    <span className={`rounded-lg px-3 py-1.5 text-xs font-extrabold ${info?.colorClass || 'bg-slate-100 text-slate-700'}`}>{shift}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+    );
   };
 
   const renderWeeklyPlanning = () => (
@@ -375,7 +614,7 @@ export const FinalPlanningView: React.FC = () => {
         const membersForWeek = teamData.filter((member) =>
           days.some(({ day }) => {
             const shift = member.planning?.finalDays?.[day];
-            return Boolean(shift && shift !== 'X');
+            return isVisibleWorkShift(shift);
           }),
         );
 
@@ -458,7 +697,8 @@ export const FinalPlanningView: React.FC = () => {
                         </div>
                       </td>
                       {days.map(({ day, date }) => {
-                        const shift = (member.planning?.finalDays?.[day] as ShiftCode | null) || null;
+                        const rawShift = (member.planning?.finalDays?.[day] as ShiftCode | null) || null;
+                        const shift = isVisibleWorkShift(rawShift) ? rawShift : null;
                         const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                         const holidayName = holidays.get(dateKey(date));
 
@@ -627,6 +867,48 @@ export const FinalPlanningView: React.FC = () => {
         </div>
       </section>
 
+      <section className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-extrabold text-slate-800">Weergave</h3>
+          <p className="text-xs text-slate-500">Kies hoe je de definitieve planning wilt bekijken.</p>
+        </div>
+        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setViewMode('table')}
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${viewMode === 'table' ? 'bg-[#17202b] text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+          >
+            <List className="h-4 w-4" /> Tabelweergave
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('calendar')}
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-colors ${viewMode === 'calendar' ? 'bg-[#17202b] text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+          >
+            <Grid3X3 className="h-4 w-4" /> Kalenderweergave
+          </button>
+        </div>
+      </section>
+
+      {viewMode === 'calendar' && (
+        <div className="flex flex-wrap gap-2">
+          {([
+            ['month', 'Maand'],
+            ['week', 'Week'],
+            ['day', 'Dag'],
+          ] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setCalendarMode(mode)}
+              className={`rounded-xl px-4 py-2 text-xs font-extrabold transition-colors ${calendarMode === mode ? 'bg-[#ffdc00] text-[#17202b]' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex min-h-52 items-center justify-center rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-center gap-3 text-sm font-semibold text-slate-600">
@@ -645,7 +927,7 @@ export const FinalPlanningView: React.FC = () => {
           </p>
         </div>
       ) : (
-        renderWeeklyPlanning()
+        viewMode === 'calendar' ? renderCalendarPlanning() : renderWeeklyPlanning()
       )}
 
       <p className="text-center text-[11px] text-slate-400">
