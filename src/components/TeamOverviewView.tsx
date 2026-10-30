@@ -31,6 +31,12 @@ const MONTH_NAMES = [
 
 const DAY_NAMES = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
 
+// Koppel hier gebruikersnamen aan foto's die rechtstreeks in /public staan.
+const USER_AVATARS: Record<string, string> = {
+  'Jonas': 'jonasje.PNG',
+};
+
+
 // Belgische wettelijke feestdagen (10), met Pasen berekend voor elk kalenderjaar.
 function getEasterSunday(year: number): Date {
   const a = year % 19;
@@ -109,6 +115,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   const [initialDaySecondChoiceState, setInitialDaySecondChoiceState] = useState<Record<string, ShiftCode>>({});
   const [isSavingDay, setIsSavingDay] = useState<boolean>(false);
   const [daySaveMessage, setDaySaveMessage] = useState<string | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<{ name: string; src: string } | null>(null);
 
   const daysInMonth = useMemo(() => {
     return new Date(currentYear, currentMonth, 0).getDate();
@@ -577,7 +584,7 @@ setIsSavingDay(false);
               {/* Table Header */}
               <thead className="sticky top-0 z-20 border-b border-slate-200 bg-slate-100/95 backdrop-blur-md">
                 <tr>
-                  <th className="sticky left-0 z-30 min-w-[140px] border-r border-slate-200 bg-slate-100 p-4 text-[11px] font-extrabold uppercase tracking-wider text-slate-800 sm:min-w-[220px]">
+                  <th className="sticky left-0 z-30 w-[150px] min-w-[150px] border-r border-slate-200 bg-slate-100 p-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-800 sm:w-[180px] sm:min-w-[180px]">
                     Naam
                   </th>
                   {Array.from({ length: daysInMonth }, (_, idx) => {
@@ -598,7 +605,7 @@ setIsSavingDay(false);
                         key={dayNum}
                         onClick={() => handleOpenDayModal(dayNum)}
                         aria-disabled={isWeekend || isHoliday}
-                        className={`p-2 border-r border-slate-100 text-center text-[11px] min-w-[42px] transition-colors ${
+                        className={`p-2 border-r border-slate-100 text-center text-[11px] min-w-[50px] transition-colors ${
                           isHoliday
                             ? 'bg-amber-100 text-amber-900 border-b-2 border-amber-300'
                             : isWeekend
@@ -633,21 +640,43 @@ setIsSavingDay(false);
                       }`}
                     >
                       {/* Sticky Name Column */}
-                      <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50/70 p-3 border-r border-slate-200 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-yellow-200 bg-yellow-50 text-xs font-extrabold text-slate-900 shadow-sm">
-                            {member.user.avatar || member.user.name.substring(0, 2).toUpperCase()}
-                          </div>
-                          <div className="truncate">
-                            <div className="font-semibold text-slate-900 group-hover:text-slate-900 transition-colors truncate flex items-center gap-1.5">
-                              <span>{member.user.name}</span>
+                      <td className="sticky left-0 z-10 w-[150px] min-w-[150px] bg-white group-hover:bg-slate-50/70 p-2 border-r border-slate-200 transition-colors sm:w-[180px] sm:min-w-[180px]">
+                        <div className="flex min-w-[112px] flex-col items-center gap-2 text-center">
+                          {(() => {
+                            const photoFile = USER_AVATARS[member.user.name.trim()];
+                            const photoSrc = photoFile ? `/${photoFile}` : undefined;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => photoSrc && setPhotoPreview({ name: member.user.name, src: photoSrc })}
+                                disabled={!photoSrc}
+                                title={photoSrc ? `Bekijk foto van ${member.user.name}` : `Geen foto ingesteld voor ${member.user.name}`}
+                                className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-yellow-200 bg-yellow-50 text-sm font-extrabold text-slate-900 shadow-sm ${photoSrc ? 'cursor-zoom-in hover:ring-2 hover:ring-yellow-300' : 'cursor-default'}`}
+                              >
+                                {photoSrc ? (
+                                  <img
+                                    src={photoSrc}
+                                    alt={`Foto van ${member.user.name}`}
+                                    className="h-full w-full object-cover"
+                                    onError={(event) => {
+                                      event.currentTarget.style.display = 'none';
+                                      const fallback = event.currentTarget.nextElementSibling as HTMLElement | null;
+                                      if (fallback) fallback.style.display = 'flex';
+                                    }}
+                                  />
+                                ) : null}
+                                <span className={photoSrc ? 'hidden' : 'flex'}>{member.user.avatar || member.user.name.substring(0, 2).toUpperCase()}</span>
+                              </button>
+                            );
+                          })()}
+                          <div className="max-w-[130px]">
+                            <div className="flex flex-wrap items-center justify-center gap-1">
+                              <span className="truncate text-xs font-semibold text-slate-900">{member.user.name}</span>
                               {isCurrentLoggedUser && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 font-medium uppercase">
-                                  Jij
-                                </span>
+                                <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[9px] font-medium uppercase text-indigo-700">Jij</span>
                               )}
                             </div>
-                            <div className="text-[10px] text-slate-400 uppercase tracking-wider truncate font-medium">
+                            <div className="truncate text-[10px] font-medium uppercase tracking-wider text-slate-400">
                               {member.user.role || 'Teamlid'}
                             </div>
                           </div>
@@ -681,7 +710,7 @@ setIsSavingDay(false);
                             key={dayNum}
                             onClick={() => handleOpenDayModal(dayNum)}
                             aria-disabled={isWeekend || isHoliday}
-                            className={`p-1 text-center border-r border-slate-100 last:border-r-0 ${
+                            className={`min-w-[50px] p-1.5 text-center border-r border-slate-100 last:border-r-0 ${
                               isHoliday
                                 ? 'bg-amber-50 text-amber-900'
                                 : isWeekend
@@ -700,7 +729,7 @@ setIsSavingDay(false);
                           <div className="flex flex-col items-center justify-center gap-0.5 py-0.5">
                             {/* Eerste keuze */}
                             <div
-                              className={`w-full h-7 flex items-center justify-center rounded-lg text-xs font-bold transition-transform hover:scale-105 select-none ${
+                              className={`w-full h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-transform hover:scale-105 select-none ${
                                 code ? codeClass : 'bg-slate-50 text-slate-300'
                               }`}
                               title={`${member.user.name} - Dag ${dayNum}: ${
@@ -723,7 +752,7 @@ setIsSavingDay(false);
                           
                           {/* Tweede keuze */}
                           <div
-                            className={`w-full h-4 flex items-center justify-center rounded text-[9px] font-bold ${
+                            className={`w-full h-[18px] flex items-center justify-center rounded text-[10px] font-bold ${
                               secondCode
                                 ? 'border border-yellow-200 bg-yellow-50 text-slate-800'
                                 : 'text-slate-300'
@@ -739,7 +768,7 @@ setIsSavingDay(false);
                       {/* Derde keuze: alleen-lezen */}
 
                         <div
-                          className={`w-full h-4 flex items-center justify-center rounded text-[9px] font-bold ${
+                          className={`w-full h-[18px] flex items-center justify-center rounded text-[10px] font-bold ${
                             thirdCode
                               ? 'border border-indigo-200 bg-indigo-50 text-indigo-800'
                               : 'text-slate-300'
@@ -765,7 +794,7 @@ setIsSavingDay(false);
               {/* Total Staff per Day Summary Footer Row */}
               <tfoot className="bg-slate-50 border-t border-slate-200 font-bold text-[10px]">
                 <tr>
-                  <td className="sticky left-0 z-10 bg-slate-50 p-3 border-r border-slate-200 text-slate-800 uppercase tracking-wider">
+                  <td className="sticky left-0 z-10 w-[150px] min-w-[150px] bg-slate-50 p-2 border-r border-slate-200 text-slate-800 uppercase tracking-wider sm:w-[180px] sm:min-w-[180px]">
                     Shift Totalen (V / D / L)
                   </td>
                   {Array.from({ length: daysInMonth }, (_, idx) => {
@@ -1216,11 +1245,25 @@ setIsSavingDay(false);
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${
-                        isInConflict ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white'
-                      }`}>
-                        {m.user.avatar || m.user.name.substring(0, 2).toUpperCase()}
-                      </div>
+                      {(() => {
+                        const photoFile = USER_AVATARS[m.user.name.trim()];
+                        const photoSrc = photoFile ? `/${photoFile}` : undefined;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => photoSrc && setPhotoPreview({ name: m.user.name, src: photoSrc })}
+                            disabled={!photoSrc}
+                            title={photoSrc ? `Bekijk foto van ${m.user.name}` : `Geen foto ingesteld voor ${m.user.name}`}
+                            className={`h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-white shadow-sm ${isInConflict ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white'} ${photoSrc ? 'cursor-zoom-in' : 'cursor-default'}`}
+                          >
+                            {photoSrc ? (
+                              <img src={photoSrc} alt={`Foto van ${m.user.name}`} className="h-full w-full object-cover" />
+                            ) : (
+                              <span className="flex h-full w-full items-center justify-center text-xs font-bold">{m.user.avatar || m.user.name.substring(0, 2).toUpperCase()}</span>
+                            )}
+                          </button>
+                        );
+                      })()}
                       <div>
                         <p className={`text-xs font-bold ${isInConflict ? 'text-red-900' : 'text-slate-900'}`}>
                           {m.user.name}
@@ -1390,6 +1433,37 @@ setIsSavingDay(false);
           </div>
         </div>
       )}
+      {photoPreview && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+          onClick={() => setPhotoPreview(null)}
+          role="presentation"
+        >
+          <div
+            className="relative max-h-[90vh] w-full max-w-xl overflow-hidden rounded-2xl bg-white p-3 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Profielfoto van ${photoPreview.name}`}
+          >
+            <button
+              type="button"
+              onClick={() => setPhotoPreview(null)}
+              className="absolute right-5 top-5 z-10 rounded-full bg-slate-900/75 p-2 text-white transition hover:bg-slate-900"
+              aria-label="Foto sluiten"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              src={photoPreview.src}
+              alt={`Vergrote foto van ${photoPreview.name}`}
+              className="mx-auto max-h-[78vh] w-auto max-w-full rounded-xl object-contain"
+            />
+            <p className="pt-3 text-center text-sm font-bold text-slate-800">{photoPreview.name}</p>
+          </div>
+        </div>
+      )}
+
        <WeekSelectionModal
         show={showFinalizeModal}
         onClose={() => setShowFinalizeModal(false)}

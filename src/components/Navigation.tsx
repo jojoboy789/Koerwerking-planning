@@ -4,6 +4,15 @@ import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, Calendar, Users, Shield, LogOut, X, UserCheck, Menu, CalendarCheck, MessageSquare, Send, Key, BusFront, Clock, } from 'lucide-react';
 import { ChangePasswordModal } from './ChangePasswordModal';
 
+/**
+ * Koppel gebruikersnamen aan afbeeldingsbestanden in de map public.
+ * Voorbeeld: 'Jonas': 'jonasje.PNG'
+ */
+const USER_AVATARS: Record<string, string> = {
+  'Jonas': 'jonasje.PNG',
+};
+
+
 interface NavigationProps {
   currentTab: string;
   onSelectTab: (tab: string) => void;
@@ -58,9 +67,43 @@ export const Navigation: React.FC<NavigationProps> = ({
               <h1 className="font-bold text-lg text-slate-900">Mijn Planning</h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
+            {(() => {
+              const avatarFile = user?.name
+                ? USER_AVATARS[user.name.trim()]
+                : undefined;
+              const avatarSrc = avatarFile ? `/${avatarFile}` : undefined;
+              const initials = user?.avatar || (
+                user?.name ? user.name.substring(0, 2).toUpperCase() : 'U'
+              );
+
+              return (
+                <div
+                  className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-sm ring-2 ring-white"
+                  title={user?.name || 'Gebruiker'}
+                >
+                  {avatarSrc ? (
+                    <img
+                      src={avatarSrc}
+                      alt={`Profielfoto van ${user?.name || 'gebruiker'}`}
+                      className="h-full w-full object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    initials
+                  )}
+                </div>
+              );
+            })()}
             <span className="text-xs text-slate-600 truncate max-w-[100px]">{user?.name}</span>
-            <button onClick={logout} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
+            <button
+              onClick={logout}
+              className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+              aria-label="Uitloggen"
+              title="Uitloggen"
+            >
               <LogOut className="w-5 h-5" />
             </button>
           </div>
