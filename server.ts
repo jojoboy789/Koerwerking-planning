@@ -836,6 +836,25 @@ function htmlToTelegramText(html: string): string {
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
     .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&egrave;/gi, 'è')
+    .replace(/&eacute;/gi, 'é')
+    .replace(/&euml;/gi, 'ë')
+    .replace(/&agrave;/gi, 'à')
+    .replace(/&ocirc;/gi, 'ô')
+    .replace(/&uuml;/gi, 'ü')
+    .replace(/&ndash;/gi, '–')
+    .replace(/&mdash;/gi, '—')
+    .replace(/&rsquo;/gi, '’')
+    .replace(/&lsquo;/gi, '‘')
+    .replace(/&rdquo;/gi, '”')
+    .replace(/&ldquo;/gi, '“')
+    .replace(/&hellip;/gi, '…')
+    .replace(/&#(\d+);/g, (_, code) =>
+      String.fromCodePoint(Number(code))
+    )
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) =>
+      String.fromCodePoint(parseInt(code, 16))
+    )
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -905,6 +924,7 @@ function getBelgianDateTimeParts(date: Date): { dateKey: string; timeKey: string
 
 async function sendCurrentOCPlanningToTelegram(): Promise<void> {
   const manifest = await fetchOCPlanningManifest();
+
   if (!manifest.slides || manifest.slides.length === 0) {
     throw new Error('Er zijn geen actieve OC Planning-slides om te versturen.');
   }
@@ -916,42 +936,84 @@ async function sendCurrentOCPlanningToTelegram(): Promise<void> {
     }))
   );
 
-  const heading = '🚌 <b>OC BUS GBR · ACTUELE DAGPLANNING</b>\\n' +
-    `<i>Automatische update · ${new Intl.DateTimeFormat('nl-BE', {
-      timeZone: OC_PLANNING_TIME_ZONE,
-      dateStyle: 'full',
-      timeStyle: 'short',
-    }).format(new Date())}</i>\\n\\n`;
+  const now = new Date();
+
+  const dateLabel = new Intl.DateTimeFormat('nl-BE', {
+    timeZone: OC_PLANNING_TIME_ZONE,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(now);
+
+  const timeLabel = new Intl.DateTimeFormat('nl-BE', {
+    timeZone: OC_PLANNING_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(now);
+
+  const heading =
+    `🚌 <b>OC BUS GBR</b>\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `📅 ${escapeTelegramHtml(dateLabel)}\n` +
+    `🕒 Update om ${timeLabel}\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n`;
 
   const maxLength = 3500;
   const messages: string[] = [];
   let message = heading;
 
-  for (const slide of slides) {
-    const category = slide.dated ? 'Dagplanning' : 'Mededeling';
-    const content = htmlToTelegramText(slide.html);
+  const orderedSlides = [
+    ...slides.filter(slide => !slide.dated),
+    ...slides.filter(slide => slide.dated),
+  ];
+
+  for (const slide of orderedSlides) {
+    const isDayPlanning = slide.dated;
+    const category = isDayPlanning ? '📋 DAGPLANNING' : '📢 MEDEDELING';
+
+    const content = htmlToTelegramText(slide.html)
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    if (!content) continue;
+
     const section =
-      `<b>${escapeTelegramHtml(category)}: ${escapeTelegramHtml(slide.title)}</b>\\n` +
-      `${escapeTelegramHtml(content || 'Geen tekstuele inhoud beschikbaar.')}\\n\\n`;
+      `${category}\n` +
+      `<b>${escapeTelegramHtml(slide.title)}</b>\n` +
+      `──────────────────\n` +
+      `${escapeTelegramHtml(content)}\n\n`;
 
     if ((message + section).length > maxLength && message !== heading) {
       messages.push(message.trim());
       message = heading;
     }
 
-    // Een enkele uitzonderlijk lange slide wordt in tekststukken opgesplitst.
     let remaining = section;
+
     while ((message + remaining).length > maxLength) {
       const available = maxLength - message.length;
+
       if (available <= 0) {
         messages.push(message.trim());
         message = heading;
         continue;
       }
-      messages.push((message + remaining.slice(0, available)).trim());
-      remaining = remaining.slice(available);
+
+      let splitAt = remaining.lastIndexOf('\n', available);
+
+      if (splitAt < Math.floor(available * 0.5)) {
+        splitAt = available;
+      }
+
+      messages.push(
+        (message + remaining.slice(0, splitAt)).trim()
+      );
+
+      remaining = remaining.slice(splitAt).trimStart();
       message = heading;
     }
+
     message += remaining;
   }
 
@@ -965,12 +1027,15 @@ async function sendCurrentOCPlanningToTelegram(): Promise<void> {
 
   for (const telegramMessage of messages) {
     const sent = await sendTelegramNotification(telegramMessage);
+
     if (!sent) {
       throw new Error('Minstens één Telegram-bericht kon niet worden verstuurd.');
     }
   }
 
-  console.log(`Automatische OC Planning-update verstuurd (${messages.length} Telegram-bericht(en)).`);
+  console.log(
+    `OC Planning-update verstuurd (${messages.length} Telegram-bericht(en)).`
+  );
 }
 
 // === GOOGLE CLOUD SCHEDULER ENDPOINT ===
