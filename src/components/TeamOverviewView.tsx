@@ -1,5 +1,3 @@
-Kan je ook kijken bij shift bezettingen en dag voor dag controle? 
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
