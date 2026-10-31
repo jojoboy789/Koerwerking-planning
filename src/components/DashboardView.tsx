@@ -37,6 +37,54 @@ const MONTH_NAMES = [
 
 const TELEGRAM_INVITE_URL = 'https://t.me/+B0GMB0QZaM01ZWJk';
 
+function getBelgianHolidays(year: number): Map<string, string> {
+  const holidays = new Map<string, string>();
+  const add = (month: number, day: number, name: string) => {
+    const key = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    holidays.set(key, name);
+  };
+
+  add(1, 1, 'Nieuwjaar');
+  add(5, 1, 'Dag van de Arbeid');
+  add(7, 21, 'Nationale feestdag');
+  add(8, 15, 'O.L.V. Hemelvaart');
+  add(11, 1, 'Allerheiligen');
+  add(11, 11, 'Wapenstilstand');
+  add(12, 25, 'Kerstmis');
+
+  // Meeus/Jones/Butcher algorithm calculates Easter Sunday.
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const easterMonth = Math.floor((h + l - 7 * m + 114) / 31);
+  const easterDay = ((h + l - 7 * m + 114) % 31) + 1;
+  const easter = new Date(year, easterMonth - 1, easterDay);
+  const addOffset = (offset: number, name: string) => {
+    const date = new Date(easter);
+    date.setDate(date.getDate() + offset);
+    add(date.getMonth() + 1, date.getDate(), name);
+  };
+  addOffset(1, 'Paasmaandag');
+  addOffset(39, 'O.H. Hemelvaart');
+  addOffset(50, 'Pinkstermaandag');
+
+  return holidays;
+}
+
+function dateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+
 export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigate,
 }) => {
@@ -74,14 +122,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         let x = 0;
         let total = 0;
 
-        Object.values(days).forEach((code) => {
+        const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+        const holidays = getBelgianHolidays(currentYear);
+
+        // Only count weekdays that are not Belgian public holidays.
+        for (let day = 1; day <= daysInMonth; day++) {
+          const date = new Date(currentYear, currentMonth - 1, day);
+          const weekday = date.getDay();
+          const isWeekend = weekday === 0 || weekday === 6;
+          const isHoliday = holidays.has(dateKey(date));
+
+          if (isWeekend || isHoliday) continue;
+
+          const code = days[day];
           if (code === 'V') v++;
           else if (code === 'D') d++;
           else if (code === 'L') l++;
           else if (code === 'X') x++;
 
           if (code) total++;
-        });
+        }
 
         setPlanningStats({
           v,
@@ -120,15 +180,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     0,
   ).getDate();
 
-  const remainingDays = Math.max(
-    0,
-    daysInCurrentMonth - planningStats.total,
-  );
+  const holidaysThisMonth = getBelgianHolidays(currentYear);
+  let requiredWorkdays = 0;
+  for (let day = 1; day <= daysInCurrentMonth; day++) {
+    const date = new Date(currentYear, currentMonth - 1, day);
+    const weekday = date.getDay();
+    if (weekday !== 0 && weekday !== 6 && !holidaysThisMonth.has(dateKey(date))) {
+      requiredWorkdays++;
+    }
+  }
 
-  const progressPercentage = Math.min(
-    100,
-    (planningStats.total / daysInCurrentMonth) * 100,
-  );
+  const remainingDays = Math.max(0, requiredWorkdays - planningStats.total);
+  const progressPercentage = requiredWorkdays > 0
+    ? Math.min(100, (planningStats.total / requiredWorkdays) * 100)
+    : 100;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 bg-slate-50 px-3 py-5 pb-24 font-sans sm:px-5 md:space-y-7 md:px-8 md:py-7">
@@ -184,7 +249,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="mt-2 text-sm font-semibold text-white">
-            {planningStats.total} van {daysInCurrentMonth} dagen ingevuld
+            {planningStats.total} van {requiredWorkdays} werkdagen ingevuld
           </div>
 
           <div
@@ -192,10 +257,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             role="progressbar"
             aria-label="Voortgang van de maandplanning"
             aria-valuemin={0}
-            aria-valuemax={daysInCurrentMonth}
+            aria-valuemax={requiredWorkdays}
             aria-valuenow={Math.min(
               planningStats.total,
-              daysInCurrentMonth,
+              requiredWorkdays,
             )}
           >
             <div
@@ -249,7 +314,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </p>
 
               <div className="mt-4 inline-flex items-center rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">
-                {planningStats.total} dagen ingevuld
+                {planningStats.total} werkdagen ingevuld
               </div>
             </div>
 

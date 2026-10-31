@@ -10,6 +10,11 @@ import { ChangePasswordModal } from './ChangePasswordModal';
  */
 const USER_AVATARS: Record<string, string> = {
   'Jonas': 'jonasje.PNG',
+  'Dylan': 'Dylantje.PNG',
+  'Illya': 'illyatje.PNG',
+  'Jordy': 'Jordyyyy.PNG',
+  'Bruno': 'Brunotje.PNG',
+  'Kurt': 'Kurtje.PNG',
 };
 
 

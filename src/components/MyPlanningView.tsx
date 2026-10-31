@@ -263,28 +263,52 @@ setInitialThirdChoices({ ...thirdChoices });
     }
   };
 
-  // Monthly stats summary
+  // Monthly stats: weekends and Belgian public holidays are not days that
+  // need a planning choice, so exclude them from the totals and progress.
   const stats = useMemo(() => {
     let vCount = 0, dCount = 0, lCount = 0, rCount = 0, xCount = 0, filledCount = 0;
+    let requiredCount = 0;
+    const holidays = getBelgianHolidays(currentYear);
 
     for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentYear, currentMonth - 1, day);
+      const dayOfWeek = date.getDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      const isHoliday = holidays.has(dateKey(date));
+
+      if (isWeekend || isHoliday) continue;
+
+      requiredCount++;
       const code = daysState[day];
+
       if (code === 'V') vCount++;
       else if (code === 'D') dCount++;
       else if (code === 'L') lCount++;
       else if (code === 'R') rCount++;
       else if (code === 'X') xCount++;
+
       if (code) filledCount++;
     }
 
-    return { vCount, dCount, lCount, rCount, xCount, filledCount, emptyCount: daysInMonth - filledCount };
-  }, [daysState, daysInMonth]);
+    return {
+      vCount,
+      dCount,
+      lCount,
+      rCount,
+      xCount,
+      filledCount,
+      requiredCount,
+      emptyCount: requiredCount - filledCount,
+    };
+  }, [daysState, daysInMonth, currentYear, currentMonth]);
 
   const monthTitle = `${MONTH_NAMES[currentMonth - 1]} ${currentYear}`.toUpperCase();
 
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === currentYear && today.getMonth() + 1 === currentMonth;
-  const completionPercentage = Math.round((stats.filledCount / daysInMonth) * 100);
+  const completionPercentage = stats.requiredCount > 0
+    ? Math.round((stats.filledCount / stats.requiredCount) * 100)
+    : 100;
   const canEdit = (canEditPlanning || isAdmin) && !isLockedForEditing;
 
   return (
@@ -300,7 +324,7 @@ setInitialThirdChoices({ ...thirdChoices });
               </div>
               <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{MONTH_NAMES[currentMonth - 1]} {currentYear}</h2>
               <p className="mt-1.5 text-sm text-indigo-100">
-                {stats.filledCount} van {daysInMonth} dagen ingevuld
+                {stats.filledCount} van {stats.requiredCount} werkdagen ingevuld
                 <span className="mx-2 text-indigo-300">•</span>
                 {stats.emptyCount === 0 ? 'Maand volledig ingevuld' : `Nog ${stats.emptyCount} ${stats.emptyCount === 1 ? 'dag' : 'dagen'} open`}
               </p>
@@ -309,7 +333,7 @@ setInitialThirdChoices({ ...thirdChoices });
               <CalendarDays className="h-7 w-7" />
             </div>
           </div>
-          <div className="mt-5 h-2 overflow-hidden rounded-full bg-black/20" role="progressbar" aria-label="Ingevulde dagen" aria-valuemin={0} aria-valuemax={daysInMonth} aria-valuenow={stats.filledCount}>
+          <div className="mt-5 h-2 overflow-hidden rounded-full bg-black/20" role="progressbar" aria-label="Ingevulde dagen" aria-valuemin={0} aria-valuemax={stats.requiredCount} aria-valuenow={stats.filledCount}>
             <div className="h-full rounded-full bg-white transition-all duration-300" style={{ width: `${completionPercentage}%` }} />
           </div>
           <div className="mt-2 flex justify-between text-[11px] font-medium text-indigo-100">

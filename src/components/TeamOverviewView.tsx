@@ -34,6 +34,11 @@ const DAY_NAMES = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
 // Koppel hier gebruikersnamen aan foto's die rechtstreeks in /public staan.
 const USER_AVATARS: Record<string, string> = {
   'Jonas': 'jonasje.PNG',
+  'Dylan': 'Dylantje.PNG',
+  'Illya': 'illyatje.PNG',
+  'Jordy': 'Jordyyyy.PNG',
+  'Bruno': 'Brunotje.PNG',
+  'Kurt': 'Kurtje.PNG',
 };
 
 
