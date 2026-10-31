@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { User, ShiftCode, SHIFT_DEFINITIONS, MonthlyPlanning } from '../types';
+import type { SpecialDay } from '../services/api';
 import { WeekSelectionModal } from './WeekSelectionModal';
 import {
   ChevronLeft,
@@ -103,6 +104,7 @@ export const TeamPlanningView: React.FC = () => {
   const [showFinalizeModal, setShowFinalizeModal] = useState<boolean>(false);
 
   const [members, setMembers] = useState<User[]>([]);
+  const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [memberSearch, setMemberSearch] = useState<string>('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('all');
@@ -138,14 +140,27 @@ export const TeamPlanningView: React.FC = () => {
     const dayOfWeek = date.getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
     const isHoliday = Boolean(holidayName);
+    const isoDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const specialDay = specialDays.find((day) => day.date === isoDate) || null;
 
     return {
       holidayName,
       isWeekend,
       isHoliday,
-      isUnavailable: isWeekend || isHoliday,
+      specialDay,
+      isUnavailable: isWeekend || isHoliday || Boolean(specialDay),
     };
-  }, [belgianHolidays]);
+  }, [belgianHolidays, specialDays]);
+
+  useEffect(() => {
+    let active = true;
+    api.getSpecialDays()
+      .then((result) => {
+        if (active) setSpecialDays(result.specialDays || []);
+      })
+      .catch((error) => console.error('Speciale kalenderdagen ophalen mislukt:', error));
+    return () => { active = false; };
+  }, []);
 
   // Load list of members
   const fetchMembers = useCallback(async () => {
@@ -863,10 +878,12 @@ export const TeamPlanningView: React.FC = () => {
                         const dayNum = item.day;
                         const shiftCode = daysState[dayNum] || '';
                         const dateObj = item.date;
-                        const { isWeekend, isHoliday, holidayName, isUnavailable } = getDayStatus(dateObj);
+                        const { isWeekend, isHoliday, holidayName, specialDay, isUnavailable } = getDayStatus(dateObj);
 
-                        const dayStyle = isHoliday
+                        const dayStyle = isHoliday || specialDay?.type === 'replacementHoliday'
                           ? 'bg-amber-100 border-amber-400 text-amber-950'
+                          : specialDay?.type === 'strike'
+                          ? 'bg-rose-100 border-rose-400 text-rose-950'
                           : isWeekend
                           ? 'bg-[#e5f2ff] border-[#007bc4] text-[#005a96]'
                           : shiftCode === 'V'
@@ -887,7 +904,7 @@ export const TeamPlanningView: React.FC = () => {
                             onClick={() => {
                               if (!isUnavailable) handleDayClick(dayNum);
                             }}
-                            aria-label={`${dayNum} ${MONTH_NAMES[currentMonth - 1]}${isHoliday ? `, feestdag ${holidayName}` : isWeekend ? ', weekend' : ''}`}
+                            aria-label={`${dayNum} ${MONTH_NAMES[currentMonth - 1]}${specialDay ? `, ${specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking'}` : isHoliday ? `, feestdag ${holidayName}` : isWeekend ? ', weekend' : ''}`}
                             aria-disabled={isUnavailable}
                             className={`min-h-[82px] sm:min-h-[92px] p-1.5 sm:p-2 rounded-xl border transition-all flex flex-col justify-between group relative ${
                               isUnavailable ? 'cursor-not-allowed' : 'cursor-pointer hover:shadow-sm'
@@ -896,7 +913,7 @@ export const TeamPlanningView: React.FC = () => {
                             <div className="flex items-center justify-between">
                               <span
                                 className={`text-xs font-bold font-mono ${
-                                  isHoliday ? 'text-amber-950' : isWeekend ? 'text-[#005a96]' : 'text-slate-700'
+                                  isHoliday || specialDay?.type === 'replacementHoliday' ? 'text-amber-950' : specialDay?.type === 'strike' ? 'text-rose-950' : isWeekend ? 'text-[#005a96]' : 'text-slate-700'
                                 }`}
                               >
                                 {dayNum}
@@ -918,7 +935,27 @@ export const TeamPlanningView: React.FC = () => {
 
                             {/* Status of the day or assigned shift */}
                             <div className="mt-1">
-                              {isHoliday ? (
+                              {specialDay ? (
+                                <div className="text-center">
+                                  <span className={`inline-block rounded-md px-1 py-0.5 text-[8px] sm:text-[9px] font-extrabold ${
+                                    specialDay.type === 'replacementHoliday'
+                                      ? 'bg-amber-200 text-amber-950'
+                                      : 'bg-rose-200 text-rose-950'
+                                  }`}>
+                                    {specialDay.type === 'replacementHoliday' ? 'VERVANGENDE FEEST DAG' : 'STAKING'}
+                                  </span>
+                                  <p className={`mt-1 text-[8px] sm:text-[9px] font-semibold leading-tight ${
+                                    specialDay.type === 'replacementHoliday' ? 'text-amber-950' : 'text-rose-950'
+                                  }`}>
+                                    Geen geplande koerdienst
+                                  </p>
+                                  {shiftCode && (
+                                    <p className="mt-1 text-[8px] font-bold text-red-700">
+                                      Opgeslagen: {shiftCode}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : isHoliday ? (
                                 <div className="text-center">
                                   <span className="inline-block rounded-md bg-amber-200 px-1 py-0.5 text-[8px] sm:text-[9px] font-extrabold text-amber-950">
                                     FEESTDAG

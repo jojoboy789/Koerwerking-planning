@@ -57,7 +57,10 @@ interface StoredPlanning {
   updatedBy: string;
 }
 
+interface StoredSpecialDay { date: string; type: 'replacementHoliday' | 'strike'; createdAt: string; createdBy: string; }
+
 interface DatabaseSchema {
+  specialDays: StoredSpecialDay[];
   users: StoredUser[];
   plannings: StoredPlanning[];
   sessions: Record<string, { userId: string; createdAt: number }>;
@@ -150,6 +153,7 @@ function loadDatabase(): DatabaseSchema {
     }
     return {
   ...data,
+  specialDays: Array.isArray(data.specialDays) ? data.specialDays : [],
   maintenance: data.maintenance || {
     enabled: false,
     updatedAt: null,
@@ -355,6 +359,7 @@ function seedInitialDatabase(): DatabaseSchema {
 
   return {
   users: initialUsers,
+  specialDays: [],
   plannings: samplePlannings,
   sessions: {},
   maintenance: {
@@ -496,6 +501,7 @@ async function startServer() {
       console.log('🔥 Loaded database state from Cloud Firestore successfully.');
       db = {
   users: remoteData.users,
+  specialDays: Array.isArray(remoteData.specialDays) ? remoteData.specialDays : db.specialDays || [],
   plannings: remoteData.plannings || [],
   sessions: db.sessions || {},
   maintenance: remoteData.maintenance || db.maintenance || {
@@ -512,6 +518,44 @@ async function startServer() {
   } catch (err) {
     console.warn('Firebase initial sync deferred/offline:', err);
   }
+
+  // === SPECIAL NON-PLANNING DAYS ===
+  // Available to signed-in users; modifications are admin-only.
+  app.get('/api/special-days', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    res.json({ specialDays: db.specialDays || [] });
+  });
+
+  app.post('/api/admin/special-days', authMiddleware, requireAdminMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    const { date, type } = req.body || {};
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        !['replacementHoliday', 'strike'].includes(type)) {
+      return res.status(400).json({ error: 'Kies een geldige datum en type.' });
+    }
+    const parsed = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+      return res.status(400).json({ error: 'De datum is ongeldig.' });
+    }
+    db.specialDays = db.specialDays || [];
+    const existing = db.specialDays.findIndex((day) => day.date === date);
+    const entry: StoredSpecialDay = {
+      date,
+      type,
+      createdAt: new Date().toISOString(),
+      createdBy: req.user?.name || 'Admin',
+    };
+    if (existing >= 0) db.specialDays[existing] = entry;
+    else db.specialDays.push(entry);
+    db.specialDays.sort((a, b) => a.date.localeCompare(b.date));
+    saveDatabase(db);
+    res.json({ success: true, specialDays: db.specialDays });
+  });
+
+  app.delete('/api/admin/special-days/:date', authMiddleware, requireAdminMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    const date = String(req.params.date || '');
+    db.specialDays = (db.specialDays || []).filter((day) => day.date !== date);
+    saveDatabase(db);
+    res.json({ success: true, specialDays: db.specialDays });
+  });
 
   // === AUTHENTICATION ENDPOINTS ===
 

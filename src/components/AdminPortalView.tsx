@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { User, AdminStats } from '../types';
 import { api } from '../services/api';
-import type { MaintenanceStatus } from '../services/api';
+import type { MaintenanceStatus, SpecialDay } from '../services/api';
 import { AdminPlanningModal } from './AdminPlanningModal';
 import {
   Users, UserPlus, Key, Edit3, Trash2, Calendar, Check, X, Shield,
@@ -55,6 +55,49 @@ const [maintenanceStatus, setMaintenanceStatus] =
 const [isUpdatingMaintenance, setIsUpdatingMaintenance] =
   useState<boolean>(false);
 
+  // Speciale kalenderdagen
+  const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
+  const [specialDayDate, setSpecialDayDate] = useState('');
+  const [specialDayType, setSpecialDayType] =
+    useState<SpecialDay['type']>('replacementHoliday');
+  const [isSavingSpecialDay, setIsSavingSpecialDay] = useState(false);
+
+  const handleAddSpecialDay = async () => {
+    if (!specialDayDate || isSavingSpecialDay) return;
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setIsSavingSpecialDay(true);
+    try {
+      const result = await api.addSpecialDay(specialDayDate, specialDayType);
+      setSpecialDays(result.specialDays || []);
+      setSpecialDayDate('');
+      setSuccessMessage(
+        specialDayType === 'replacementHoliday'
+          ? 'Vervangende feestdag toegevoegd.'
+          : 'Stakingsdag toegevoegd.'
+      );
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Kon de speciale dag niet toevoegen.');
+    } finally {
+      setIsSavingSpecialDay(false);
+    }
+  };
+
+  const handleDeleteSpecialDay = async (date: string) => {
+    if (!window.confirm(`Wil je de speciale dag van ${date} verwijderen?`)) return;
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const result = await api.deleteSpecialDay(date);
+      setSpecialDays(result.specialDays || []);
+      setSuccessMessage('Speciale dag verwijderd.');
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Kon de speciale dag niet verwijderen.');
+    }
+  };
+
   // Change Code Form State
   const [generatedNewCode, setGeneratedNewCode] = useState('');
 
@@ -62,12 +105,13 @@ const [isUpdatingMaintenance, setIsUpdatingMaintenance] =
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const [usersRes, statsRes, fbStatus, maintenanceRes] =
+      const [usersRes, statsRes, fbStatus, maintenanceRes, specialDaysRes] =
   await Promise.allSettled([
     api.getAdminUsers(),
     api.getAdminStats(),
     api.getFirebaseStatus(),
     api.getMaintenanceStatus(),
+    api.getSpecialDays(),
   ]);
 
       if (usersRes.status === 'fulfilled') {
@@ -82,6 +126,9 @@ const [isUpdatingMaintenance, setIsUpdatingMaintenance] =
       if (maintenanceRes.status === 'fulfilled') {
   setMaintenanceStatus(maintenanceRes.value);
 }
+      if (specialDaysRes.status === 'fulfilled') {
+        setSpecialDays(specialDaysRes.value.specialDays || []);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Kon gebruikersgegevens niet laden.';
       setErrorMessage(msg);
@@ -505,6 +552,91 @@ const handleToggleMaintenance = async () => {
     )}
   </button>
 </div>
+
+      {/* SPECIALE KALENDERDAGEN */}
+      <section className="rounded-3xl border border-slate-200 bg-white p-4 md:p-6 shadow-xs space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="rounded-2xl bg-amber-100 p-3 text-amber-800">
+            <Calendar className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Speciale kalenderdagen</h3>
+            <p className="mt-1 max-w-2xl text-xs text-slate-600">
+              Voeg een vervangende feestdag of stakingsdag toe. Deze dagen worden straks
+              in de planning aangeduid als niet-inplanbaar.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto]">
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Datum</span>
+            <input
+              type="date"
+              value={specialDayDate}
+              onChange={(event) => setSpecialDayDate(event.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Type dag</span>
+            <select
+              value={specialDayType}
+              onChange={(event) => setSpecialDayType(event.target.value as SpecialDay['type'])}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+            >
+              <option value="replacementHoliday">Vervangende Feest Dag</option>
+              <option value="strike">Staking</option>
+            </select>
+          </label>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={handleAddSpecialDay}
+              disabled={!specialDayDate || isSavingSpecialDay}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#ffdc00] px-4 py-2.5 text-sm font-bold text-slate-900 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              {isSavingSpecialDay ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Toevoegen
+            </button>
+          </div>
+        </div>
+
+        {specialDays.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-200 px-4 py-5 text-center text-xs text-slate-500">
+            Er zijn nog geen speciale kalenderdagen ingesteld.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {[...specialDays].sort((a, b) => a.date.localeCompare(b.date)).map((day) => (
+              <div key={day.date} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <span className={`rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                    day.type === 'replacementHoliday'
+                      ? 'bg-amber-100 text-amber-900'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {day.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking'}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-800">
+                    {new Date(`${day.date}T12:00:00`).toLocaleDateString('nl-BE', {
+                      weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
+                    })}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSpecialDay(day.date)}
+                  className="inline-flex items-center justify-center gap-1.5 self-start rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 sm:self-auto"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Verwijderen
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Stats Cards Row - Bento Style */}
       {stats && (

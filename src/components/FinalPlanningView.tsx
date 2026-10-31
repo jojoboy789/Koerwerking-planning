@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '../services/api';
+import type { SpecialDay } from '../services/api';
 import { TeamMemberOverview, ShiftCode, SHIFT_DEFINITIONS } from '../types';
 import {
   ChevronLeft,
@@ -189,6 +190,7 @@ export const FinalPlanningView: React.FC = () => {
   const [currentYear, setCurrentYear] = useState<number>(() => new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(() => new Date().getMonth() + 1);
   const [teamData, setTeamData] = useState<TeamMemberOverview[]>([]);
+  const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isPrinting, setIsPrinting] = useState<number | null>(null);
   const [isPrintingMonth, setIsPrintingMonth] = useState(false);
@@ -220,6 +222,19 @@ export const FinalPlanningView: React.FC = () => {
   useEffect(() => {
     fetchTeamOverview();
   }, [fetchTeamOverview]);
+
+  useEffect(() => {
+    let active = true;
+    api.getSpecialDays()
+      .then((result) => {
+        if (active) setSpecialDays(result.specialDays || []);
+      })
+      .catch((error) => console.error('Speciale kalenderdagen ophalen mislukt:', error));
+    return () => { active = false; };
+  }, []);
+
+  const getSpecialDay = (date: Date): SpecialDay | undefined =>
+    specialDays.find((item) => item.date === dateKey(date));
 
   const daysInMonth = useMemo(
     () => new Date(currentYear, currentMonth, 0).getDate(),
@@ -505,6 +520,7 @@ export const FinalPlanningView: React.FC = () => {
             {dates.map((date) => {
               const inCurrentMonth = date.getMonth() + 1 === currentMonth && date.getFullYear() === currentYear;
               const holidayName = getBelgianHolidays(date.getFullYear()).get(dateKey(date));
+              const specialDay = getSpecialDay(date);
               const isWeekend = date.getDay() === 0 || date.getDay() === 6;
               const isToday = dateKey(date) === dateKey(new Date());
               const isSelected = dateKey(date) === selectedKey;
@@ -526,20 +542,30 @@ export const FinalPlanningView: React.FC = () => {
                     }
                   }}
                   className={`min-h-[112px] border-b border-r border-slate-100 p-1.5 text-left transition-colors sm:min-h-[132px] sm:p-2 ${
-                    holidayName ? 'bg-amber-50 hover:bg-amber-100' :
+                    holidayName || specialDay?.type === 'replacementHoliday' ? 'bg-amber-50 hover:bg-amber-100' :
+                  specialDay?.type === 'strike' ? 'bg-rose-50 hover:bg-rose-100' :
                     isWeekend ? 'bg-blue-50/70 hover:bg-blue-100' :
                     'bg-white hover:bg-yellow-50'
                   } ${!inCurrentMonth ? 'opacity-40' : ''} ${isSelected ? 'ring-2 ring-inset ring-[#ffdc00]' : ''}`}
                 >
                   <div className="mb-2 flex items-center justify-between gap-1">
                     <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold ${
-                      isToday ? 'bg-[#ffdc00] text-[#17202b]' : holidayName ? 'bg-amber-200 text-amber-950' : isWeekend ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'
+                      isToday ? 'bg-[#ffdc00] text-[#17202b]' : holidayName || specialDay?.type === 'replacementHoliday' ? 'bg-amber-200 text-amber-950' : specialDay?.type === 'strike' ? 'bg-rose-200 text-rose-950' : isWeekend ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'
                     }`}>{date.getDate()}</span>
-                    {holidayName && <span className="truncate rounded-full bg-amber-200 px-2 py-1 text-[9px] font-extrabold text-amber-900">Feestdag</span>}
-                    {!holidayName && isWeekend && <span className="truncate rounded-full bg-blue-100 px-2 py-1 text-[9px] font-extrabold text-blue-800">Weekend</span>}
+                    {specialDay && <span className={`truncate rounded-full px-2 py-1 text-[9px] font-extrabold ${specialDay.type === 'replacementHoliday' ? 'bg-amber-200 text-amber-900' : 'bg-rose-200 text-rose-900'}`}>{specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'STAKING'}</span>}
+                    {!specialDay && holidayName && <span className="truncate rounded-full bg-amber-200 px-2 py-1 text-[9px] font-extrabold text-amber-900">Feestdag</span>}
+                    {!holidayName && !specialDay && isWeekend && <span className="truncate rounded-full bg-blue-100 px-2 py-1 text-[9px] font-extrabold text-blue-800">Weekend</span>}
                   </div>
 
-                  {holidayName ? (
+                  {specialDay ? (
+                    <div className={`flex min-h-[76px] items-start gap-2 rounded-lg border p-2 sm:min-h-[88px] sm:p-2.5 ${specialDay.type === 'replacementHoliday' ? 'border-amber-300 bg-[#fff4cc] text-amber-950' : 'border-rose-300 bg-rose-50 text-rose-950'}`}>
+                      <CalendarDays className={`mt-0.5 h-4 w-4 shrink-0 ${specialDay.type === 'replacementHoliday' ? 'text-amber-700' : 'text-rose-700'}`} />
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-extrabold leading-tight sm:text-xs">Geen geplande koerdienst</div>
+                        <div className="mt-1 text-[9px] leading-snug sm:text-[10px]">{specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking'}. Dienstkeuzes zijn uitgeschakeld.</div>
+                      </div>
+                    </div>
+                  ) : holidayName ? (
                     <div className="flex min-h-[76px] items-start gap-2 rounded-lg border border-amber-300 bg-[#fff4cc] p-2 text-amber-950 sm:min-h-[88px] sm:p-2.5">
                       <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
                       <div className="min-w-0">
@@ -701,16 +727,21 @@ export const FinalPlanningView: React.FC = () => {
                         const shift = isVisibleWorkShift(rawShift) ? rawShift : null;
                         const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                         const holidayName = holidays.get(dateKey(date));
+                        const specialDay = getSpecialDay(date);
 
                         return (
                           <td
                             key={day}
                             className={`border-r border-slate-100 p-1.5 text-center last:border-r-0 ${
-                              holidayName ? 'bg-amber-50' : isWeekend ? 'bg-slate-50/80' : ''
+                              holidayName || specialDay?.type === 'replacementHoliday' ? 'bg-amber-50' : specialDay?.type === 'strike' ? 'bg-rose-50' : isWeekend ? 'bg-slate-50/80' : ''
                             }`}
-                            title={holidayName || undefined}
+                            title={specialDay ? (specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking') : holidayName || undefined}
                           >
-                            <ShiftCell shift={shift} memberName={member.user.name} day={day} />
+                            {specialDay ? (
+                              <div className={`rounded-lg px-1 py-2 text-[9px] font-extrabold leading-tight ${specialDay.type === 'replacementHoliday' ? 'bg-amber-100 text-amber-900' : 'bg-rose-100 text-rose-900'}`}>
+                                {specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'STAKING'}
+                              </div>
+                            ) : <ShiftCell shift={shift} memberName={member.user.name} day={day} />}
                           </td>
                         );
                       })}
@@ -737,6 +768,7 @@ export const FinalPlanningView: React.FC = () => {
                 weekNumber={week}
                 weekData={days}
                 teamData={membersForWeek}
+                specialDays={specialDays}
                 year={currentYear}
                 month={currentMonth}
               />

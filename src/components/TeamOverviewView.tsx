@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import type { SpecialDay } from '../services/api';
 import { TeamMemberOverview, ShiftCode, SHIFT_DEFINITIONS } from '../types';
 import { WeekSelectionModal } from './WeekSelectionModal';
 import {
@@ -107,6 +108,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   const [showFinalizeModal, setShowFinalizeModal] = useState<boolean>(false);
 
   const [teamData, setTeamData] = useState<TeamMemberOverview[]>([]);
+  const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'ok' | 'conflict' | 'missing'>('all');
@@ -143,6 +145,21 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   useEffect(() => {
     fetchOverview();
   }, [fetchOverview]);
+
+  useEffect(() => {
+    let active = true;
+    api.getSpecialDays()
+      .then((result) => {
+        if (active) setSpecialDays(result.specialDays || []);
+      })
+      .catch((error) => console.error('Speciale kalenderdagen ophalen mislukt:', error));
+    return () => { active = false; };
+  }, []);
+
+  const getSpecialDay = (date: Date): SpecialDay | undefined => {
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return specialDays.find((item) => item.date === key);
+  };
 
   const handlePrevMonth = () => {
     if (currentMonth === 1) {
@@ -214,6 +231,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
         isWeekend: boolean;
         isHoliday: boolean;
         holidayName: string | null;
+        specialDay?: SpecialDay;
         missingShifts: ShiftCode[];
         conflictShifts: ShiftCode[];
       }
@@ -224,6 +242,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
       const dayOfWeek = date.getDay();
       const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
       const isHoliday = holidayName !== null;
+      const specialDay = getSpecialDay(date);
 
       totals[d] = {
         V: 0,
@@ -239,6 +258,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
         isWeekend,
         isHoliday,
         holidayName,
+        specialDay,
         missingShifts: [],
         conflictShifts: [],
       };
@@ -249,7 +269,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
       for (let d = 1; d <= daysInMonth; d++) {
         const code = days[d];
         const memberInfo = { userId: m.user.id, name: m.user.name, role: m.user.role };
-        if (totals[d].isWeekend || totals[d].isHoliday) {
+        if (totals[d].isWeekend || totals[d].isHoliday || totals[d].specialDay) {
           continue;
         }
         if (code === 'V') {
@@ -300,7 +320,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
     }
 
     return totals;
-  }, [filteredMembers, daysInMonth, currentYear, currentMonth]);
+  }, [filteredMembers, daysInMonth, currentYear, currentMonth, specialDays]);
 
   // Overall monthly health counts
   const monthlyCoverageStats = useMemo(() => {
@@ -339,7 +359,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   const handleOpenDayModal = (day: number) => {
     const selectedDate = new Date(currentYear, currentMonth - 1, day);
     const dayInfo = getNonWorkingDayInfo(selectedDate);
-    if (dayInfo.isWeekend || dayInfo.holidayName) return;
+    if (dayInfo.isWeekend || dayInfo.holidayName || getSpecialDay(selectedDate)) return;
     setSelectedDayDetail(day);
     setDaySaveMessage(null);
 
@@ -598,6 +618,7 @@ setIsSavingDay(false);
                     const dayOfWeek = date.getDay();
                     const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
                     const isHoliday = holidayName !== null;
+                    const specialDay = getSpecialDay(date);
                     const dayName = DAY_NAMES[dayOfWeek];
 
                     const isToday =
@@ -609,17 +630,19 @@ setIsSavingDay(false);
                       <th
                         key={dayNum}
                         onClick={() => handleOpenDayModal(dayNum)}
-                        aria-disabled={isWeekend || isHoliday}
+                        aria-disabled={isWeekend || isHoliday || Boolean(specialDay)}
                         className={`min-w-[50px] p-2 border-r border-slate-100 text-center text-[11px] transition-colors xl:min-w-0 xl:px-0.5 xl:py-1 ${
-                          isHoliday
+                          isHoliday || specialDay?.type === 'replacementHoliday'
                             ? 'bg-amber-100 text-amber-900 border-b-2 border-amber-300'
+                            : specialDay?.type === 'strike'
+                            ? 'bg-rose-100 text-rose-900 border-b-2 border-rose-300'
                             : isWeekend
                             ? 'bg-[#dbeafe] text-[#0057a8] border-b-2 border-[#0072bc]'
                             : isToday
                             ? 'border-b-2 border-b-[#ffdc00] bg-yellow-50 font-extrabold text-slate-950 cursor-pointer'
                             : 'text-slate-600 cursor-pointer hover:bg-yellow-50'
                         }`}
-                        title={isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : isWeekend ? 'Weekend geen geplande koerdienst' : `Klik om bezetting en shifts van Dag ${dayNum} te inspecteren en bewerken`}
+                        title={specialDay ? `${specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking'}: Geen geplande koerdienst` : isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : isWeekend ? 'Weekend geen geplande koerdienst' : `Klik om bezetting en shifts van Dag ${dayNum} te inspecteren en bewerken`}
                       >
                         <div className="text-[9px] uppercase font-medium">{dayName}</div>
                         <div className="font-bold text-xs mt-0.5">{dayNum}</div>
@@ -694,6 +717,7 @@ setIsSavingDay(false);
                         const date = new Date(currentYear, currentMonth - 1, dayNum);
                         const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
                         const isHoliday = holidayName !== null;
+                        const specialDay = getSpecialDay(date);
                         const code = pln[dayNum] || '';
                         const secondCode = secondPln[dayNum] || '';
                         const thirdCode = thirdPln[dayNum] || '';
@@ -714,22 +738,24 @@ setIsSavingDay(false);
                           <td
                             key={dayNum}
                             onClick={() => handleOpenDayModal(dayNum)}
-                            aria-disabled={isWeekend || isHoliday}
+                            aria-disabled={isWeekend || isHoliday || Boolean(specialDay)}
                             className={`min-w-[50px] p-1.5 text-center border-r border-slate-100 last:border-r-0 xl:min-w-0 xl:px-0.5 xl:py-1 ${
-                              isHoliday
+                              isHoliday || specialDay?.type === 'replacementHoliday'
                                 ? 'bg-amber-50 text-amber-900'
+                                : specialDay?.type === 'strike'
+                                ? 'bg-rose-50 text-rose-900'
                                 : isWeekend
                                 ? 'bg-[#eaf4ff] text-[#0057a8]'
                                 : isToday
                                 ? 'bg-yellow-50/50 cursor-pointer hover:bg-yellow-50/70'
                                 : 'cursor-pointer hover:bg-yellow-50/70'
                             }`}
-                            title={isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : isWeekend ? 'Weekend geen geplande koerdienst' : undefined}
+                            title={specialDay ? `${specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking'}: Geen geplande koerdienst` : isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : isWeekend ? 'Weekend geen geplande koerdienst' : undefined}
                           >
-                          {(isWeekend || isHoliday) ? (
+                          {(isWeekend || isHoliday || specialDay) ? (
                             <span className={`flex h-[3.75rem] items-center justify-center text-[10px] font-bold ${
-                              isHoliday ? 'text-amber-700' : 'text-[#0072bc]'
-                            }`} title={isHoliday ? holidayName || undefined : 'Weekend geen geplande koerdienst'}>—</span>
+                              isHoliday || specialDay?.type === 'replacementHoliday' ? 'text-amber-700' : specialDay?.type === 'strike' ? 'text-rose-700' : 'text-[#0072bc]'
+                            }`} title={specialDay ? (specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking') : isHoliday ? holidayName || undefined : 'Weekend geen geplande koerdienst'}>{specialDay ? (specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'STAKING') : '—'}</span>
                           ) : (
                           <div className="flex flex-col items-center justify-center gap-0.5 py-0.5">
                             {/* Eerste keuze */}

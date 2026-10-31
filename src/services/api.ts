@@ -2,6 +2,8 @@ import { User, MonthlyPlanning, TeamMemberOverview, AdminStats } from '../types'
 
 const API_BASE = '/api';
 
+export interface SpecialDay { date: string; type: 'replacementHoliday' | 'strike'; createdAt?: string; createdBy?: string; }
+
 export interface MaintenanceStatus {
   enabled: boolean;
   updatedAt: string | null;
@@ -294,6 +296,24 @@ async saveUserPlanningAsAdmin(
       }
     );
   }
+  // Speciale kalenderdagen (vervangende feestdagen en stakingen)
+  async getSpecialDays() {
+    return this.request<{ specialDays: SpecialDay[] }>('/special-days');
+  }
+
+  async addSpecialDay(date: string, type: SpecialDay['type']) {
+    return this.request<{ success: boolean; specialDays: SpecialDay[] }>('/admin/special-days', {
+      method: 'POST',
+      body: JSON.stringify({ date, type }),
+    });
+  }
+
+  async deleteSpecialDay(date: string) {
+    return this.request<{ success: boolean; specialDays: SpecialDay[] }>(`/admin/special-days/${date}`, {
+      method: 'DELETE',
+    });
+  }
+
 }
 
 export const api = new ApiClient();

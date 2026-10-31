@@ -1,5 +1,6 @@
 import React from 'react';
 import { TeamMemberOverview, SHIFT_DEFINITIONS } from '../types';
+import type { SpecialDay } from '../services/api';
 
 const DAY_NAMES = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
 const MONTH_NAMES = [
@@ -13,6 +14,7 @@ interface PrintableWeekViewProps {
   month: number;
   weekData: Array<{ day: number; date: Date }>;
   teamData: TeamMemberOverview[];
+  specialDays?: SpecialDay[];
 }
 
 function getEasterSunday(year: number): Date {
@@ -84,11 +86,14 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
   weekNumber,
   weekData,
   teamData,
+  specialDays = [],
   year,
   month,
 }) => {
   const monthName = MONTH_NAMES[month - 1] || '';
   const holidays = getBelgianHolidays(year);
+  const getSpecialDay = (date: Date): SpecialDay | undefined =>
+    specialDays.find((item) => item.date === dateKey(date));
 
   const pageStyle: React.CSSProperties = {
     width: '1120px',
@@ -170,14 +175,15 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
               </th>
               {weekData.map(({ day, date }) => {
                 const holidayName = holidays.get(dateKey(date));
+                const specialDay = getSpecialDay(date);
                 const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                 return (
-                  <th key={day} title={holidayName || undefined} style={{
+                  <th key={day} title={specialDay ? (specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking') : holidayName || undefined} style={{
                     padding: '9px 4px',
                     textAlign: 'center',
                     verticalAlign: 'middle',
-                    color: holidayName ? '#92400e' : isWeekend ? '#0057a8' : '#ffffff',
-                    background: holidayName ? '#fef3c7' : isWeekend ? '#dbeafe' : '#263445',
+                    color: holidayName || specialDay?.type === 'replacementHoliday' ? '#92400e' : specialDay?.type === 'strike' ? '#9f1239' : isWeekend ? '#0057a8' : '#ffffff',
+                    background: holidayName || specialDay?.type === 'replacementHoliday' ? '#fef3c7' : specialDay?.type === 'strike' ? '#ffe4e6' : isWeekend ? '#dbeafe' : '#263445',
                     borderLeft: '1px solid #ffffff30',
                   }}>
                     <div style={{ fontSize: '11px', fontWeight: 900, letterSpacing: '0.4px' }}>
@@ -187,7 +193,7 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
                       {day}
                     </div>
                     <div style={{ marginTop: '4px', minHeight: '11px', fontSize: '8px', fontWeight: 900, letterSpacing: '0.5px' }}>
-                      {holidayName ? 'FEESTDAG' : isWeekend ? 'WEEKEND' : '\u00a0'}
+                      {specialDay ? (specialDay.type === 'replacementHoliday' ? 'VERVANGENDE FEEST DAG' : 'STAKING') : holidayName ? 'FEESTDAG' : isWeekend ? 'WEEKEND' : '\u00a0'}
                     </div>
                   </th>
                 );
@@ -234,28 +240,30 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
                   const shiftCode = member.planning?.finalDays?.[day] || '';
                   const colors = getShiftColors(shiftCode);
                   const holidayName = holidays.get(dateKey(date));
+                  const specialDay = getSpecialDay(date);
                   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                   return (
-                    <td key={day} title={holidayName || (isWeekend ? 'Weekend geen geplande koerdienst' : undefined)} style={{
+                    <td key={day} title={specialDay ? (specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking') : holidayName || (isWeekend ? 'Weekend geen geplande koerdienst' : undefined)} style={{
                       padding: '7px 6px',
                       textAlign: 'center',
                       verticalAlign: 'middle',
                       borderBottom: '1px solid #e2e8f0',
                       borderLeft: '1px solid #e2e8f0',
-                      background: holidayName ? '#fffbeb' : isWeekend ? '#eaf4ff' : 'transparent',
+                      background: holidayName || specialDay?.type === 'replacementHoliday' ? '#fffbeb' : specialDay?.type === 'strike' ? '#fff1f2' : isWeekend ? '#eaf4ff' : 'transparent',
                     }}>
-                      {(isWeekend || holidayName) ? (
+                      {(isWeekend || holidayName || specialDay) ? (
                         <div style={{
                           height: '43px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: holidayName ? '#b45309' : '#0072bc',
+                          color: specialDay?.type === 'strike' ? '#be123c' : holidayName || specialDay?.type === 'replacementHoliday' ? '#b45309' : '#0072bc',
                           fontWeight: 900,
-                          fontSize: '18px',
-                          lineHeight: 1,
+                          fontSize: specialDay ? '9px' : '18px',
+                          lineHeight: specialDay ? 1.25 : 1,
+                          padding: specialDay ? '0 3px' : undefined,
                         }}>
-                          —
+                          {specialDay ? (specialDay.type === 'replacementHoliday' ? 'VERVANGENDE FEEST DAG' : 'STAKING') : '—'}
                         </div>
                       ) : (
                         <div style={{
@@ -294,7 +302,7 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
           Legenda dienstcodes
         </div>
         <div style={{ color: '#64748b', fontSize: '10px', fontWeight: 600 }}>
-          Blauw = weekend: geen geplande koerdienst&nbsp;&nbsp;·&nbsp;&nbsp;Amber = Belgische feestdag: geen geplande koerdienst
+          Blauw = weekend&nbsp; · &nbsp;Amber = feestdag/vervangende feestdag&nbsp; · &nbsp;Rood = staking (geen geplande koerdienst)
         </div>
       </div>
 
