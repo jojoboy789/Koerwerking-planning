@@ -1,3 +1,5 @@
+Kan je ook kijken bij shift bezettingen en dag voor dag controle? 
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -31,6 +33,16 @@ const MONTH_NAMES = [
 ];
 
 const DAY_NAMES = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
+
+// Koppel hier gebruikersnamen aan foto's die rechtstreeks in /public staan.
+const USER_AVATARS: Record<string, string> = {
+  'Jonas': 'jonasje.PNG',
+  'Dylan': 'Dylantje.PNG',
+  'Illya': 'illyatje.PNG',
+  'Jordy': 'Jordyyyy.PNG',
+  'Bruno': 'Brunotje.PNG',
+  'Kurt': 'Kurtje.PNG',
+};
 
 // Belgische wettelijke feestdagen (10), met Pasen berekend voor elk kalenderjaar.
 function getEasterSunday(year: number): Date {
@@ -111,6 +123,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   const [initialDaySecondChoiceState, setInitialDaySecondChoiceState] = useState<Record<string, ShiftCode>>({});
   const [isSavingDay, setIsSavingDay] = useState<boolean>(false);
   const [daySaveMessage, setDaySaveMessage] = useState<string | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<{ name: string; src: string } | null>(null);
 
   const daysInMonth = useMemo(() => {
     return new Date(currentYear, currentMonth, 0).getDate();
@@ -137,7 +150,9 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   useEffect(() => {
     let active = true;
     api.getSpecialDays()
-      .then((result) => { if (active) setSpecialDays(result.specialDays || []); })
+      .then((result) => {
+        if (active) setSpecialDays(result.specialDays || []);
+      })
       .catch((error) => console.error('Speciale kalenderdagen ophalen mislukt:', error));
     return () => { active = false; };
   }, []);
@@ -145,11 +160,6 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   const getSpecialDay = (date: Date): SpecialDay | undefined => {
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     return specialDays.find((item) => item.date === key);
-  };
-
-  const isExcludedFromCoverage = (date: Date) => {
-    const info = getNonWorkingDayInfo(date);
-    return info.isWeekend || Boolean(info.holidayName) || Boolean(getSpecialDay(date));
   };
 
   const handlePrevMonth = () => {
@@ -292,7 +302,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
       const conflicts: ShiftCode[] = [];
 
       // Weekends do not require shifts by default (no shortage/missing for weekends)
-      if (!t.isWeekend && !t.isHoliday && !t.specialDay) {
+      if (!t.isWeekend && !t.isHoliday) {
         if (t.V === 0) missing.push('V');
         if (t.D === 0) missing.push('D');
         if (t.L === 0) missing.push('L');
@@ -305,10 +315,9 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
       t.missingShifts = missing;
       t.conflictShifts = conflicts;
       t.hasConflict = conflicts.length > 0;
-      t.isMissing = !t.isWeekend && !t.isHoliday && !t.specialDay && missing.length > 0;
+      t.isMissing = !t.isWeekend && !t.isHoliday && missing.length > 0;
       // Alleen gewone werkdagen hebben een verplichte shiftbezetting.
-      t.isIdeal = !t.isWeekend && !t.isHoliday && !t.specialDay && t.V === 1 && t.D === 1 && t.L === 1;
-      if (t.specialDay) { t.hasConflict = false; t.isMissing = false; t.isIdeal = false; t.missingShifts = []; t.conflictShifts = []; }
+      t.isIdeal = !t.isWeekend && !t.isHoliday && t.V === 1 && t.D === 1 && t.L === 1;
     }
 
     return totals;
@@ -324,7 +333,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
 
     for (let d = 1; d <= daysInMonth; d++) {
       const t = dailyTotals[d];
-      if (t.isHoliday || t.specialDay) {
+      if (t.isHoliday) {
         continue;
       }
       if (t.isWeekend) {
@@ -371,7 +380,6 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
     setInitialDaySecondChoiceState(secondState);
   };
 
-
   // Change a member's shift for the currently selected day
   const handleSetMemberShiftForDay = (userId: string, code: ShiftCode) => {
     setDayEditState((prev) => ({
@@ -385,7 +393,7 @@ const handleSaveDayResolutions = async () => {
 if (selectedDayDetail === null) return;
 const selectedDate = new Date(currentYear, currentMonth - 1, selectedDayDetail);
 const selectedDayInfo = getNonWorkingDayInfo(selectedDate);
-if (selectedDayInfo.isWeekend || selectedDayInfo.holidayName || getSpecialDay(selectedDate)) return;
+if (selectedDayInfo.isWeekend || selectedDayInfo.holidayName) return;
 
 setIsSavingDay(true);
 setDaySaveMessage(null);
@@ -597,11 +605,11 @@ setIsSavingDay(false);
           <div
             className="w-full max-w-full overflow-x-auto [scrollbar-width:auto] [scrollbar-color:#17202b_#e2e8f0] [&::-webkit-scrollbar]:h-4 [&::-webkit-scrollbar]:w-4 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-slate-200 [&::-webkit-scrollbar-thumb]:bg-[#17202b] [&::-webkit-scrollbar-thumb:hover]:bg-[#ffdc00]"
           >
-            <table aria-label={`Teamplanning ${monthDisplay}`} className="w-full min-w-[900px] border-collapse text-left text-xs">
+            <table aria-label={`Teamplanning ${monthDisplay}`} className="w-full min-w-[900px] border-collapse text-left text-xs xl:table-fixed xl:min-w-0">
               {/* Table Header */}
               <thead className="sticky top-0 z-20 border-b border-slate-200 bg-slate-100/95 backdrop-blur-md">
                 <tr>
-                  <th className="sticky left-0 z-30 min-w-[140px] border-r border-slate-200 bg-slate-100 p-4 text-[11px] font-extrabold uppercase tracking-wider text-slate-800 sm:min-w-[220px]">
+                  <th className="sticky left-0 z-30 w-[150px] min-w-[150px] border-r border-slate-200 bg-slate-100 p-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-800 sm:w-[180px] sm:min-w-[180px] xl:w-[160px] xl:min-w-[160px] xl:p-2">
                     Naam
                   </th>
                   {Array.from({ length: daysInMonth }, (_, idx) => {
@@ -611,7 +619,6 @@ setIsSavingDay(false);
                     const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
                     const isHoliday = holidayName !== null;
                     const specialDay = getSpecialDay(date);
-                    const isSpecialDay = Boolean(specialDay);
                     const dayName = DAY_NAMES[dayOfWeek];
 
                     const isToday =
@@ -623,9 +630,9 @@ setIsSavingDay(false);
                       <th
                         key={dayNum}
                         onClick={() => handleOpenDayModal(dayNum)}
-                        aria-disabled={isWeekend || isHoliday || isSpecialDay}
-                        className={`p-2 border-r border-slate-100 text-center text-[11px] min-w-[42px] transition-colors ${
-                          (isHoliday || specialDay?.type === 'replacementHoliday')
+                        aria-disabled={isWeekend || isHoliday || Boolean(specialDay)}
+                        className={`min-w-[50px] p-2 border-r border-slate-100 text-center text-[11px] transition-colors xl:min-w-0 xl:px-0.5 xl:py-1 ${
+                          isHoliday || specialDay?.type === 'replacementHoliday'
                             ? 'bg-amber-100 text-amber-900 border-b-2 border-amber-300'
                             : specialDay?.type === 'strike'
                             ? 'bg-rose-100 text-rose-900 border-b-2 border-rose-300'
@@ -635,7 +642,7 @@ setIsSavingDay(false);
                             ? 'border-b-2 border-b-[#ffdc00] bg-yellow-50 font-extrabold text-slate-950 cursor-pointer'
                             : 'text-slate-600 cursor-pointer hover:bg-yellow-50'
                         }`}
-                        title={isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : isWeekend ? 'Weekend geen geplande koerdienst' : `Klik om bezetting en shifts van Dag ${dayNum} te inspecteren en bewerken`}
+                        title={specialDay ? `${specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking'}: Geen geplande koerdienst` : isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : isWeekend ? 'Weekend geen geplande koerdienst' : `Klik om bezetting en shifts van Dag ${dayNum} te inspecteren en bewerken`}
                       >
                         <div className="text-[9px] uppercase font-medium">{dayName}</div>
                         <div className="font-bold text-xs mt-0.5">{dayNum}</div>
@@ -661,21 +668,43 @@ setIsSavingDay(false);
                       }`}
                     >
                       {/* Sticky Name Column */}
-                      <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50/70 p-3 border-r border-slate-200 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-yellow-200 bg-yellow-50 text-xs font-extrabold text-slate-900 shadow-sm">
-                            {member.user.avatar || member.user.name.substring(0, 2).toUpperCase()}
-                          </div>
-                          <div className="truncate">
-                            <div className="font-semibold text-slate-900 group-hover:text-slate-900 transition-colors truncate flex items-center gap-1.5">
-                              <span>{member.user.name}</span>
+                      <td className="sticky left-0 z-10 w-[150px] min-w-[150px] bg-white group-hover:bg-slate-50/70 p-2 border-r border-slate-200 transition-colors sm:w-[180px] sm:min-w-[180px] xl:w-[160px] xl:min-w-[160px] xl:px-1">
+                        <div className="flex min-w-[112px] flex-col items-center gap-2 text-center">
+                          {(() => {
+                            const photoFile = USER_AVATARS[member.user.name.trim()];
+                            const photoSrc = photoFile ? `/${photoFile}` : undefined;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => photoSrc && setPhotoPreview({ name: member.user.name, src: photoSrc })}
+                                disabled={!photoSrc}
+                                title={photoSrc ? `Bekijk foto van ${member.user.name}` : `Geen foto ingesteld voor ${member.user.name}`}
+                                className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-yellow-200 bg-yellow-50 text-sm font-extrabold text-slate-900 shadow-sm ${photoSrc ? 'cursor-zoom-in hover:ring-2 hover:ring-yellow-300' : 'cursor-default'}`}
+                              >
+                                {photoSrc ? (
+                                  <img
+                                    src={photoSrc}
+                                    alt={`Foto van ${member.user.name}`}
+                                    className="h-full w-full object-cover"
+                                    onError={(event) => {
+                                      event.currentTarget.style.display = 'none';
+                                      const fallback = event.currentTarget.nextElementSibling as HTMLElement | null;
+                                      if (fallback) fallback.style.display = 'flex';
+                                    }}
+                                  />
+                                ) : null}
+                                <span className={photoSrc ? 'hidden' : 'flex'}>{member.user.avatar || member.user.name.substring(0, 2).toUpperCase()}</span>
+                              </button>
+                            );
+                          })()}
+                          <div className="max-w-[130px]">
+                            <div className="flex flex-wrap items-center justify-center gap-1">
+                              <span className="truncate text-xs font-semibold text-slate-900">{member.user.name}</span>
                               {isCurrentLoggedUser && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 font-medium uppercase">
-                                  Jij
-                                </span>
+                                <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[9px] font-medium uppercase text-indigo-700">Jij</span>
                               )}
                             </div>
-                            <div className="text-[10px] text-slate-400 uppercase tracking-wider truncate font-medium">
+                            <div className="truncate text-[10px] font-medium uppercase tracking-wider text-slate-400">
                               {member.user.role || 'Teamlid'}
                             </div>
                           </div>
@@ -689,7 +718,6 @@ setIsSavingDay(false);
                         const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
                         const isHoliday = holidayName !== null;
                         const specialDay = getSpecialDay(date);
-                        const isSpecialDay = Boolean(specialDay);
                         const code = pln[dayNum] || '';
                         const secondCode = secondPln[dayNum] || '';
                         const thirdCode = thirdPln[dayNum] || '';
@@ -710,9 +738,9 @@ setIsSavingDay(false);
                           <td
                             key={dayNum}
                             onClick={() => handleOpenDayModal(dayNum)}
-                            aria-disabled={isWeekend || isHoliday || isSpecialDay}
-                            className={`p-1 text-center border-r border-slate-100 last:border-r-0 ${
-                              (isHoliday || specialDay?.type === 'replacementHoliday')
+                            aria-disabled={isWeekend || isHoliday || Boolean(specialDay)}
+                            className={`min-w-[50px] p-1.5 text-center border-r border-slate-100 last:border-r-0 xl:min-w-0 xl:px-0.5 xl:py-1 ${
+                              isHoliday || specialDay?.type === 'replacementHoliday'
                                 ? 'bg-amber-50 text-amber-900'
                                 : specialDay?.type === 'strike'
                                 ? 'bg-rose-50 text-rose-900'
@@ -722,17 +750,17 @@ setIsSavingDay(false);
                                 ? 'bg-yellow-50/50 cursor-pointer hover:bg-yellow-50/70'
                                 : 'cursor-pointer hover:bg-yellow-50/70'
                             }`}
-                            title={isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : isWeekend ? 'Weekend geen geplande koerdienst' : undefined}
+                            title={specialDay ? `${specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking'}: Geen geplande koerdienst` : isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : isWeekend ? 'Weekend geen geplande koerdienst' : undefined}
                           >
-                          {(isWeekend || isHoliday || isSpecialDay) ? (
+                          {(isWeekend || isHoliday || specialDay) ? (
                             <span className={`flex h-[3.75rem] items-center justify-center text-[10px] font-bold ${
-                              isHoliday ? 'text-amber-700' : 'text-[#0072bc]'
-                            }`} title={isHoliday ? holidayName || undefined : 'Weekend geen geplande koerdienst'}>—</span>
+                              isHoliday || specialDay?.type === 'replacementHoliday' ? 'text-amber-700' : specialDay?.type === 'strike' ? 'text-rose-700' : 'text-[#0072bc]'
+                            }`} title={specialDay ? (specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking') : isHoliday ? holidayName || undefined : 'Weekend geen geplande koerdienst'}>{specialDay ? (specialDay.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'STAKING') : '—'}</span>
                           ) : (
                           <div className="flex flex-col items-center justify-center gap-0.5 py-0.5">
                             {/* Eerste keuze */}
                             <div
-                              className={`w-full h-7 flex items-center justify-center rounded-lg text-xs font-bold transition-transform hover:scale-105 select-none ${
+                              className={`w-full h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-transform hover:scale-105 select-none xl:h-7 xl:rounded-md xl:text-xs ${
                                 code ? codeClass : 'bg-slate-50 text-slate-300'
                               }`}
                               title={`${member.user.name} - Dag ${dayNum}: ${
@@ -755,7 +783,7 @@ setIsSavingDay(false);
                           
                           {/* Tweede keuze */}
                           <div
-                            className={`w-full h-4 flex items-center justify-center rounded text-[9px] font-bold ${
+                            className={`w-full h-[18px] flex items-center justify-center rounded text-[10px] font-bold ${
                               secondCode
                                 ? 'border border-yellow-200 bg-yellow-50 text-slate-800'
                                 : 'text-slate-300'
@@ -771,7 +799,7 @@ setIsSavingDay(false);
                       {/* Derde keuze: alleen-lezen */}
 
                         <div
-                          className={`w-full h-4 flex items-center justify-center rounded text-[9px] font-bold ${
+                          className={`w-full h-[18px] flex items-center justify-center rounded text-[10px] font-bold ${
                             thirdCode
                               ? 'border border-indigo-200 bg-indigo-50 text-indigo-800'
                               : 'text-slate-300'
@@ -797,7 +825,7 @@ setIsSavingDay(false);
               {/* Total Staff per Day Summary Footer Row */}
               <tfoot className="bg-slate-50 border-t border-slate-200 font-bold text-[10px]">
                 <tr>
-                  <td className="sticky left-0 z-10 bg-slate-50 p-3 border-r border-slate-200 text-slate-800 uppercase tracking-wider">
+                  <td className="sticky left-0 z-10 w-[150px] min-w-[150px] bg-slate-50 p-2 border-r border-slate-200 text-slate-800 uppercase tracking-wider sm:w-[180px] sm:min-w-[180px]">
                     Shift Totalen (V / D / L)
                   </td>
                   {Array.from({ length: daysInMonth }, (_, idx) => {
@@ -805,20 +833,16 @@ setIsSavingDay(false);
                     const tot = dailyTotals[dayNum];
                     const working = tot.V + tot.D + tot.L;
                     const isCovered = tot.isIdeal;
-                    const specialDay = tot.specialDay;
-                    const isSpecialDay = Boolean(specialDay);
                     const hasConflict = tot.hasConflict;
                     const date = new Date(currentYear, currentMonth - 1, dayNum);
                     const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
                     const isHoliday = holidayName !== null;
-                    const specialDay = getSpecialDay(date);
-                    const isSpecialDay = Boolean(specialDay);
 
                     return (
                       <td
                         key={dayNum}
                         onClick={() => handleOpenDayModal(dayNum)}
-                        aria-disabled={isWeekend || isHoliday || isSpecialDay}
+                        aria-disabled={isWeekend || isHoliday}
                         title={isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : isWeekend ? 'Weekend geen geplande koerdienst' : `Dag ${dayNum}: V:${tot.V}, D:${tot.D}, L:${tot.L} (Klik om te bekijken)`}
                         className={`p-1.5 text-center border-r border-slate-100 transition-colors ${
                           isHoliday
@@ -938,8 +962,6 @@ setIsSavingDay(false);
             const dayName = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'][dayOfWeek];
             const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
             const isHoliday = holidayName !== null;
-            const specialDay = tot.specialDay;
-            const isSpecialDay = Boolean(specialDay);
             const isIdeal = tot.isIdeal;
             const hasConflict = tot.hasConflict;
             const isMissing = tot.isMissing;
@@ -947,30 +969,28 @@ setIsSavingDay(false);
             // Apply filter
             if (statusFilter === 'ok' && !isIdeal) return null;
             if (statusFilter === 'conflict' && (!hasConflict || isMissing)) return null;
-            if (statusFilter === 'missing' && (!isMissing || isWeekend || isHoliday || isSpecialDay)) return null;
+            if (statusFilter === 'missing' && (!isMissing || isWeekend || isHoliday)) return null;
 
             return (
               <div
                 key={dayNum}
                 onClick={() => handleOpenDayModal(dayNum)}
-                role={isWeekend || isHoliday || isSpecialDay ? undefined : 'button'}
-                tabIndex={isWeekend || isHoliday || isSpecialDay ? -1 : 0}
-                aria-disabled={isWeekend || isHoliday || isSpecialDay}
-                onKeyDown={(event) => { if (!isWeekend && !isHoliday && !isSpecialDay && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); handleOpenDayModal(dayNum); } }}
+                role={isWeekend || isHoliday ? undefined : 'button'}
+                tabIndex={isWeekend || isHoliday ? -1 : 0}
+                aria-disabled={isWeekend || isHoliday}
+                onKeyDown={(event) => { if (!isWeekend && !isHoliday && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); handleOpenDayModal(dayNum); } }}
                 className={`group relative flex flex-col justify-between rounded-2xl border p-4 transition-all ${
-                  (isHoliday || specialDay?.type === 'replacementHoliday')
+                  isHoliday
                     ? 'cursor-default bg-amber-50 border-amber-300'
-                    : specialDay?.type === 'strike'
-                    ? 'cursor-default bg-rose-50 border-rose-300'
                     : isWeekend
                     ? 'cursor-default bg-[#eaf4ff] border-[#93c5fd]'
                     : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00]'
                 } ${
-                  !isWeekend && !isHoliday && !isSpecialDay && hasConflict
+                  !isWeekend && !isHoliday && hasConflict
                     ? 'bg-amber-50/40 border-amber-300 hover:border-amber-500'
-                    : !isWeekend && !isHoliday && !isSpecialDay && isIdeal
+                    : !isWeekend && !isHoliday && isIdeal
                     ? 'bg-emerald-50/40 border-emerald-300 hover:border-emerald-500'
-                    : !isWeekend && !isHoliday && !isSpecialDay
+                    : !isWeekend && !isHoliday
                     ? 'bg-slate-50/70 border-slate-200 hover:border-indigo-300 hover:bg-yellow-50/40'
                     : ''
                 }`}
@@ -982,15 +1002,15 @@ setIsSavingDay(false);
                       <span className="text-sm font-black font-mono text-slate-800">
                         {dayNum}
                       </span>
-                      <span className={`text-[11px] font-bold uppercase ${(isHoliday || specialDay?.type === 'replacementHoliday') ? 'text-amber-800' : specialDay?.type === 'strike' ? 'text-rose-800' : isWeekend ? 'text-[#0057a8]' : 'text-slate-500'}`}>
+                      <span className={`text-[11px] font-bold uppercase ${isHoliday ? 'text-amber-800' : isWeekend ? 'text-[#0057a8]' : 'text-slate-500'}`}>
                         {dayName}
                       </span>
                     </div>
 
                     {/* Status Badge */}
-                    {isHoliday || specialDay ? (
+                    {isHoliday ? (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900 border border-amber-300">
-                        {specialDay ? (specialDay.type === 'replacementHoliday' ? 'Vervangende feestdag' : 'Staking') : holidayName}
+                        {holidayName}
                       </span>
                     ) : isWeekend ? (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-[#0057a8] border border-blue-200">
@@ -1013,15 +1033,15 @@ setIsSavingDay(false);
                     )}
                   </div>
 
-                  {(isWeekend || isHoliday || isSpecialDay) ? (
+                  {(isWeekend || isHoliday) ? (
                     <div className={`mt-3 rounded-xl border p-3 text-xs font-bold ${
-                      (isHoliday || specialDay?.type === 'replacementHoliday')
+                      isHoliday
                         ? 'border-amber-200 bg-amber-100/80 text-amber-900'
-                        : specialDay?.type === 'strike'
-                        ? 'border-rose-200 bg-rose-100/80 text-rose-900'
                         : 'border-blue-200 bg-blue-100/80 text-[#0057a8]'
                     }`}>
-                      {specialDay ? `${specialDay.type === 'replacementHoliday' ? 'Vervangende feestdag' : 'Staking'}: geen geplande koerdienst` : isHoliday ? `${holidayName}: Deze dag geen geplande koerdienst` : 'Weekend geen geplande koerdienst'}
+                      {isHoliday
+                        ? `${holidayName}: Deze dag geen geplande koerdienst`
+                        : 'Weekend geen geplande koerdienst'}
                     </div>
                   ) : (
                     <>
@@ -1105,7 +1125,7 @@ setIsSavingDay(false);
                 </div>
 
                 {/* Footer action hint */}
-                {!isWeekend && !isHoliday && !isSpecialDay && (
+                {!isWeekend && !isHoliday && (
                 <div className="mt-3 pt-2 border-t border-slate-200/50 flex items-center justify-between text-[10px] text-slate-400 group-hover:text-indigo-600 transition-colors">
                   <span>Klik voor details & aanpassen</span>
                   <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
@@ -1256,11 +1276,25 @@ setIsSavingDay(false);
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${
-                        isInConflict ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white'
-                      }`}>
-                        {m.user.avatar || m.user.name.substring(0, 2).toUpperCase()}
-                      </div>
+                      {(() => {
+                        const photoFile = USER_AVATARS[m.user.name.trim()];
+                        const photoSrc = photoFile ? `/${photoFile}` : undefined;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => photoSrc && setPhotoPreview({ name: m.user.name, src: photoSrc })}
+                            disabled={!photoSrc}
+                            title={photoSrc ? `Bekijk foto van ${m.user.name}` : `Geen foto ingesteld voor ${m.user.name}`}
+                            className={`h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-white shadow-sm ${isInConflict ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white'} ${photoSrc ? 'cursor-zoom-in' : 'cursor-default'}`}
+                          >
+                            {photoSrc ? (
+                              <img src={photoSrc} alt={`Foto van ${m.user.name}`} className="h-full w-full object-cover" />
+                            ) : (
+                              <span className="flex h-full w-full items-center justify-center text-xs font-bold">{m.user.avatar || m.user.name.substring(0, 2).toUpperCase()}</span>
+                            )}
+                          </button>
+                        );
+                      })()}
                       <div>
                         <p className={`text-xs font-bold ${isInConflict ? 'text-red-900' : 'text-slate-900'}`}>
                           {m.user.name}
@@ -1430,6 +1464,37 @@ setIsSavingDay(false);
           </div>
         </div>
       )}
+      {photoPreview && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+          onClick={() => setPhotoPreview(null)}
+          role="presentation"
+        >
+          <div
+            className="relative max-h-[90vh] w-full max-w-xl overflow-hidden rounded-2xl bg-white p-3 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Profielfoto van ${photoPreview.name}`}
+          >
+            <button
+              type="button"
+              onClick={() => setPhotoPreview(null)}
+              className="absolute right-5 top-5 z-10 rounded-full bg-slate-900/75 p-2 text-white transition hover:bg-slate-900"
+              aria-label="Foto sluiten"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              src={photoPreview.src}
+              alt={`Vergrote foto van ${photoPreview.name}`}
+              className="mx-auto max-h-[78vh] w-auto max-w-full rounded-xl object-contain"
+            />
+            <p className="pt-3 text-center text-sm font-bold text-slate-800">{photoPreview.name}</p>
+          </div>
+        </div>
+      )}
+
        <WeekSelectionModal
         show={showFinalizeModal}
         onClose={() => setShowFinalizeModal(false)}
