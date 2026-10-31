@@ -585,11 +585,11 @@ setIsSavingDay(false);
           <div
             className="w-full max-w-full overflow-x-auto [scrollbar-width:auto] [scrollbar-color:#17202b_#e2e8f0] [&::-webkit-scrollbar]:h-4 [&::-webkit-scrollbar]:w-4 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-slate-200 [&::-webkit-scrollbar-thumb]:bg-[#17202b] [&::-webkit-scrollbar-thumb:hover]:bg-[#ffdc00]"
           >
-            <table aria-label={`Teamplanning ${monthDisplay}`} className="w-full min-w-[900px] border-collapse text-left text-xs">
+            <table aria-label={`Teamplanning ${monthDisplay}`} className="w-full min-w-[900px] border-collapse text-left text-xs xl:table-fixed xl:min-w-0">
               {/* Table Header */}
               <thead className="sticky top-0 z-20 border-b border-slate-200 bg-slate-100/95 backdrop-blur-md">
                 <tr>
-                  <th className="sticky left-0 z-30 w-[150px] min-w-[150px] border-r border-slate-200 bg-slate-100 p-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-800 sm:w-[180px] sm:min-w-[180px]">
+                  <th className="sticky left-0 z-30 w-[150px] min-w-[150px] border-r border-slate-200 bg-slate-100 p-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-800 sm:w-[180px] sm:min-w-[180px] xl:w-[160px] xl:min-w-[160px] xl:p-2">
                     Naam
                   </th>
                   {Array.from({ length: daysInMonth }, (_, idx) => {
@@ -610,7 +610,7 @@ setIsSavingDay(false);
                         key={dayNum}
                         onClick={() => handleOpenDayModal(dayNum)}
                         aria-disabled={isWeekend || isHoliday}
-                        className={`p-2 border-r border-slate-100 text-center text-[11px] min-w-[50px] transition-colors ${
+                        className={`min-w-[50px] p-2 border-r border-slate-100 text-center text-[11px] transition-colors xl:min-w-0 xl:px-0.5 xl:py-1 ${
                           isHoliday
                             ? 'bg-amber-100 text-amber-900 border-b-2 border-amber-300'
                             : isWeekend
@@ -645,7 +645,7 @@ setIsSavingDay(false);
                       }`}
                     >
                       {/* Sticky Name Column */}
-                      <td className="sticky left-0 z-10 w-[150px] min-w-[150px] bg-white group-hover:bg-slate-50/70 p-2 border-r border-slate-200 transition-colors sm:w-[180px] sm:min-w-[180px]">
+                      <td className="sticky left-0 z-10 w-[150px] min-w-[150px] bg-white group-hover:bg-slate-50/70 p-2 border-r border-slate-200 transition-colors sm:w-[180px] sm:min-w-[180px] xl:w-[160px] xl:min-w-[160px] xl:px-1">
                         <div className="flex min-w-[112px] flex-col items-center gap-2 text-center">
                           {(() => {
                             const photoFile = USER_AVATARS[member.user.name.trim()];
@@ -715,7 +715,7 @@ setIsSavingDay(false);
                             key={dayNum}
                             onClick={() => handleOpenDayModal(dayNum)}
                             aria-disabled={isWeekend || isHoliday}
-                            className={`min-w-[50px] p-1.5 text-center border-r border-slate-100 last:border-r-0 ${
+                            className={`min-w-[50px] p-1.5 text-center border-r border-slate-100 last:border-r-0 xl:min-w-0 xl:px-0.5 xl:py-1 ${
                               isHoliday
                                 ? 'bg-amber-50 text-amber-900'
                                 : isWeekend
@@ -734,7 +734,7 @@ setIsSavingDay(false);
                           <div className="flex flex-col items-center justify-center gap-0.5 py-0.5">
                             {/* Eerste keuze */}
                             <div
-                              className={`w-full h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-transform hover:scale-105 select-none ${
+                              className={`w-full h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-transform hover:scale-105 select-none xl:h-7 xl:rounded-md xl:text-xs ${
                                 code ? codeClass : 'bg-slate-50 text-slate-300'
                               }`}
                               title={`${member.user.name} - Dag ${dayNum}: ${
