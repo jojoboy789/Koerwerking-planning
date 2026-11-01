@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { api } from '../services/api';
 import type { SpecialDay } from '../services/api';
 import { TeamMemberOverview, ShiftCode, SHIFT_DEFINITIONS } from '../types';
@@ -196,6 +196,7 @@ export const FinalPlanningView: React.FC = () => {
   const [isPrintingMonth, setIsPrintingMonth] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('calendar');
   const [calendarMode, setCalendarMode] = useState<'month' | 'week' | 'day'>('month');
+  const selectedDayDetailsRef = useRef<HTMLElement | null>(null);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date>(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()),
   );
@@ -304,7 +305,8 @@ export const FinalPlanningView: React.FC = () => {
       scale: 2,
       useCORS: true,
       logging: false,
-      windowWidth: 1120,
+      windowWidth: 1200,
+      windowHeight: Math.max(input.scrollHeight, 900),
       onclone: (clonedDoc) => {
         // De PDF-weergave gebruikt inline stijlen. Externe stylesheets verwijderen
         // voorkomt dat de website-CSS de afdruklayout onbedoeld beïnvloedt.
@@ -371,9 +373,14 @@ export const FinalPlanningView: React.FC = () => {
   };
 
   const handleDownloadMonthPdf = async () => {
+    if (isPrintingMonth || isPrinting !== null) return;
     setIsPrintingMonth(true);
 
     try {
+      if (weeks.length === 0) {
+        throw new Error('Er zijn geen ingeplande werkdagen om naar PDF te exporteren.');
+      }
+
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
@@ -381,26 +388,19 @@ export const FinalPlanningView: React.FC = () => {
         compress: true,
       });
 
-      let pageAdded = false;
-
-      for (const { week } of weeks) {
-        try {
-          const canvas = await capturePrintableWeek(week);
-          addCanvasToPdfPage(pdf, canvas, pageAdded);
-          pageAdded = true;
-        } catch (error) {
-          console.error(`PDF-pagina voor week ${week} kon niet worden aangemaakt:`, error);
-        }
+      for (let index = 0; index < weeks.length; index += 1) {
+        const { week } = weeks[index];
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const canvas = await capturePrintableWeek(week);
+        addCanvasToPdfPage(pdf, canvas, index > 0);
       }
 
-      if (pageAdded) {
-        const monthNumber = String(currentMonth).padStart(2, '0');
-        pdf.save(`definitieve-planning-${currentYear}-maand-${monthNumber}.pdf`);
-      } else {
-        console.error('Er werden geen weektabellen gevonden voor de maand-PDF.');
-      }
+      pdf.save(`definitieve-planning-${currentYear}-maand-${String(currentMonth).padStart(2, '0')}.pdf`);
     } catch (error) {
       console.error('Maand-PDF exporteren is mislukt:', error);
+      window.alert(error instanceof Error
+        ? `De maand-PDF kon niet worden gemaakt: ${error.message}`
+        : 'De maand-PDF kon niet worden gemaakt. Controleer de browserconsole.');
     } finally {
       setIsPrintingMonth(false);
     }
@@ -540,6 +540,13 @@ export const FinalPlanningView: React.FC = () => {
                       setCurrentYear(date.getFullYear());
                       setCurrentMonth(date.getMonth() + 1);
                     }
+                    // Breng de detailbezetting van de aangeklikte datum in beeld.
+                    window.setTimeout(() => {
+                      selectedDayDetailsRef.current?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start',
+                      });
+                    }, 80);
                   }}
                   className={`min-h-[112px] border-b border-r border-slate-100 p-1.5 text-left transition-colors sm:min-h-[132px] sm:p-2 ${
                     holidayName || specialDay?.type === 'replacementHoliday' ? 'bg-amber-50 hover:bg-amber-100' :
@@ -606,7 +613,11 @@ export const FinalPlanningView: React.FC = () => {
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section
+          ref={selectedDayDetailsRef}
+          id="selected-day-details"
+          className="scroll-mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+        >
           <div className="border-b border-slate-200 bg-[#17202b] px-4 py-3 text-white">
             <h3 className="font-bold">Bezetting op {selectedCalendarDate.getDate()} {MONTH_NAMES[selectedCalendarDate.getMonth()]}</h3>
             <p className="mt-0.5 text-xs text-slate-300">{selectedMembers.length} ingeplande teamleden</p>
@@ -763,7 +774,7 @@ export const FinalPlanningView: React.FC = () => {
               </span>
             </div>
 
-            <div style={{ position: 'absolute', left: '-9999px', top: '-9999px', zIndex: -100 }}>
+            <div style={{ position: 'fixed', left: 0, top: 0, opacity: 0, pointerEvents: 'none', zIndex: -100, width: 1120 }}>
               <PrintableWeekView
                 weekNumber={week}
                 weekData={days}
@@ -961,6 +972,40 @@ export const FinalPlanningView: React.FC = () => {
       ) : (
         viewMode === 'calendar' ? renderCalendarPlanning() : renderWeeklyPlanning()
       )}
+
+      {/* Altijd gemonteerde PDF-bronnen: beschikbaar ongeacht de gekozen schermweergave. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'fixed',
+          left: '-10000px',
+          top: 0,
+          width: 1120,
+          opacity: 1,
+          pointerEvents: 'none',
+          zIndex: -1,
+        }}
+      >
+        {weeks.map(({ week, days }) => {
+          const membersForWeek = teamData.filter((member) =>
+            days.some(({ day }) => isVisibleWorkShift(member.planning?.finalDays?.[day])),
+          );
+          if (membersForWeek.length === 0) return null;
+
+          return (
+            <div key={`pdf-source-${week}`}>
+              <PrintableWeekView
+                weekNumber={week}
+                weekData={days}
+                teamData={membersForWeek}
+                specialDays={specialDays}
+                year={currentYear}
+                month={currentMonth}
+              />
+            </div>
+          );
+        })}
+      </div>
 
       <p className="text-center text-[11px] text-slate-400">
         Definitieve planning · {MONTH_NAMES[currentMonth - 1]} {currentYear}

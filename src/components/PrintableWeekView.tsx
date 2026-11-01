@@ -201,7 +201,13 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
             </tr>
           </thead>
           <tbody>
-            {teamData.slice(0, 6).map((member, index) => (
+            {teamData
+              .filter((member) => weekData.some(({ day }) => {
+                const code = member.planning?.finalDays?.[day];
+                return code === 'V' || code === 'D' || code === 'L';
+              }))
+              .slice(0, 6)
+              .map((member, index) => (
               <tr key={member.user.id} style={{ background: index % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                 <td style={{
                   padding: '10px 12px',
@@ -237,7 +243,8 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
                   </div>
                 </td>
                 {weekData.map(({ day, date }) => {
-                  const shiftCode = member.planning?.finalDays?.[day] || '';
+                  const rawShiftCode = member.planning?.finalDays?.[day] || '';
+                  const shiftCode = rawShiftCode === 'R' || rawShiftCode === 'X' ? '' : rawShiftCode;
                   const colors = getShiftColors(shiftCode);
                   const holidayName = holidays.get(dateKey(date));
                   const specialDay = getSpecialDay(date);
@@ -312,7 +319,9 @@ export const PrintableWeekView: React.FC<PrintableWeekViewProps> = ({
         gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
         gap: '7px',
       }}>
-        {Object.entries(SHIFT_DEFINITIONS).map(([code, { shortLabel, description }]) => {
+        {Object.entries(SHIFT_DEFINITIONS)
+          .filter(([code]) => code !== 'R' && code !== 'X')
+          .map(([code, { shortLabel, description }]) => {
           const colors = getShiftColors(code);
           return (
             <div key={code} style={{
