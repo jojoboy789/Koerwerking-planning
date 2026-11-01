@@ -31,6 +31,11 @@ export const Navigation: React.FC<NavigationProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
 
+const [photoPreview, setPhotoPreview] = useState<{
+  src: string;
+  alt: string;
+} | null>(null);
+
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, show: canEditPlanning || isAdmin },
     { id: 'planning', label: 'Mijn Planning', icon: Calendar, show: canEditPlanning || isAdmin },
@@ -52,6 +57,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       if (e.key === 'Escape') {
         setIsMenuOpen(false);
         setShowChangePasswordModal(false);
+        setPhotoPreview(null);
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -83,9 +89,16 @@ export const Navigation: React.FC<NavigationProps> = ({
               );
 
               return (
-                <div
-                  className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-sm ring-2 ring-white"
-                  title={user?.name || 'Gebruiker'}
+                <button
+                  type="button"
+                  onClick={() => avatarSrc && setPhotoPreview({
+                    src: avatarSrc,
+                    alt: `Profielfoto van ${user?.name || 'gebruiker'}`
+                  })}
+                  disabled={!avatarSrc}
+                  className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-sm ring-2 ring-white disabled:cursor-default"
+                  title={avatarSrc ? `Bekijk foto van ${user?.name}` : (user?.name || 'Gebruiker')}
+                  aria-label={avatarSrc ? `Bekijk profielfoto van ${user?.name}` : 'Geen profielfoto beschikbaar'}
                 >
                   {avatarSrc ? (
                     <img
@@ -99,7 +112,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                   ) : (
                     initials
                   )}
-                </div>
+                </button>
               );
             })()}
             <span className="text-xs text-slate-600 truncate max-w-[100px]">{user?.name}</span>
@@ -213,6 +226,30 @@ export const Navigation: React.FC<NavigationProps> = ({
           </div>
         </div>
       </div>
+      {photoPreview && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Profielfoto in groot formaat"
+          onClick={() => setPhotoPreview(null)}
+        >
+          <button
+            type="button"
+            className="absolute right-4 top-4 rounded-full bg-white/15 p-3 text-white transition hover:bg-white/25"
+            onClick={() => setPhotoPreview(null)}
+            aria-label="Foto sluiten"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <img
+            src={photoPreview.src}
+            alt={photoPreview.alt}
+            className="max-h-[85vh] max-w-[92vw] rounded-2xl object-contain shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
       {showChangePasswordModal && <ChangePasswordModal onClose={() => setShowChangePasswordModal(false)} />}
     </>
   );

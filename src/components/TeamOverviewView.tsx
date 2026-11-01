@@ -459,12 +459,12 @@ setIsSavingDay(false);
   const monthDisplay = `${MONTH_NAMES[currentMonth - 1]} ${currentYear}`.toUpperCase();
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 overflow-x-hidden bg-slate-50 px-3 py-5 font-sans sm:px-5 md:space-y-7 md:px-8 md:py-7">
+    <div className="mx-auto w-full max-w-[1600px] space-y-4 overflow-x-hidden bg-slate-50 px-2.5 py-3 font-sans sm:space-y-6 sm:px-5 sm:py-5 md:space-y-7 md:px-8 md:py-7">
       {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 md:text-3xl">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h2 className="text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl md:text-3xl">
               Team Overzicht
             </h2>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-800">
@@ -477,11 +477,11 @@ setIsSavingDay(false);
         </div>
 
         {/* Action button to Planner Mode & Month Navigation */}
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 md:w-auto">
           {(canPlannerMode || isAdmin) && (
             <button
               onClick={() => setShowFinalizeModal(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#17202b] px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00] focus-visible:ring-offset-2"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#17202b] px-4 py-2.5 text-xs font-extrabold text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00] focus-visible:ring-offset-2 sm:w-auto"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Planning Afronden</span>
@@ -491,7 +491,7 @@ setIsSavingDay(false);
           {(user?.canPlannerMode || isAdmin) && onNavigateToTeamPlanning && (
             <button
               onClick={onNavigateToTeamPlanning}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#ffdc00] px-4 py-2.5 text-xs font-extrabold text-[#17202b] shadow-sm transition-colors hover:bg-yellow-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00] focus-visible:ring-offset-2"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#ffdc00] px-4 py-2.5 text-xs font-extrabold text-[#17202b] shadow-sm transition-colors hover:bg-yellow-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00] focus-visible:ring-offset-2 sm:w-auto"
             >
               <UserCheck className="w-4 h-4" />
               <span>Team Plannen Modus</span>
@@ -499,7 +499,7 @@ setIsSavingDay(false);
           )}
 
           {/* Month Navigation Control */}
-          <div className="flex items-center rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+          <div className="flex min-h-11 w-full items-center justify-between rounded-2xl border border-slate-200 bg-white p-1 shadow-sm sm:w-auto sm:justify-center">
             <button
               onClick={handlePrevMonth}
               className="rounded-xl p-2.5 text-slate-600 transition-colors hover:bg-yellow-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00]"
@@ -507,7 +507,7 @@ setIsSavingDay(false);
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="min-w-[140px] px-3 text-center text-xs font-extrabold tracking-wide text-slate-900 sm:text-sm">
+            <span className="min-w-0 flex-1 px-2 text-center text-[11px] font-extrabold tracking-wide text-slate-900 sm:min-w-[140px] sm:flex-none sm:px-3 sm:text-sm">
               {monthDisplay}
             </span>
             <button
@@ -522,7 +522,7 @@ setIsSavingDay(false);
       </div>
 
       {/* Legend & Search Filters */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-xs">
+      <div className="flex flex-col items-stretch gap-3 text-xs lg:flex-row lg:items-center lg:justify-between lg:gap-4">
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
@@ -556,8 +556,8 @@ setIsSavingDay(false);
         </div>
 
         {/* Search & Role Filter */}
-        <div className="flex items-center gap-2 w-full lg:w-auto">
-          <div className="relative flex-1 sm:w-64">
+        <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+          <div className="relative w-full flex-1 sm:w-64">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
@@ -573,7 +573,7 @@ setIsSavingDay(false);
               <select
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
-                className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-[#17202b] focus:outline-none focus:ring-4 focus:ring-yellow-100"
+                className="min-h-11 w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-[#17202b] focus:outline-none focus:ring-4 focus:ring-yellow-100 sm:w-auto"
               >
                 <option value="all">Alle rollen</option>
                 {roles.map((r) => (
@@ -601,13 +601,13 @@ setIsSavingDay(false);
           </div>
         ) : (
           <div
-            className="w-full max-w-full overflow-x-auto [scrollbar-width:auto] [scrollbar-color:#17202b_#e2e8f0] [&::-webkit-scrollbar]:h-4 [&::-webkit-scrollbar]:w-4 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-slate-200 [&::-webkit-scrollbar-thumb]:bg-[#17202b] [&::-webkit-scrollbar-thumb:hover]:bg-[#ffdc00]"
+            className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:auto] [scrollbar-color:#17202b_#e2e8f0] [&::-webkit-scrollbar]:h-4 [&::-webkit-scrollbar]:w-4 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-slate-200 [&::-webkit-scrollbar-thumb]:bg-[#17202b] [&::-webkit-scrollbar-thumb:hover]:bg-[#ffdc00]"
           >
-            <table aria-label={`Teamplanning ${monthDisplay}`} className="w-full min-w-[900px] border-collapse text-left text-xs xl:table-fixed xl:min-w-0">
+            <table aria-label={`Teamplanning ${monthDisplay}`} className="w-full min-w-[760px] border-collapse text-left text-xs sm:min-w-[900px] xl:table-fixed xl:min-w-0">
               {/* Table Header */}
               <thead className="sticky top-0 z-20 border-b border-slate-200 bg-slate-100/95 backdrop-blur-md">
                 <tr>
-                  <th className="sticky left-0 z-30 w-[150px] min-w-[150px] border-r border-slate-200 bg-slate-100 p-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-800 sm:w-[180px] sm:min-w-[180px] xl:w-[160px] xl:min-w-[160px] xl:p-2">
+                  <th className="sticky left-0 z-30 w-[112px] min-w-[112px] border-r border-slate-200 bg-slate-100 p-2 sm:w-[180px] sm:min-w-[180px] sm:p-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-800 sm:w-[180px] sm:min-w-[180px] xl:w-[160px] xl:min-w-[160px] xl:p-2">
                     Naam
                   </th>
                   {Array.from({ length: daysInMonth }, (_, idx) => {
@@ -666,8 +666,8 @@ setIsSavingDay(false);
                       }`}
                     >
                       {/* Sticky Name Column */}
-                      <td className="sticky left-0 z-10 w-[150px] min-w-[150px] bg-white group-hover:bg-slate-50/70 p-2 border-r border-slate-200 transition-colors sm:w-[180px] sm:min-w-[180px] xl:w-[160px] xl:min-w-[160px] xl:px-1">
-                        <div className="flex min-w-[112px] flex-col items-center gap-2 text-center">
+                      <td className="sticky left-0 z-10 w-[112px] min-w-[112px] bg-white group-hover:bg-slate-50/70 p-1.5 sm:w-[180px] sm:min-w-[180px] sm:p-2 border-r border-slate-200 transition-colors sm:w-[180px] sm:min-w-[180px] xl:w-[160px] xl:min-w-[160px] xl:px-1">
+                        <div className="flex min-w-[100px] flex-col items-center gap-1.5 text-center sm:min-w-[112px] sm:gap-2">
                           {(() => {
                             const photoFile = USER_AVATARS[member.user.name.trim()];
                             const photoSrc = photoFile ? `/${photoFile}` : undefined;
@@ -677,7 +677,7 @@ setIsSavingDay(false);
                                 onClick={() => photoSrc && setPhotoPreview({ name: member.user.name, src: photoSrc })}
                                 disabled={!photoSrc}
                                 title={photoSrc ? `Bekijk foto van ${member.user.name}` : `Geen foto ingesteld voor ${member.user.name}`}
-                                className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-yellow-200 bg-yellow-50 text-sm font-extrabold text-slate-900 shadow-sm ${photoSrc ? 'cursor-zoom-in hover:ring-2 hover:ring-yellow-300' : 'cursor-default'}`}
+                                className={`flex h-10 w-10 shrink-0 items-center sm:h-14 sm:w-14 justify-center overflow-hidden rounded-full border-2 border-yellow-200 bg-yellow-50 text-sm font-extrabold text-slate-900 shadow-sm ${photoSrc ? 'cursor-zoom-in hover:ring-2 hover:ring-yellow-300' : 'cursor-default'}`}
                               >
                                 {photoSrc ? (
                                   <img
@@ -886,8 +886,8 @@ setIsSavingDay(false);
       </div>
 
       {/* SECTION 2: Dedicated Shift Bezetting & Dag-voor-Dag Controlepaneel */}
-      <div className="space-y-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+      <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:space-y-6 sm:rounded-3xl sm:p-6">
+        <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 md:flex-row md:items-center md:justify-between md:gap-4">
           <div>
             <div className="flex items-center gap-2.5">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#17202b] text-[#ffdc00] shadow-sm">

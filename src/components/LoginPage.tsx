@@ -27,6 +27,31 @@ export const LoginPage: React.FC = () => {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Houd de loginpagina vast op het scherm en voorkom scrollen van document/body.
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const previousHtmlOverflow = html.style.overflow;
+    const previousBodyOverflow = body.style.overflow;
+    const previousBodyHeight = body.style.height;
+    const previousHtmlOverscroll = html.style.overscrollBehavior;
+    const previousBodyOverscroll = body.style.overscrollBehavior;
+
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    html.style.overscrollBehavior = 'none';
+    body.style.overscrollBehavior = 'none';
+    body.style.height = '100%';
+
+    return () => {
+      html.style.overflow = previousHtmlOverflow;
+      body.style.overflow = previousBodyOverflow;
+      body.style.height = previousBodyHeight;
+      html.style.overscrollBehavior = previousHtmlOverscroll;
+      body.style.overscrollBehavior = previousBodyOverscroll;
+    };
+  }, []);
+
   // Onderhoudsstatus ophalen en elke 15 seconden vernieuwen
   useEffect(() => {
     let isActive = true;
@@ -84,18 +109,99 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#17202b] px-4 py-8 font-sans text-slate-900 sm:px-6">
+    <div className="login-viewport fixed inset-0 flex h-screen h-[100dvh] min-h-0 flex-col items-center justify-center overflow-hidden bg-[#100d1c] px-3 py-2 font-sans text-slate-900 sm:px-5 sm:py-3">
+
+      <style>{`
+        html, body, #root {
+          min-height: 0;
+          background: #100d1c;
+        }
+        html, body {
+          width: 100%;
+          height: 100%;
+          margin: 0;
+          overflow: hidden !important;
+          overscroll-behavior: none;
+        }
+        #root { height: 100%; overflow: hidden; }
+        .login-viewport {
+          position: fixed;
+          inset: 0;
+          width: 100%;
+          height: 100vh;
+          height: 100dvh;
+          min-height: 0;
+          background-color: #100d1c;
+          background-image:
+            radial-gradient(ellipse at 88% 8%, rgba(249, 115, 22, 0.24) 0%, transparent 38%),
+            radial-gradient(ellipse at 8% 92%, rgba(139, 92, 246, 0.22) 0%, transparent 42%),
+            linear-gradient(145deg, #100d1c 0%, #21132f 48%, #0b1020 100%);
+          background-repeat: no-repeat;
+          background-size: cover;
+          overflow: hidden;
+          isolation: isolate;
+        }
+        .login-content { width: 100%; max-height: 100%; display: flex; flex-direction: column; justify-content: center; }
+        .login-brand { margin-bottom: clamp(6px, 1.2vh, 14px); }
+        .login-logo { width: clamp(34px, 5.5vh, 58px); height: clamp(34px, 5.5vh, 58px); margin-bottom: clamp(3px, .6vh, 8px); }
+        .login-title { font-size: clamp(20px, 3.4vh, 32px); line-height: 1.08; }
+        .login-subtitle { margin-top: clamp(2px, .5vh, 7px); font-size: clamp(11px, 1.7vh, 14px); }
+        .login-maintenance { margin-bottom: clamp(6px, 1vh, 12px); }
+        .login-card-body { padding: clamp(10px, 2vh, 24px) clamp(12px, 2.5vw, 28px); }
+        .login-card-intro { margin-bottom: clamp(7px, 1.3vh, 16px); }
+        .login-form { display: flex; flex-direction: column; gap: clamp(8px, 1.5vh, 16px); }
+        .login-input { padding-top: clamp(9px, 1.6vh, 15px); padding-bottom: clamp(9px, 1.6vh, 15px); }
+        .login-submit { padding-top: clamp(9px, 1.6vh, 15px); padding-bottom: clamp(9px, 1.6vh, 15px); }
+        .login-forgot { margin-top: clamp(8px, 1.5vh, 16px); padding-top: clamp(7px, 1.3vh, 14px); }
+        .login-security { margin-top: clamp(5px, .8vh, 10px); }
+        .login-footer { margin-top: clamp(3px, .6vh, 8px); }
+        .login-maintenance-head { padding: clamp(6px, 1vh, 11px) clamp(9px, 1.5vw, 16px); }
+        .login-maintenance-copy { padding: clamp(7px, 1vh, 12px) clamp(9px, 1.5vw, 16px); }
+        @media (max-height: 700px) {
+          .login-viewport { padding-top: 4px; padding-bottom: 4px; }
+          .login-content { transform: scale(.92); transform-origin: center; }
+          .login-footer { margin-top: 2px; }
+        }
+        @media (max-width: 640px) {
+          .login-viewport {
+            padding-left: max(10px, env(safe-area-inset-left));
+            padding-right: max(10px, env(safe-area-inset-right));
+            padding-top: max(6px, env(safe-area-inset-top));
+            padding-bottom: max(6px, env(safe-area-inset-bottom));
+          }
+        }
+        @media (max-height: 580px) {
+          .login-content { transform: scale(.82); }
+          .login-logo { display: none; }
+          .login-security { display: none; }
+        }
+      `}</style>
 
       {/* Achtergrondaccenten */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#ffdc00]/10 blur-3xl"
+        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-orange-500/20 blur-3xl"
       />
 
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-sky-400/10 blur-3xl"
+        className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-violet-500/20 blur-3xl"
       />
+
+      {/* Subtiele Halloween-accenten voor de normale loginpagina */}
+      {!maintenanceActive && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="180" viewBox="0 0 220 180"><g fill="none" stroke="#c4b5fd" stroke-width="1.3" opacity=".32"><path d="M0 0 L70 70 M0 35 L70 70 M35 0 L70 70 M0 70 L70 70 M70 0 L70 70 M0 0 Q35 0 70 70 Q70 35 0 70 Q35 35 0 0"/><path d="M220 180 L150 110 M220 145 L150 110 M185 180 L150 110 M220 110 L150 110 M150 180 L150 110 M220 180 Q185 180 150 110 Q150 145 220 110 Q185 145 220 180"/></g><g fill="#fb923c" opacity=".16"><path d="M105 20 C90 10 75 20 76 35 C65 44 72 61 86 63 C94 76 113 72 118 60 C133 53 129 35 118 30 C117 22 111 19 105 20 Z"/><path d="M105 17 L112 6 L116 24 Z"/></g><g fill="#a78bfa" opacity=".20"><path d="M125 98 Q140 78 155 98 L169 115 L155 112 L146 125 L137 112 L123 115 Z"/></g><g fill="#fb923c" opacity=".10"><path d="M105 135 C85 130 76 149 87 163 C99 178 123 172 126 156 C140 144 127 128 115 133 Z"/></g></svg>'
+            )}")`,
+            backgroundRepeat: 'repeat',
+            backgroundSize: '180px 150px',
+          }}
+        />
+      )}
 
       {/* Onderhoudspatroon met waarschuwingsdriehoeken */}
       {maintenanceActive && (
@@ -107,17 +213,17 @@ export const LoginPage: React.FC = () => {
               '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="90" viewBox="0 0 100 90"><path d="M50 8 L94 82 H6 Z" fill="#ffdc00" stroke="#ffdc00" stroke-width="3"/><text x="50" y="66" font-size="43" font-family="Arial" font-weight="900" text-anchor="middle" fill="#17202b">!</text></svg>'
             )}")`,
             backgroundRepeat: 'repeat',
-            backgroundSize: '100px 90px',
+            backgroundSize: 'clamp(78px, 18vw, 100px) clamp(70px, 16.2vw, 90px)',
           }}
         />
       )}
 
       {/* Login */}
-      <main className="relative z-10 w-full max-w-md">
+      <main className="login-content relative z-10 w-full max-w-md">
 
         {/* Branding */}
-        <div className="mb-7 text-center">
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#ffdc00] text-[#17202b] shadow-lg shadow-black/20">
+        <div className="login-brand text-center">
+          <div className="login-logo mx-auto flex items-center justify-center rounded-2xl bg-orange-500 text-[#100d1c] shadow-lg shadow-black/20">
             <BusFront className="h-8 w-8" strokeWidth={2.5} />
           </div>
 
@@ -125,22 +231,28 @@ export const LoginPage: React.FC = () => {
             Koerwerking
           </p>
 
-          <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+          <h1 className="login-title font-extrabold tracking-tight text-white">
             Mijn Planning
           </h1>
 
-          <p className="mt-3 text-sm leading-relaxed text-slate-300">
+          <p className="login-subtitle leading-relaxed text-slate-300">
             Meld je aan om je planning te bekijken.
           </p>
+
+          {!maintenanceActive && (
+            <p className="mt-2 text-xs font-black uppercase tracking-[0.18em] text-orange-300 drop-shadow-[0_0_10px_rgba(249,115,22,0.35)] sm:mt-3 sm:text-sm">
+              🎃 Happy Halloween 👻
+            </p>
+          )}
         </div>
 
         {/* Onderhoudsmelding */}
         {maintenanceActive && (
           <div
             role="status"
-            className="mb-5 overflow-hidden rounded-2xl border-2 border-[#ffdc00] bg-[#ffdc00] shadow-xl shadow-black/20"
+            className="login-maintenance overflow-hidden rounded-2xl border-2 border-[#ffdc00] bg-[#ffdc00] shadow-xl shadow-black/20"
           >
-            <div className="flex items-center gap-3 border-b border-black/10 bg-black/5 px-4 py-3">
+            <div className="login-maintenance-head flex items-center gap-2 border-b border-black/10 bg-black/5 sm:gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#17202b] text-[#ffdc00]">
                 <AlertCircle className="h-6 w-6" strokeWidth={2.5} />
               </div>
@@ -156,7 +268,7 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-4 py-3">
+            <div className="login-maintenance-copy">
               <p className="text-sm font-bold leading-relaxed text-[#17202b]">
                 Er worden momenteel updates en verbeteringen uitgevoerd aan
                 de applicatie.
@@ -171,13 +283,13 @@ export const LoginPage: React.FC = () => {
         )}
 
         {/* Loginformulierkaart */}
-        <div className="overflow-hidden rounded-3xl border border-white/10 bg-white shadow-2xl shadow-black/20">
+        <div className="login-card overflow-hidden rounded-2xl border border-white/10 bg-white shadow-2xl shadow-black/20 sm:rounded-3xl">
 
           {/* Gele accentlijn */}
-          <div className="h-1.5 w-full bg-[#ffdc00]" />
+          <div className="h-1.5 w-full bg-gradient-to-r from-orange-500 via-amber-400 to-violet-500" />
 
-          <div className="p-6 sm:p-9">
-            <div className="mb-7">
+          <div className="login-card-body">
+            <div className="login-card-intro">
               <div className="mb-2 flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-slate-700" />
 
@@ -204,7 +316,7 @@ export const LoginPage: React.FC = () => {
             )}
 
             {/* Loginformulier */}
-            <form className="space-y-5" onSubmit={handleSubmit}>
+            <form className="login-form" onSubmit={handleSubmit}>
               <div>
                 <label
                   htmlFor="access_code"
@@ -239,7 +351,7 @@ export const LoginPage: React.FC = () => {
                     aria-describedby={
                       errorMessage ? 'access-code-error' : undefined
                     }
-                    className={`w-full rounded-2xl border bg-slate-50 py-4 pl-12 pr-12 font-mono text-center text-lg font-bold uppercase tracking-widest text-slate-900 outline-none transition-all placeholder:font-sans placeholder:text-sm placeholder:font-medium placeholder:tracking-normal placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`login-input w-full rounded-2xl border bg-slate-50 pl-12 pr-12 font-mono text-center text-lg font-bold uppercase tracking-widest text-slate-900 outline-none transition-all placeholder:font-sans placeholder:text-sm placeholder:font-medium placeholder:tracking-normal placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-60 ${
                       errorMessage
                         ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-100'
                         : 'border-slate-200 focus:border-[#17202b] focus:bg-white focus:ring-4 focus:ring-yellow-100'
@@ -277,7 +389,7 @@ export const LoginPage: React.FC = () => {
                 id="login-submit-button"
                 type="submit"
                 disabled={isSubmitting}
-                className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ffdc00] px-6 py-4 font-extrabold text-[#17202b] shadow-md shadow-yellow-100/50 transition-all duration-200 hover:bg-yellow-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-yellow-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                className="login-submit group flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-6 font-extrabold text-[#17202b] shadow-md shadow-yellow-100/50 transition-all duration-200 hover:bg-yellow-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-yellow-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? (
                   <>
@@ -294,7 +406,7 @@ export const LoginPage: React.FC = () => {
             </form>
 
             {/* Toegangscode vergeten */}
-            <div className="mt-7 border-t border-slate-100 pt-6 text-center">
+            <div className="login-forgot border-t border-slate-100 text-center">
               <button
                 type="button"
                 onClick={() => setShowForgotModal(true)}
@@ -308,7 +420,7 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {/* Beveiligingsmelding */}
-        <div className="mt-5 flex items-center justify-center gap-2 text-center text-xs text-slate-400">
+        <div className="login-security flex items-center justify-center gap-2 text-center text-xs text-slate-400">
           <ShieldCheck className="h-4 w-4 shrink-0 text-[#ffdc00]" />
 
           <span>Persoonlijke toegang tot Koerwerking-planning</span>
@@ -316,7 +428,7 @@ export const LoginPage: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 mt-8 text-center">
+      <footer className="login-footer relative z-10 shrink-0 text-center">
         <p className="text-xs text-slate-400">
           Gemaakt door{' '}
           <a
