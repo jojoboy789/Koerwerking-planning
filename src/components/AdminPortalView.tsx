@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { User, AdminStats } from '../types';
 import { api } from '../services/api';
@@ -7,7 +7,8 @@ import { AdminPlanningModal } from './AdminPlanningModal';
 import {
   Users, UserPlus, Key, Edit3, Trash2, Calendar, Check, X, Shield,
   ShieldCheck, AlertCircle, CheckCircle2, Loader2, Sparkles, RefreshCw,
-  Copy, CheckCheck, Save, Cloud, Database, Send, BusFront, Power
+  Copy, CheckCheck, Save, Cloud, Database, Send, BusFront, Power,
+  Search, Terminal, Activity, Server, Cpu, Filter, Radio
 } from 'lucide-react';
 
 export const AdminPortalView: React.FC = () => {
@@ -16,6 +17,7 @@ export const AdminPortalView: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isUsersMatrixExpanded, setIsUsersMatrixExpanded] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSyncingFirebase, setIsSyncingFirebase] = useState<boolean>(false);
@@ -25,6 +27,10 @@ export const AdminPortalView: React.FC = () => {
     authDomain: string;
     lastSyncAt: string;
   } | null>(null);
+
+  // Zoek- en Filterstate
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'ALL' | 'ADMIN' | 'ACTIVE' | 'INACTIVE'>('ALL');
 
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
@@ -48,19 +54,19 @@ export const AdminPortalView: React.FC = () => {
   const [newIsActive, setNewIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSendingOcPlanning, setIsSendingOcPlanning] = useState(false);
-  // Onderhoudsmodus
-const [maintenanceStatus, setMaintenanceStatus] =
-  useState<MaintenanceStatus | null>(null);
 
-const [isUpdatingMaintenance, setIsUpdatingMaintenance] =
-  useState<boolean>(false);
+  // Onderhoudsmodus
+  const [maintenanceStatus, setMaintenanceStatus] = useState<MaintenanceStatus | null>(null);
+  const [isUpdatingMaintenance, setIsUpdatingMaintenance] = useState<boolean>(false);
 
   // Speciale kalenderdagen
   const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
   const [specialDayDate, setSpecialDayDate] = useState('');
-  const [specialDayType, setSpecialDayType] =
-    useState<SpecialDay['type']>('replacementHoliday');
+  const [specialDayType, setSpecialDayType] = useState<SpecialDay['type']>('replacementHoliday');
   const [isSavingSpecialDay, setIsSavingSpecialDay] = useState(false);
+
+  // Change Code Form State
+  const [generatedNewCode, setGeneratedNewCode] = useState('');
 
   const handleAddSpecialDay = async () => {
     if (!specialDayDate || isSavingSpecialDay) return;
@@ -98,21 +104,18 @@ const [isUpdatingMaintenance, setIsUpdatingMaintenance] =
     }
   };
 
-  // Change Code Form State
-  const [generatedNewCode, setGeneratedNewCode] = useState('');
-
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
       const [usersRes, statsRes, fbStatus, maintenanceRes, specialDaysRes] =
-  await Promise.allSettled([
-    api.getAdminUsers(),
-    api.getAdminStats(),
-    api.getFirebaseStatus(),
-    api.getMaintenanceStatus(),
-    api.getSpecialDays(),
-  ]);
+        await Promise.allSettled([
+          api.getAdminUsers(),
+          api.getAdminStats(),
+          api.getFirebaseStatus(),
+          api.getMaintenanceStatus(),
+          api.getSpecialDays(),
+        ]);
 
       if (usersRes.status === 'fulfilled') {
         setUsers(usersRes.value.users || []);
@@ -124,8 +127,8 @@ const [isUpdatingMaintenance, setIsUpdatingMaintenance] =
         setFirebaseStatus(fbStatus.value);
       }
       if (maintenanceRes.status === 'fulfilled') {
-  setMaintenanceStatus(maintenanceRes.value);
-}
+        setMaintenanceStatus(maintenanceRes.value);
+      }
       if (specialDaysRes.status === 'fulfilled') {
         setSpecialDays(specialDaysRes.value.specialDays || []);
       }
@@ -155,44 +158,34 @@ const [isUpdatingMaintenance, setIsUpdatingMaintenance] =
     }
   };
 
-  // Onderhoudsmodus inschakelen of uitschakelen
-const handleToggleMaintenance = async () => {
-  if (!maintenanceStatus || isUpdatingMaintenance) return;
+  const handleToggleMaintenance = async () => {
+    if (!maintenanceStatus || isUpdatingMaintenance) return;
+    const nextStatus = !maintenanceStatus.enabled;
+    const confirmed = window.confirm(
+      nextStatus
+        ? 'Wil je de onderhoudsmodus inschakelen? Alle bezoekers krijgen dan een UPDATE IN PROGRESS-melding op de loginpagina.'
+        : 'Wil je de onderhoudsmodus uitschakelen? De melding verdwijnt dan bij de bezoekers.'
+    );
 
-  const nextStatus = !maintenanceStatus.enabled;
+    if (!confirmed) return;
 
-  const confirmed = window.confirm(
-    nextStatus
-      ? 'Wil je de onderhoudsmodus inschakelen? Alle bezoekers krijgen dan een UPDATE IN PROGRESS-melding op de loginpagina.'
-      : 'Wil je de onderhoudsmodus uitschakelen? De melding verdwijnt dan bij de bezoekers.'
-  );
+    setIsUpdatingMaintenance(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
 
-  if (!confirmed) return;
+    try {
+      const result = await api.updateMaintenanceMode(nextStatus);
+      setMaintenanceStatus(result.maintenance);
+      setSuccessMessage(result.message);
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'De onderhoudsmodus kon niet worden gewijzigd.';
+      setErrorMessage(msg);
+    } finally {
+      setIsUpdatingMaintenance(false);
+    }
+  };
 
-  setIsUpdatingMaintenance(true);
-  setErrorMessage(null);
-  setSuccessMessage(null);
-
-  try {
-    const result = await api.updateMaintenanceMode(nextStatus);
-
-    setMaintenanceStatus(result.maintenance);
-    setSuccessMessage(result.message);
-
-    setTimeout(() => setSuccessMessage(null), 4000);
-  } catch (err: unknown) {
-    const msg =
-      err instanceof Error
-        ? err.message
-        : 'De onderhoudsmodus kon niet worden gewijzigd.';
-
-    setErrorMessage(msg);
-  } finally {
-    setIsUpdatingMaintenance(false);
-  }
-};
-
-  // OC BUS GBR Dagplanning handmatig naar Telegram versturen
   const handleSendOcPlanningToTelegram = async () => {
     setIsSendingOcPlanning(true);
     setErrorMessage(null);
@@ -202,11 +195,7 @@ const handleToggleMaintenance = async () => {
       const result = await api.sendOcPlanningToTelegram();
       setSuccessMessage(result.message);
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'De OC BUS GBR-planning kon niet naar Telegram worden verstuurd.';
-
+      const msg = err instanceof Error ? err.message : 'De OC BUS GBR-planning kon niet naar Telegram worden verstuurd.';
       setErrorMessage(msg);
     } finally {
       setIsSendingOcPlanning(false);
@@ -217,7 +206,6 @@ const handleToggleMaintenance = async () => {
     loadData();
   }, [loadData]);
 
-  // Open Create Modal & generate initial random code
   const handleOpenCreateModal = async () => {
     setNewName('');
     setNewRole('Teamlid');
@@ -243,7 +231,6 @@ const handleToggleMaintenance = async () => {
     }
   };
 
-  // Submit Create User
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) {
@@ -284,7 +271,6 @@ const handleToggleMaintenance = async () => {
     }
   };
 
-  // Toggle user active status directly
   const handleToggleActive = async (targetUser: User) => {
     if (targetUser.id === currentAdmin?.id) {
       setErrorMessage('Je kunt je eigen beheerderaccount niet deactiveren.');
@@ -306,7 +292,6 @@ const handleToggleMaintenance = async () => {
     }
   };
 
-  // Toggle quick permission
   const handleTogglePermission = async (targetUser: User, field: 'canViewOverview' | 'canEditPlanning' | 'canPlannerMode' | 'isAdmin') => {
     const nextVal = !targetUser[field];
     try {
@@ -323,7 +308,6 @@ const handleToggleMaintenance = async () => {
     }
   };
 
-  // Change Code modal
   const handleOpenChangeCodeModal = async (targetUser: User) => {
     setChangeCodeUser(targetUser);
     try {
@@ -355,7 +339,6 @@ const handleToggleMaintenance = async () => {
     }
   };
 
-  // Delete User
   const handleConfirmDelete = async () => {
     if (!deleteConfirmUser) return;
     setIsSubmitting(true);
@@ -373,7 +356,6 @@ const handleToggleMaintenance = async () => {
     }
   };
 
-  // Edit User details
   const handleSaveEditUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
@@ -406,231 +388,303 @@ const handleToggleMaintenance = async () => {
     setTimeout(() => setCopiedCode(false), 2500);
   };
 
+  // Gefilterde gebruikers voor ICT Table 2.0
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      const matchesSearch =
+        u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (u.role && u.role.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (u.rawCode && u.rawCode.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      if (!matchesSearch) return false;
+
+      if (roleFilter === 'ADMIN') return u.isAdmin;
+      if (roleFilter === 'ACTIVE') return u.isActive;
+      if (roleFilter === 'INACTIVE') return !u.isActive;
+      return true;
+    });
+  }, [users, searchQuery, roleFilter]);
+
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto w-full pb-24 font-sans">
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
-              Gebruikersbeheer
-            </h2>
-            <span className="px-2.5 py-0.5 bg-indigo-100 border border-indigo-200 rounded-full text-[10px] font-bold text-indigo-700 uppercase tracking-wider">
-              ADMIN PORTAL
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-mono selection:bg-cyan-500 selection:text-white p-4 md:p-8 space-y-6 max-w-[1600px] mx-auto w-full pb-24">
+      {/* Top ICT Telemetry Bar */}
+      <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-4 text-xs">
+        <div className="flex items-center gap-6 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
             </span>
+            <span className="text-cyan-700 font-bold uppercase tracking-wider text-[11px]">ADMIN CONTROL ROOM v2.0</span>
           </div>
-          <p className="text-xs md:text-sm text-slate-500 mt-1">
-            Beheer gebruikerstoegang, rechten, toegangscodes en planningen.
-          </p>
+
+          <div className="hidden sm:flex items-center gap-2 text-slate-500 text-[11px] border-l border-slate-200 pl-4">
+            <Server className="w-3.5 h-3.5 text-indigo-700" />
+            <span>NODE: GBR-MAIN-NODE-01</span>
+          </div>
+
+          <div className="hidden md:flex items-center gap-2 text-slate-500 text-[11px] border-l border-slate-200 pl-4">
+            <Cpu className="w-3.5 h-3.5 text-emerald-700" />
+            <span>DATABASE: FIRESTORE ACTIVE</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
           <button
             onClick={loadData}
-            className="p-2.5 rounded-2xl bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-slate-50 transition-all shadow-xs cursor-pointer"
-            title="Verversen"
+            className="p-2 rounded-xl bg-slate-100 border border-slate-300 text-slate-600 hover:text-cyan-700 hover:border-cyan-500/50 hover:bg-slate-100 transition-all cursor-pointer flex items-center gap-2 text-xs"
+            title="Systeem verversen"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-cyan-700' : ''}`} />
+            <span className="hidden sm:inline">RE-SYNC DATA</span>
           </button>
 
           <button
             id="btn-create-user"
             onClick={handleOpenCreateModal}
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-indigo-100 flex items-center gap-2 transition-all cursor-pointer active:scale-98"
+            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-cyan-500/20 flex items-center gap-2 transition-all cursor-pointer active:scale-98"
           >
             <UserPlus className="w-4 h-4" />
-            <span>Nieuwe Gebruiker</span>
+            <span>+ NIEUWE GEBRUIKER</span>
           </button>
+        </div>
+      </div>
+
+      {/* Hero / Header Section */}
+      <div className="bg-gradient-to-r from-white via-white to-cyan-50 border border-slate-200 rounded-3xl p-6 md:p-8 relative overflow-hidden shadow-2xl">
+        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-cyan-50 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="p-2.5 bg-slate-100 border border-slate-300 rounded-xl text-cyan-700">
+                <Terminal className="w-6 h-6" />
+              </div>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+                Systeem- & Gebruikersbeheer
+              </h1>
+              <span className="px-3 py-1 bg-cyan-50 border border-cyan-200 rounded-full text-[10px] font-bold text-cyan-700 uppercase tracking-widest">
+                SYS_ADMIN 2.0
+              </span>
+            </div>
+            <p className="text-xs md:text-sm text-slate-500 mt-2 font-sans max-w-2xl leading-relaxed">
+              Geavanceerde ICT-beheeromgeving voor medewerkers, toegangsrechten, veiligheidscodes en Telegram-dispatchers.
+            </p>
+          </div>
+
+          {/* Quick Metrics Bar inside Header */}
+          {stats && (
+            <div className="grid grid-cols-3 gap-3 bg-slate-50/60 backdrop-blur-md p-3 rounded-2xl border border-slate-200 shrink-0">
+              <div className="px-3 py-1 text-center">
+                <div className="text-[10px] text-slate-500 font-sans">TOTAL USERS</div>
+                <div className="text-xl font-bold text-cyan-700">{stats.totalUsers}</div>
+              </div>
+              <div className="px-3 py-1 text-center border-l border-slate-200">
+                <div className="text-[10px] text-emerald-700 font-sans">ONLINE/ACTIEF</div>
+                <div className="text-xl font-bold text-emerald-700">{stats.activeUsers}</div>
+              </div>
+              <div className="px-3 py-1 text-center border-l border-slate-200">
+                <div className="text-[10px] text-amber-700 font-sans">ADMINS</div>
+                <div className="text-xl font-bold text-amber-700">{stats.adminCount}</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Notifications */}
       {successMessage && (
-        <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-3 text-emerald-800 text-xs font-medium animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-3 text-emerald-700 text-xs font-sans animate-in fade-in shadow-lg">
+          <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
           <span>{successMessage}</span>
         </div>
       )}
       {errorMessage && (
-        <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 flex items-center gap-3 text-red-800 text-xs font-medium animate-in fade-in">
-          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-center gap-3 text-rose-700 text-xs font-sans animate-in fade-in shadow-lg">
+          <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
           <span>{errorMessage}</span>
         </div>
       )}
 
-{/* ONDERHOUDSMODUS */}
-<div
-  className={`p-4 md:p-5 rounded-3xl border shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors ${
-    maintenanceStatus?.enabled
-      ? 'bg-linear-to-r from-amber-100 via-yellow-50 to-orange-50 border-amber-300'
-      : 'bg-linear-to-r from-emerald-50 via-white to-slate-50 border-emerald-200'
-  }`}
->
-  <div className="flex items-start sm:items-center gap-3.5">
-    <div
-      className={`p-3 rounded-2xl shadow-sm shrink-0 ${
-        maintenanceStatus?.enabled
-          ? 'bg-amber-400 text-slate-900'
-          : 'bg-emerald-500 text-white'
-      }`}
-    >
-      <Power className="w-5 h-5" />
-    </div>
+      {/* Bento Grid layout for System Controls */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Card 1: Maintenance Status Control */}
+        <div className={`p-5 rounded-3xl border shadow-xl transition-all font-sans relative overflow-hidden ${
+          maintenanceStatus?.enabled
+            ? 'bg-gradient-to-br from-amber-950/40 via-white to-white border-amber-200'
+            : 'bg-white border-slate-200'
+        }`}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className={`p-3 rounded-2xl ${
+                maintenanceStatus?.enabled ? 'bg-amber-400 text-slate-900' : 'bg-emerald-50 text-emerald-700 border border-emerald-500/30'
+              }`}>
+                <Power className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider font-mono">Onderhoudsmodus</h3>
+                <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
+                  maintenanceStatus?.enabled
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    : 'bg-emerald-50 text-emerald-700 border border-emerald-500/40'
+                }`}>
+                  {maintenanceStatus?.enabled ? '● UPDATE IN PROGRESS' : '● OPERATIONAL'}
+                </span>
+              </div>
+            </div>
 
-    <div>
-      <div className="flex items-center gap-2 flex-wrap">
-        <h3 className="text-sm font-bold text-slate-900">
-          Website onderhoudsmodus
-        </h3>
+            <button
+              type="button"
+              onClick={handleToggleMaintenance}
+              disabled={!maintenanceStatus || isUpdatingMaintenance}
+              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none cursor-pointer ${
+                maintenanceStatus?.enabled ? 'bg-amber-500' : 'bg-slate-200'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition duration-200 ${
+                  maintenanceStatus?.enabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+              {isUpdatingMaintenance && (
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-900" />
+                </span>
+              )}
+            </button>
+          </div>
+          <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+            {maintenanceStatus?.enabled
+              ? 'Bezoekers krijgen een onderhoudsscherm op de loginpagina.'
+              : 'Schakel in bij het uitvoeren van systeemupdates.'}
+          </p>
+        </div>
 
-        {maintenanceStatus ? (
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-              maintenanceStatus.enabled
-                ? 'bg-amber-100 text-amber-800 border-amber-300'
-                : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-            }`}
+        {/* Card 2: Telegram Dispatcher */}
+        <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xl font-sans flex flex-col justify-between">
+          <div className="flex items-start gap-3">
+            <div className="p-3 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-2xl shrink-0">
+              <BusFront className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider font-mono">OC BUS GBR Dispatch</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Verstuur actuele planningen direct naar het Telegram kanaal.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSendOcPlanningToTelegram}
+            disabled={isSendingOcPlanning}
+            className="mt-4 w-full py-2.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 font-mono text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
           >
-            {maintenanceStatus.enabled
-              ? 'UPDATE IN PROGRESS'
-              : 'NORMAAL OPERATIONEEL'}
-          </span>
-        ) : (
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-            STATUS LADEN
-          </span>
-        )}
+            {isSendingOcPlanning ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+            <span>VERSTUUR NAAR TELEGRAM</span>
+          </button>
+        </div>
+
+        {/* Card 3: Cloud Firestore Sync */}
+        <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xl font-sans flex flex-col justify-between">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-cyan-500/20 text-cyan-700 border border-cyan-200 rounded-2xl shrink-0">
+                <Cloud className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider font-mono">Cloud Firestore</h3>
+                <span className="text-[10px] text-cyan-700 font-mono block mt-0.5">planning-koer-gbr</span>
+              </div>
+            </div>
+            <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+          </div>
+
+          <button
+            onClick={handleSyncFirebase}
+            disabled={isSyncingFirebase}
+            className="mt-4 w-full py-2.5 bg-cyan-50 hover:bg-cyan-500/20 border border-cyan-200 text-cyan-300 font-mono text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+          >
+            {isSyncingFirebase ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Database className="w-4 h-4" />
+            )}
+            <span>SYNC DATABASE</span>
+          </button>
+        </div>
       </div>
 
-      <p className="text-xs text-slate-600 mt-1 max-w-xl">
-        {maintenanceStatus?.enabled
-          ? 'Bezoekers zien een onderhoudsmelding op de loginpagina. De website blijft gewoon bruikbaar.'
-          : 'Schakel deze modus in wanneer je wijzigingen of verbeteringen aan de website uitvoert.'}
-      </p>
-
-      {maintenanceStatus?.updatedAt && (
-        <p className="text-[10px] text-slate-500 mt-2">
-          Laatste wijziging:{' '}
-          {new Date(maintenanceStatus.updatedAt).toLocaleString('nl-BE')}
-          {maintenanceStatus.updatedBy &&
-            ` door ${maintenanceStatus.updatedBy}`}
-        </p>
-      )}
-    </div>
-  </div>
-
-  <button
-    type="button"
-    onClick={handleToggleMaintenance}
-    disabled={!maintenanceStatus || isUpdatingMaintenance}
-    className={`relative inline-flex h-8 w-14 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
-      maintenanceStatus?.enabled
-        ? 'bg-amber-500'
-        : 'bg-emerald-500'
-    }`}
-    role="switch"
-    aria-checked={maintenanceStatus?.enabled ?? false}
-    aria-label="Onderhoudsmodus wijzigen"
-    title={
-      maintenanceStatus?.enabled
-        ? 'Onderhoudsmodus uitschakelen'
-        : 'Onderhoudsmodus inschakelen'
-    }
-  >
-    <span
-      className={`pointer-events-none inline-block h-7 w-7 transform rounded-full bg-white shadow-md transition duration-200 ${
-        maintenanceStatus?.enabled
-          ? 'translate-x-6'
-          : 'translate-x-0'
-      }`}
-    />
-
-    {isUpdatingMaintenance && (
-      <span className="absolute inset-0 flex items-center justify-center">
-        <Loader2 className="w-4 h-4 animate-spin text-slate-700" />
-      </span>
-    )}
-  </button>
-</div>
-
-      {/* SPECIALE KALENDERDAGEN */}
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 md:p-6 shadow-xs space-y-4">
-        <div className="flex items-start gap-3">
-          <div className="rounded-2xl bg-amber-100 p-3 text-amber-800">
-            <Calendar className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Speciale kalenderdagen</h3>
-            <p className="mt-1 max-w-2xl text-xs text-slate-600">
-              Voeg een vervangende feestdag of stakingsdag toe. Deze dagen worden straks
-              in de planning aangeduid als niet-inplanbaar.
-            </p>
+      {/* Speciale Dagen Module */}
+      <section className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-xl space-y-4 font-sans">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-700">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 font-mono uppercase tracking-wider">Speciale Kalenderdagen</h3>
+              <p className="text-xs text-slate-500">Stakingsdagen en vervangende feestdagen markeren in het systeem.</p>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto]">
-          <label className="space-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Datum</span>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block mb-1">Datum</label>
             <input
               type="date"
               value={specialDayDate}
-              onChange={(event) => setSpecialDayDate(event.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+              onChange={(e) => setSpecialDayDate(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 outline-none focus:border-cyan-500 transition-colors"
             />
-          </label>
-          <label className="space-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Type dag</span>
+          </div>
+          <div>
+            <label className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block mb-1">Type Dag</label>
             <select
               value={specialDayType}
-              onChange={(event) => setSpecialDayType(event.target.value as SpecialDay['type'])}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+              onChange={(e) => setSpecialDayType(e.target.value as SpecialDay['type'])}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 outline-none focus:border-cyan-500 transition-colors"
             >
-              <option value="replacementHoliday">Vervangende Feest Dag</option>
-              <option value="strike">Staking</option>
+              <option value="replacementHoliday">Vervangende Feestdag</option>
+              <option value="strike">Stakingsdag</option>
             </select>
-          </label>
+          </div>
           <div className="flex items-end">
             <button
               type="button"
               onClick={handleAddSpecialDay}
               disabled={!specialDayDate || isSavingSpecialDay}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#ffdc00] px-4 py-2.5 text-sm font-bold text-slate-900 transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 border border-amber-600 text-slate-950 font-mono text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {isSavingSpecialDay ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              Toevoegen
+              {isSavingSpecialDay ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              <span>TOEVOEGEN</span>
             </button>
           </div>
         </div>
 
-        {specialDays.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-slate-200 px-4 py-5 text-center text-xs text-slate-500">
-            Er zijn nog geen speciale kalenderdagen ingesteld.
-          </p>
-        ) : (
-          <div className="space-y-2">
+        {specialDays.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2">
             {[...specialDays].sort((a, b) => a.date.localeCompare(b.date)).map((day) => (
-              <div key={day.date} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
-                  <span className={`rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                    day.type === 'replacementHoliday'
-                      ? 'bg-amber-100 text-amber-900'
-                      : 'bg-rose-100 text-rose-800'
+              <div key={day.date} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                <div>
+                  <span className={`text-[9px] font-mono px-2 py-0.5 rounded font-bold uppercase tracking-wider ${
+                    day.type === 'replacementHoliday' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-rose-500/20 text-rose-700 border border-rose-500/30'
                   }`}>
-                    {day.type === 'replacementHoliday' ? 'Vervangende Feest Dag' : 'Staking'}
+                    {day.type === 'replacementHoliday' ? 'FEESTDAG' : 'STAKING'}
                   </span>
-                  <span className="text-sm font-semibold text-slate-800">
-                    {new Date(`${day.date}T12:00:00`).toLocaleDateString('nl-BE', {
-                      weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
-                    })}
-                  </span>
+                  <div className="text-slate-700 font-mono mt-1 text-xs">
+                    {day.date}
+                  </div>
                 </div>
                 <button
-                  type="button"
                   onClick={() => handleDeleteSpecialDay(day.date)}
-                  className="inline-flex items-center justify-center gap-1.5 self-start rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 sm:self-auto"
+                  className="p-1.5 rounded-lg bg-white text-slate-500 hover:text-rose-400 hover:bg-rose-50 transition-colors"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Verwijderen
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             ))}
@@ -638,166 +692,117 @@ const handleToggleMaintenance = async () => {
         )}
       </section>
 
-      {/* Stats Cards Row - Bento Style */}
-      {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">Totaal Gebruikers</div>
-            <div className="text-xl font-bold text-slate-900 mt-1">{stats.totalUsers}</div>
-          </div>
-          <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <div className="text-[10px] text-emerald-600 uppercase font-semibold">Actief</div>
-            <div className="text-xl font-bold text-emerald-700 mt-1">{stats.activeUsers}</div>
-          </div>
-          <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <div className="text-[10px] text-red-600 uppercase font-semibold">Inactief</div>
-            <div className="text-xl font-bold text-red-700 mt-1">{stats.inactiveUsers}</div>
-          </div>
-          <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <div className="text-[10px] text-indigo-600 uppercase font-semibold">Planning Rechten</div>
-            <div className="text-xl font-bold text-indigo-700 mt-1">{stats.canEditPlanningCount}</div>
-          </div>
-          <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <div className="text-[10px] text-amber-600 uppercase font-semibold">Overzicht Rechten</div>
-            <div className="text-xl font-bold text-amber-700 mt-1">{stats.canViewOverviewCount}</div>
-          </div>
-          <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">Beheerders</div>
-            <div className="text-xl font-bold text-slate-900 mt-1">{stats.adminCount}</div>
-          </div>
-        </div>
-      )}
-
-{/* OC BUS GBR Dagplanning naar Telegram */}
-<div className="p-4 md:p-5 rounded-3xl bg-linear-to-r from-yellow-400/20 via-yellow-50 to-amber-50 border border-yellow-300 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-  <div className="flex items-start sm:items-center gap-3.5">
-    <div className="p-3 bg-[#ffdc00] text-slate-900 rounded-2xl shadow-sm shrink-0">
-      <BusFront className="w-5 h-5" />
-    </div>
-
-    <div>
-      <h3 className="text-sm font-bold text-slate-900">
-        OC BUS GBR Dagplanning
-      </h3>
-      <p className="text-xs text-slate-600 mt-1">
-        Verstuur de actuele dagplanning en mededelingen handmatig naar Telegram.
-      </p>
-    </div>
-  </div>
-
-  <button
-  type="button"
-  onClick={handleSendOcPlanningToTelegram}
-  disabled={isSendingOcPlanning}
-  title="Verstuur de actuele dagplanning en mededelingen naar Telegram"
-  className="px-4 py-2.5 bg-[#ffdc00] text-slate-900 font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 hover:bg-yellow-300 transition-all disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
->
-  {isSendingOcPlanning ? (
-    <>
-      <Loader2 className="w-4 h-4 animate-spin" />
-      <span>Versturen...</span>
-    </>
-  ) : (
-    <>
-      <Send className="w-4 h-4" />
-      <span>Verstuur naar Telegram</span>
-    </>
-  )}
-</button>
-</div>
-
-      {/* Firebase Cloud Sync Card */}
-      <div className="p-4 md:p-5 rounded-3xl bg-linear-to-r from-amber-500/10 via-amber-50 to-orange-50/40 border border-amber-200/90 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-start sm:items-center gap-3.5">
-          <div className="p-3 bg-amber-500 text-white rounded-2xl shadow-sm shrink-0">
-            <Cloud className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-slate-900">Google Cloud Firestore</h3>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Gekoppeld
+      {/* Main Users Management 2.0 Table Section */}
+      <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl space-y-4">
+        {/* Table Header Controls / Filters */}
+        <div className="p-4 md:p-6 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans">
+          <div className="flex items-center gap-3">
+            <Users className="w-5 h-5 text-cyan-700" />
+            <button
+              type="button"
+              onClick={() => setIsUsersMatrixExpanded((expanded) => !expanded)}
+              aria-expanded={isUsersMatrixExpanded}
+              aria-controls="users-matrix-content"
+              className="flex items-center gap-3 text-left group"
+            >
+              <h2 className="text-lg font-bold text-slate-900 font-mono uppercase tracking-wider">
+                Gebruikers Matrix ({filteredUsers.length})
+              </h2>
+              <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 group-hover:bg-cyan-100 transition-colors" aria-hidden="true">
+                <span className="text-base leading-none">{isUsersMatrixExpanded ? '−' : '+'}</span>
               </span>
+              <span className="text-[10px] text-slate-500 font-mono">{isUsersMatrixExpanded ? 'INKLAPPEN' : 'UITKLAPPEN'}</span>
+            </button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            {/* Search Input */}
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Zoek op naam of code..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs outline-none focus:border-cyan-500 transition-colors"
+              />
             </div>
-            <p className="text-xs text-slate-600 mt-0.5">
-              Project: <span className="font-mono font-semibold text-amber-900">planning-koer-gbr</span> &bull; Realtime cloud-persistentie voor alle gebruikers en maandplanningen.
-            </p>
+
+            {/* Filter Pills */}
+            <div className="flex items-center gap-1 bg-slate-50 p-1 border border-slate-200 rounded-xl text-xs w-full sm:w-auto justify-center">
+              <button
+                onClick={() => setRoleFilter('ALL')}
+                className={`px-3 py-1 rounded-lg text-[11px] font-mono transition-colors ${roleFilter === 'ALL' ? 'bg-cyan-500 text-white font-bold' : 'text-slate-500 hover:text-slate-900'}`}
+              >
+                ALLES
+              </button>
+              <button
+                onClick={() => setRoleFilter('ADMIN')}
+                className={`px-3 py-1 rounded-lg text-[11px] font-mono transition-colors ${roleFilter === 'ADMIN' ? 'bg-cyan-500 text-white font-bold' : 'text-slate-500 hover:text-slate-900'}`}
+              >
+                ADMINS
+              </button>
+              <button
+                onClick={() => setRoleFilter('ACTIVE')}
+                className={`px-3 py-1 rounded-lg text-[11px] font-mono transition-colors ${roleFilter === 'ACTIVE' ? 'bg-cyan-500 text-white font-bold' : 'text-slate-500 hover:text-slate-900'}`}
+              >
+                ACTIEF
+              </button>
+            </div>
           </div>
         </div>
 
-        <button
-          onClick={handleSyncFirebase}
-          disabled={isSyncingFirebase}
-          className="px-4 py-2 bg-amber-600 hover:bg-amber-700 active:scale-98 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 transition-all cursor-pointer shrink-0"
-        >
-          {isSyncingFirebase ? (
-            <>
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Synchroniseren...</span>
-            </>
-          ) : (
-            <>
-              <Database className="w-3.5 h-3.5" />
-              <span>Nu Syncen naar Firebase</span>
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Users Table - Bento Card */}
-      <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs relative">
+        {/* ICT Table: standaard ingeklapt, open via de matrixkop */}
+        {isUsersMatrixExpanded && <div id="users-matrix-content">
         {isLoading ? (
           <div className="py-20 flex flex-col items-center justify-center space-y-3">
-            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-            <p className="text-xs text-slate-500 font-medium">Gebruikers laden...</p>
+            <Loader2 className="w-8 h-8 text-cyan-700 animate-spin" />
+            <p className="text-xs text-slate-500 font-mono">DATABASE METRICS LADEN...</p>
           </div>
         ) : (
           <div className="overflow-x-auto w-full">
-            <table className="w-full text-left text-xs border-collapse min-w-[760px]">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold text-[11px] uppercase tracking-wider">
+            <table className="w-full text-left text-xs border-collapse min-w-[800px] font-mono">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[10px] uppercase tracking-widest">
                 <tr>
-                  <th className="p-4">Gebruiker</th>
-                  <th className="p-4">Rol / Functie</th>
-                  <th className="p-4 text-center">Status</th>
-                  <th className="p-4 text-center">Rechten</th>
-                  <th className="p-4 text-right">Acties</th>
+                  <th className="p-4">GEBRUIKER & IDENTITEIT</th>
+                  <th className="p-4">ROL / FUNCTIE</th>
+                  <th className="p-4 text-center">STATUS</th>
+                  <th className="p-4 text-center">RECHTEN MATRIX</th>
+                  <th className="p-4 text-right">ACTIES</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {users.map((u) => {
+              <tbody className="divide-y divide-slate-800/60">
+                {filteredUsers.map((u) => {
                   const isSelf = u.id === currentAdmin?.id;
 
                   return (
-                    <tr key={u.id} className="hover:bg-slate-50/70 transition-colors group">
-                      {/* Avatar & Name */}
-                      <td className="p-4">
+                    <tr key={u.id} className="hover:bg-slate-100/40 transition-colors group">
+                      {/* Name & Avatar */}
+                      <td className="p-4 font-sans">
                         <div className="flex items-center gap-3">
-                          <div
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs border ${
-                              u.isAdmin
-                                ? 'bg-amber-50 border-amber-200 text-amber-700'
-                                : 'bg-indigo-50 border-indigo-100 text-indigo-700'
-                            }`}
-                          >
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-mono font-bold text-xs border ${
+                            u.isAdmin
+                              ? 'bg-amber-500/10 border-amber-500/30 text-amber-700'
+                              : 'bg-cyan-50 border-cyan-200 text-cyan-700'
+                          }`}>
                             {u.avatar || u.name.substring(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-semibold text-sm text-slate-900 flex items-center gap-1.5">
+                            <div className="font-bold text-sm text-slate-900 flex items-center gap-2">
                               <span>{u.name}</span>
                               {isSelf && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 font-medium uppercase">
-                                  Jij
+                                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-200">
+                                  JIJ
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 mt-0.5">
+                            <div className="flex items-center gap-2 mt-1">
                               {u.rawCode && (
-                                <span className="text-[11px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-1.5 py-0.5 rounded">
-                                  Code: {u.rawCode}
+                                <span className="text-[10px] font-mono bg-slate-50 border border-slate-200 text-cyan-700 px-1.5 py-0.5 rounded">
+                                  CODE: {u.rawCode}
                                 </span>
                               )}
-                              <span className="text-[10px] text-slate-400">
+                              <span className="text-[10px] text-slate-500 font-mono">
                                 ID: {u.id}
                               </span>
                             </div>
@@ -806,88 +811,75 @@ const handleToggleMaintenance = async () => {
                       </td>
 
                       {/* Role */}
-                      <td className="p-4">
-                        <span className="text-xs text-slate-700 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 font-medium">
+                      <td className="p-4 font-mono">
+                        <span className="text-xs text-slate-600 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200">
                           {u.role || 'Teamlid'}
                         </span>
                       </td>
 
-                      {/* Status Toggle Switch */}
-                      <td className="p-4 text-center">
+                      {/* Status */}
+                      <td className="p-4 text-center font-mono">
                         <button
                           type="button"
                           onClick={() => handleToggleActive(u)}
                           disabled={isSelf}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
-                            u.isActive ? 'bg-indigo-600' : 'bg-slate-200'
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out disabled:opacity-30 ${
+                            u.isActive ? 'bg-emerald-600' : 'bg-slate-100'
                           }`}
-                          title={u.isActive ? 'Klik om te deactiveren' : 'Klik om te activeren'}
                         >
                           <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-slate-50 shadow transition duration-200 ease-in-out ${
                               u.isActive ? 'translate-x-5' : 'translate-x-0'
                             }`}
                           />
                         </button>
-                        <div className="text-[10px] mt-1 text-slate-500 font-medium">
-                          {u.isActive ? (
-                            <span className="text-emerald-700 font-semibold">Actief</span>
-                          ) : (
-                            <span className="text-red-600">Inactief</span>
-                          )}
+                        <div className="text-[9px] mt-1 text-slate-500">
+                          {u.isActive ? <span className="text-emerald-700 font-bold">ACTIEF</span> : <span className="text-rose-400">INACTIEF</span>}
                         </div>
                       </td>
 
-                      {/* Permissions Chips */}
-                      <td className="p-4 text-center">
+                      {/* Rights */}
+                      <td className="p-4 text-center font-sans">
                         <div className="inline-flex flex-wrap items-center justify-center gap-1.5 text-[10px]">
-                          {/* Overzicht */}
                           <button
                             onClick={() => handleTogglePermission(u, 'canViewOverview')}
-                            className={`px-2 py-0.5 rounded-lg border transition-colors flex items-center gap-1 cursor-pointer ${
+                            className={`px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 cursor-pointer font-mono ${
                               u.canViewOverview || u.isAdmin
-                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200 font-medium'
-                                : 'bg-slate-50 text-slate-400 border-slate-200'
+                                ? 'bg-cyan-50 text-cyan-300 border-cyan-200'
+                                : 'bg-slate-50 text-slate-600 border-slate-200'
                             }`}
-                            title="Klik om recht 'Overzicht' te wisselen"
                           >
-                            <Users className="w-2.5 h-2.5" />
-                            <span>Overzicht: {u.canViewOverview || u.isAdmin ? 'Ja' : 'Nee'}</span>
+                            <Users className="w-3 h-3" />
+                            <span>OVERZICHT</span>
                           </button>
 
-                          {/* Planner Mode */}
                           <button
                             onClick={() => handleTogglePermission(u, 'canPlannerMode')}
-                            className={`px-2 py-0.5 rounded-lg border transition-colors flex items-center gap-1 cursor-pointer ${
+                            className={`px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 cursor-pointer font-mono ${
                               u.canPlannerMode || u.isAdmin
-                                ? 'bg-amber-50 text-amber-700 border-amber-200 font-medium'
-                                : 'bg-slate-50 text-slate-400 border-slate-200'
+                                ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                : 'bg-slate-50 text-slate-600 border-slate-200'
                             }`}
-                            title="Klik om recht 'Planner Mode' te wisselen"
                           >
-                            <Shield className="w-2.5 h-2.5" />
-                            <span>Planner: {u.canPlannerMode || u.isAdmin ? 'Ja' : 'Nee'}</span>
+                            <Shield className="w-3 h-3" />
+                            <span>PLANNER</span>
                           </button>
 
-                          {/* Planning */}
                           <button
                             onClick={() => handleTogglePermission(u, 'canEditPlanning')}
-                            className={`px-2 py-0.5 rounded-lg border transition-colors flex items-center gap-1 cursor-pointer ${
+                            className={`px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 cursor-pointer font-mono ${
                               u.canEditPlanning || u.isAdmin
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-medium'
-                                : 'bg-slate-50 text-slate-400 border-slate-200'
+                                ? 'bg-emerald-600/10 text-emerald-700 border-emerald-500/30'
+                                : 'bg-slate-50 text-slate-600 border-slate-200'
                             }`}
-                            title="Klik om recht 'Planning invullen' te wisselen"
                           >
-                            <Calendar className="w-2.5 h-2.5" />
-                            <span>Planning: {u.canEditPlanning || u.isAdmin ? 'Ja' : 'Nee'}</span>
+                            <Calendar className="w-3 h-3" />
+                            <span>PLANNING</span>
                           </button>
 
-                          {/* Admin */}
                           {u.isAdmin && (
-                            <span className="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1 font-bold">
-                              <ShieldCheck className="w-2.5 h-2.5" />
-                              <span>Admin</span>
+                            <span className="px-2 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold">
+                              ADMIN
                             </span>
                           )}
                         </div>
@@ -896,39 +888,35 @@ const handleToggleMaintenance = async () => {
                       {/* Actions */}
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* View/Edit Planning */}
                           <button
                             onClick={() => setPlanningModalUser(u)}
-                            className="p-1.5 rounded-xl bg-slate-50 border border-slate-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 transition-colors cursor-pointer"
-                            title="Planning van medewerker bekijken / bewerken"
+                            className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-cyan-700 hover:border-cyan-500/50 transition-colors cursor-pointer"
+                            title="Planning bekijken/bewerken"
                           >
                             <Calendar className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Change Access Code */}
                           <button
                             onClick={() => handleOpenChangeCodeModal(u)}
-                            className="p-1.5 rounded-xl bg-slate-50 border border-slate-200 text-amber-600 hover:bg-amber-50 hover:border-amber-200 transition-colors cursor-pointer"
-                            title="Nieuwe toegangscode toewijzen"
+                            className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-amber-700 hover:border-amber-200 transition-colors cursor-pointer"
+                            title="Nieuwe code toewijzen"
                           >
                             <Key className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Edit User Info */}
                           <button
                             onClick={() => setEditingUser({ ...u })}
-                            className="p-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-                            title="Gegevens bewerken"
+                            className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-600 transition-colors cursor-pointer"
+                            title="Bewerken"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Delete */}
                           <button
                             onClick={() => setDeleteConfirmUser(u)}
                             disabled={isSelf}
-                            className="p-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                            title="Gebruiker verwijderen"
+                            className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-rose-400 hover:bg-rose-50 hover:border-rose-200 transition-colors disabled:opacity-20 cursor-pointer"
+                            title="Verwijderen"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -941,154 +929,91 @@ const handleToggleMaintenance = async () => {
             </table>
           </div>
         )}
+        </div>}
       </div>
 
-      {/* === MODAL: CREATE USER === */}
+      {/* Modals met ICT Cyber Styling */}
+      {/* CREATE MODAL */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md shadow-xl overflow-hidden">
-            <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-50/80 backdrop-blur-md animate-in fade-in font-sans">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50">
               <div className="flex items-center gap-2.5">
-                <UserPlus className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-bold text-base text-slate-900">Nieuwe Gebruiker Aanmaken</h3>
+                <UserPlus className="w-5 h-5 text-cyan-700" />
+                <h3 className="font-mono font-bold text-sm uppercase text-slate-900 tracking-wider">Nieuwe Gebruiker Aanmaken</h3>
               </div>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
-              >
+              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 hover:text-slate-900">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleCreateUser} className="p-6 space-y-4 text-xs">
               <div>
-                <label className="block text-slate-700 mb-1.5 uppercase font-bold text-[10px] tracking-wider">
-                  Volledige Naam *
-                </label>
+                <label className="text-slate-500 font-mono text-[10px] uppercase block mb-1">Volledige Naam *</label>
                 <input
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="bijv. Jan Janssens"
+                  placeholder="bv. Jan Janssens"
                   required
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3.5 py-2.5 text-sm focus:border-indigo-600 focus:bg-white outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3.5 py-2.5 text-xs outline-none focus:border-cyan-500 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-700 mb-1.5 uppercase font-bold text-[10px] tracking-wider">
-                  Functie / Rol
-                </label>
+                <label className="text-slate-500 font-mono text-[10px] uppercase block mb-1">Functie / Rol</label>
                 <input
                   type="text"
                   value={newRole}
                   onChange={(e) => setNewRole(e.target.value)}
-                  placeholder="bijv. Teamlid / Verpleegkundige"
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3.5 py-2.5 text-sm focus:border-indigo-600 focus:bg-white outline-none transition-all"
+                  placeholder="bv. Teamlid / Verpleegkundige"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3.5 py-2.5 text-xs outline-none focus:border-cyan-500 font-mono"
                 />
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-slate-700 uppercase font-bold text-[10px] tracking-wider">
-                    Toegangscode *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleGenerateCodeForCreate}
-                    className="text-indigo-600 hover:underline text-[11px] flex items-center gap-1 font-bold cursor-pointer"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    <span>Genereer code</span>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-slate-500 font-mono text-[10px] uppercase">Toegangscode *</label>
+                  <button type="button" onClick={handleGenerateCodeForCreate} className="text-cyan-700 font-mono text-[10px] flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" /> Genereer
                   </button>
                 </div>
                 <input
                   type="text"
                   value={newAccessCode}
                   onChange={(e) => setNewAccessCode(e.target.value.toUpperCase())}
-                  placeholder="GBR-XXXX-XX"
                   required
-                  className="w-full bg-slate-50 border border-slate-200 text-indigo-700 font-mono font-bold tracking-widest text-center rounded-xl px-3.5 py-2.5 text-sm focus:border-indigo-600 focus:bg-white outline-none uppercase"
+                  className="w-full bg-slate-50 border border-slate-200 text-cyan-700 font-mono font-bold tracking-widest text-center rounded-xl px-3.5 py-2.5 text-sm uppercase outline-none focus:border-cyan-500"
                 />
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Deze code geef je aan de medewerker om in te loggen.
-                </p>
               </div>
 
-              {/* Permissions Checkboxes */}
-              <div className="pt-2 border-t border-slate-100 space-y-2.5">
-                <label className="text-slate-700 uppercase font-bold text-[10px] block tracking-wider">
-                  Toegangsrechten
+              <div className="pt-2 border-t border-slate-200 space-y-2">
+                <label className="text-slate-500 font-mono text-[10px] uppercase block">Toegangsrechten</label>
+                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+                  <input type="checkbox" checked={newCanEditPlanning} onChange={(e) => setNewCanEditPlanning(e.target.checked)} className="accent-cyan-500" />
+                  <span className="text-slate-700">Planning invullen</span>
                 </label>
-                
-                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={newCanEditPlanning}
-                    onChange={(e) => setNewCanEditPlanning(e.target.checked)}
-                    className="accent-indigo-600 w-4 h-4 rounded"
-                  />
-                  <div>
-                    <span className="font-semibold text-slate-900">Planning invullen</span>
-                    <p className="text-[10px] text-slate-500">Gebruiker kan eigen maandshifts selecteren & opslaan</p>
-                  </div>
+                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+                  <input type="checkbox" checked={newCanPlannerMode} onChange={(e) => setNewCanPlannerMode(e.target.checked)} className="accent-cyan-500" />
+                  <span className="text-slate-700">Planner Mode</span>
                 </label>
-
-                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={newCanPlannerMode}
-                    onChange={(e) => setNewCanPlannerMode(e.target.checked)}
-                    className="accent-indigo-600 w-4 h-4 rounded"
-                  />
-                  <div>
-                    <span className="font-semibold text-slate-900">Planner Mode</span>
-                    <p className="text-[10px] text-slate-500">Gebruiker kan planningen van collega's aanpassen & 'Team plannen' gebruiken</p>
-                  </div>
+                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+                  <input type="checkbox" checked={newCanViewOverview} onChange={(e) => setNewCanViewOverview(e.target.checked)} className="accent-cyan-500" />
+                  <span className="text-slate-700">Overzicht bekijken</span>
                 </label>
-
-                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={newCanViewOverview}
-                    onChange={(e) => setNewCanViewOverview(e.target.checked)}
-                    className="accent-indigo-600 w-4 h-4 rounded"
-                  />
-                  <div>
-                    <span className="font-semibold text-slate-900">Overzicht bekijken</span>
-                    <p className="text-[10px] text-slate-500">Gebruiker kan het teammatrix rooster inzien</p>
-                  </div>
-                </label>
-
-                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-amber-50/50 border border-amber-200 cursor-pointer hover:bg-amber-50 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={newIsAdmin}
-                    onChange={(e) => setNewIsAdmin(e.target.checked)}
-                    className="accent-amber-600 w-4 h-4 rounded"
-                  />
-                  <div>
-                    <span className="font-semibold text-amber-900">Systeembeheerder (Admin)</span>
-                    <p className="text-[10px] text-amber-700">Volledige beheerderstoegang tot alle gebruikers</p>
-                  </div>
+                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-amber-950/30 border border-amber-500/30 cursor-pointer">
+                  <input type="checkbox" checked={newIsAdmin} onChange={(e) => setNewIsAdmin(e.target.checked)} className="accent-amber-500" />
+                  <span className="text-amber-300 font-bold">Systeembeheerder (Admin)</span>
                 </label>
               </div>
 
-              <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 font-medium cursor-pointer"
-                >
-                  Annuleren
+              <div className="pt-4 border-t border-slate-200 flex justify-end gap-3 font-mono">
+                <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600">
+                  ANNULEREN
                 </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
+                <button type="submit" disabled={isSubmitting} className="px-5 py-2 rounded-xl bg-cyan-500 text-white font-bold flex items-center gap-2">
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-                  <span>Aanmaken</span>
+                  <span>AANMAKEN</span>
                 </button>
               </div>
             </form>
@@ -1096,278 +1021,133 @@ const handleToggleMaintenance = async () => {
         </div>
       )}
 
-      {/* === MODAL: SHOWCASE NEW ACCESS CODE === */}
+      {/* SHOWCASE NEW CODE MODAL */}
       {newlyCreatedCodeInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 shadow-2xl text-center space-y-5">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mx-auto">
-              <Key className="w-7 h-7" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-50/80 backdrop-blur-md animate-in fade-in font-mono">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 shadow-2xl text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-cyan-50 border border-cyan-200 flex items-center justify-center text-cyan-700 mx-auto">
+              <Key className="w-6 h-6" />
             </div>
-
-            <div>
-              <h3 className="font-bold text-xl text-slate-900">
-                Toegangscode voor {newlyCreatedCodeInfo.name}
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Kopieer deze code en geef hem aan de medewerker. In de database wordt alleen de veilige SHA-256 hash bewaard.
-              </p>
-            </div>
+            <h3 className="font-bold text-lg text-slate-900">Toegangscode Gegenereerd</h3>
+            <p className="text-xs text-slate-500">Medewerker: {newlyCreatedCodeInfo.name}</p>
 
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-              <span className="font-mono text-2xl font-bold tracking-widest text-indigo-700 select-all">
-                {newlyCreatedCodeInfo.code}
-              </span>
-              <button
-                onClick={() => handleCopyCode(newlyCreatedCodeInfo.code)}
-                className="p-2 rounded-xl bg-white border border-slate-200 hover:border-indigo-600 text-indigo-600 transition-colors cursor-pointer shadow-xs"
-                title="Kopieer code"
-              >
-                {copiedCode ? <CheckCheck className="w-5 h-5 text-emerald-600" /> : <Copy className="w-5 h-5" />}
+              <span className="text-cyan-700 font-bold text-xl tracking-widest">{newlyCreatedCodeInfo.code}</span>
+              <button onClick={() => handleCopyCode(newlyCreatedCodeInfo.code)} className="p-2 text-slate-500 hover:text-slate-900">
+                {copiedCode ? <CheckCheck className="w-5 h-5 text-emerald-700" /> : <Copy className="w-5 h-5" />}
               </button>
             </div>
 
-            <button
-              onClick={() => setNewlyCreatedCodeInfo(null)}
-              className="w-full py-3 rounded-2xl bg-indigo-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all cursor-pointer"
-            >
-              Klaar / Sluiten
+            <button onClick={() => setNewlyCreatedCodeInfo(null)} className="w-full py-2.5 rounded-xl bg-cyan-500 text-white font-bold">
+              SLUITEN
             </button>
           </div>
         </div>
       )}
 
-      {/* === MODAL: CHANGE ACCESS CODE === */}
+      {/* CHANGE CODE MODAL */}
       {changeCodeUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md shadow-xl overflow-hidden">
-            <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-              <div className="flex items-center gap-2.5">
-                <Key className="w-5 h-5 text-amber-600" />
-                <h3 className="font-bold text-base text-slate-900">
-                  Toegangscode Wijzigen: {changeCodeUser.name}
-                </h3>
-              </div>
-              <button
-                onClick={() => setChangeCodeUser(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-50/80 backdrop-blur-md animate-in fade-in font-mono">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <h3 className="font-bold text-lg text-slate-900">Code Wijzigen: {changeCodeUser.name}</h3>
+            <div>
+              <input
+                type="text"
+                value={generatedNewCode}
+                onChange={(e) => setGeneratedNewCode(e.target.value.toUpperCase())}
+                className="w-full bg-slate-50 border border-slate-200 text-amber-700 font-bold tracking-widest text-center rounded-xl p-3 text-base uppercase"
+              />
             </div>
-
-            <div className="p-6 space-y-4 text-xs">
-              <p className="text-slate-500">
-                Zodra je een nieuwe code instelt, wordt de vorige toegangscode direct permanent ongeldig gemaakt.
-              </p>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-slate-700 uppercase font-bold text-[10px] tracking-wider">
-                    Nieuwe Toegangscode
-                  </label>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const res = await api.generateAccessCode(changeCodeUser.name.substring(0, 3));
-                      setGeneratedNewCode(res.code);
-                    }}
-                    className="text-indigo-600 hover:underline text-[11px] flex items-center gap-1 font-bold cursor-pointer"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    <span>Genereer willekeurige code</span>
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={generatedNewCode}
-                  onChange={(e) => setGeneratedNewCode(e.target.value.toUpperCase())}
-                  placeholder="GBR-XXXX-XX"
-                  className="w-full bg-slate-50 border border-slate-200 text-indigo-700 font-mono font-bold tracking-widest text-center rounded-xl px-3.5 py-2.5 text-base focus:border-indigo-600 focus:bg-white outline-none uppercase"
-                />
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setChangeCodeUser(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:text-slate-900 cursor-pointer font-medium"
-                >
-                  Annuleren
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmitChangeCode}
-                  disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-amber-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-amber-700 shadow-md shadow-amber-100 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
-                  <span>Code Opslaan</span>
-                </button>
-              </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => setChangeCodeUser(null)} className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 text-xs">
+                ANNULEREN
+              </button>
+              <button onClick={handleSubmitChangeCode} disabled={isSubmitting} className="px-5 py-2 rounded-xl bg-amber-400 text-slate-900 font-bold text-xs">
+                OPSLAAN
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* === MODAL: EDIT USER === */}
+      {/* EDIT USER MODAL */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md shadow-xl overflow-hidden">
-            <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-              <div className="flex items-center gap-2.5">
-                <Edit3 className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-bold text-base text-slate-900">Gebruiker Bewerken</h3>
-              </div>
-              <button
-                onClick={() => setEditingUser(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-50/80 backdrop-blur-md animate-in fade-in font-sans">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 text-xs">
+            <div className="flex justify-between items-center border-b border-slate-200 pb-3 font-mono">
+              <h3 className="font-bold text-slate-900 uppercase">Gebruiker Bewerken</h3>
+              <button onClick={() => setEditingUser(null)} className="text-slate-500"><X className="w-4 h-4" /></button>
             </div>
-
-            <form onSubmit={handleSaveEditUser} className="p-6 space-y-4 text-xs">
+            <form onSubmit={handleSaveEditUser} className="space-y-3">
               <div>
-                <label className="block text-slate-700 mb-1.5 uppercase font-bold text-[10px] tracking-wider">
-                  Naam
-                </label>
+                <label className="text-slate-500 font-mono text-[10px] uppercase block mb-1">Naam</label>
                 <input
                   type="text"
                   value={editingUser.name}
                   onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
-                  required
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3.5 py-2 text-sm focus:border-indigo-600 focus:bg-white outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl p-2.5 font-mono"
                 />
               </div>
-
               <div>
-                <label className="block text-slate-700 mb-1.5 uppercase font-bold text-[10px] tracking-wider">
-                  Functie / Rol
-                </label>
+                <label className="text-slate-500 font-mono text-[10px] uppercase block mb-1">Functie</label>
                 <input
                   type="text"
                   value={editingUser.role || ''}
                   onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3.5 py-2 text-sm focus:border-indigo-600 focus:bg-white outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl p-2.5 font-mono"
                 />
               </div>
-
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <label className="text-slate-700 uppercase font-bold text-[10px] block tracking-wider">
-                  Rechten & Toegang
+              <div className="space-y-2 pt-2 border-t border-slate-200">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={editingUser.canEditPlanning} onChange={(e) => setEditingUser({ ...editingUser, canEditPlanning: e.target.checked })} className="accent-cyan-500" />
+                  <span className="text-slate-700">Planning invullen</span>
                 </label>
-                
-                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={editingUser.canEditPlanning}
-                    onChange={(e) => setEditingUser({ ...editingUser, canEditPlanning: e.target.checked })}
-                    className="accent-indigo-600 w-4 h-4 rounded"
-                  />
-                  <span className="font-semibold text-slate-900">Planning invullen</span>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={editingUser.canPlannerMode} onChange={(e) => setEditingUser({ ...editingUser, canPlannerMode: e.target.checked })} className="accent-cyan-500" />
+                  <span className="text-slate-700">Planner Mode</span>
                 </label>
-
-                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={editingUser.canPlannerMode}
-                    onChange={(e) => setEditingUser({ ...editingUser, canPlannerMode: e.target.checked })}
-                    className="accent-indigo-600 w-4 h-4 rounded"
-                  />
-                  <span className="font-semibold text-slate-900">Planner Mode</span>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={editingUser.canViewOverview} onChange={(e) => setEditingUser({ ...editingUser, canViewOverview: e.target.checked })} className="accent-cyan-500" />
+                  <span className="text-slate-700">Overzicht bekijken</span>
                 </label>
-
-                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={editingUser.canViewOverview}
-                    onChange={(e) => setEditingUser({ ...editingUser, canViewOverview: e.target.checked })}
-                    className="accent-indigo-600 w-4 h-4 rounded"
-                  />
-                  <span className="font-semibold text-slate-900">Overzicht bekijken</span>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={editingUser.isAdmin} onChange={(e) => setEditingUser({ ...editingUser, isAdmin: e.target.checked })} className="accent-amber-500" />
+                  <span className="text-amber-300 font-bold">Admin Status</span>
                 </label>
-
-                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-amber-50/50 border border-amber-200 cursor-pointer hover:bg-amber-50 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={editingUser.isAdmin}
-                    onChange={(e) => setEditingUser({ ...editingUser, isAdmin: e.target.checked })}
-                    className="accent-amber-600 w-4 h-4 rounded"
-                  />
-                  <span className="font-semibold text-amber-900">Systeembeheerder (Admin)</span>
-                </label>
-
-                <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={editingUser.isActive}
-                    onChange={(e) => setEditingUser({ ...editingUser, isActive: e.target.checked })}
-                    className="accent-indigo-600 w-4 h-4 rounded"
-                  />
-                  <span className="font-semibold text-slate-900">Account is actief</span>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={editingUser.isActive} onChange={(e) => setEditingUser({ ...editingUser, isActive: e.target.checked })} className="accent-emerald-500" />
+                  <span className="text-emerald-700">Account actief</span>
                 </label>
               </div>
-
-              <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setEditingUser(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:text-slate-900 cursor-pointer font-medium"
-                >
-                  Annuleren
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  <span>Opslaan</span>
-                </button>
+              <div className="flex justify-end gap-3 pt-3 font-mono">
+                <button type="button" onClick={() => setEditingUser(null)} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl">ANNULEREN</button>
+                <button type="submit" disabled={isSubmitting} className="px-5 py-2 bg-cyan-500 text-white font-bold rounded-xl">OPSLAAN</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* === MODAL: DELETE CONFIRMATION === */}
+      {/* DELETE CONFIRMATION MODAL */}
       {deleteConfirmUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-sm p-6 text-center space-y-4 shadow-xl">
-            <div className="w-12 h-12 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-red-600 mx-auto">
-              <Trash2 className="w-6 h-6" />
-            </div>
-
-            <div>
-              <h3 className="font-bold text-lg text-slate-900">
-                Gebruiker Verwijderen?
-              </h3>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Weet je zeker dat je <strong>{deleteConfirmUser.name}</strong> wilt verwijderen? Alle ingevulde maandplanningen van deze medewerker worden ook definitief gewist.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <button
-                onClick={() => setDeleteConfirmUser(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 hover:text-slate-900 text-xs font-medium cursor-pointer"
-              >
-                Annuleren
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-50/80 backdrop-blur-md animate-in fade-in font-mono">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-sm p-6 shadow-2xl text-center space-y-4">
+            <Trash2 className="w-8 h-8 text-rose-400 mx-auto" />
+            <h3 className="font-bold text-slate-900">Gebruiker Verwijderen?</h3>
+            <p className="text-xs text-slate-500">{deleteConfirmUser.name} permanent wissen uit de database?</p>
+            <div className="flex justify-center gap-3 pt-2">
+              <button onClick={() => setDeleteConfirmUser(null)} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs">
+                ANNULEREN
               </button>
-              <button
-                onClick={handleConfirmDelete}
-                disabled={isSubmitting}
-                className="px-5 py-2 rounded-xl bg-red-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-red-700 shadow-md shadow-red-100 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                <span>Definitief Verwijderen</span>
+              <button onClick={handleConfirmDelete} disabled={isSubmitting} className="px-5 py-2 bg-rose-500 text-white font-bold rounded-xl text-xs">
+                VERWIJDEREN
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* === MODAL: ADMIN PLANNING EDITOR === */}
+      {/* ADMIN PLANNING MODAL */}
       {planningModalUser && (
         <AdminPlanningModal
           user={planningModalUser}
