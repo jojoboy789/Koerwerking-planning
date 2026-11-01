@@ -209,7 +209,15 @@ function loadDatabase() {
         }
       }
     }
-    return data;
+    return {
+      ...data,
+      specialDays: Array.isArray(data.specialDays) ? data.specialDays : [],
+      maintenance: data.maintenance || {
+        enabled: false,
+        updatedAt: null,
+        updatedBy: null
+      }
+    };
   } catch (err) {
     console.error("Error reading db.json:", err);
     return seedInitialDatabase();
@@ -397,8 +405,14 @@ function seedInitialDatabase() {
   });
   return {
     users: initialUsers,
+    specialDays: [],
     plannings: samplePlannings,
-    sessions: {}
+    sessions: {},
+    maintenance: {
+      enabled: false,
+      updatedAt: null,
+      updatedBy: null
+    }
   };
 }
 var db2 = loadDatabase();
@@ -504,8 +518,14 @@ async function startServer() {
       console.log("\u{1F525} Loaded database state from Cloud Firestore successfully.");
       db2 = {
         users: remoteData.users,
+        specialDays: Array.isArray(remoteData.specialDays) ? remoteData.specialDays : db2.specialDays || [],
         plannings: remoteData.plannings || [],
-        sessions: db2.sessions || {}
+        sessions: db2.sessions || {},
+        maintenance: remoteData.maintenance || db2.maintenance || {
+          enabled: false,
+          updatedAt: null,
+          updatedBy: null
+        }
       };
       saveDatabase(db2);
     } else {
@@ -515,6 +535,38 @@ async function startServer() {
   } catch (err) {
     console.warn("Firebase initial sync deferred/offline:", err);
   }
+  app2.get("/api/special-days", authMiddleware, (req, res) => {
+    res.json({ specialDays: db2.specialDays || [] });
+  });
+  app2.post("/api/admin/special-days", authMiddleware, requireAdminMiddleware, (req, res) => {
+    const { date, type } = req.body || {};
+    if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !["replacementHoliday", "strike"].includes(type)) {
+      return res.status(400).json({ error: "Kies een geldige datum en type." });
+    }
+    const parsed = /* @__PURE__ */ new Date(`${date}T00:00:00`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+      return res.status(400).json({ error: "De datum is ongeldig." });
+    }
+    db2.specialDays = db2.specialDays || [];
+    const existing = db2.specialDays.findIndex((day) => day.date === date);
+    const entry = {
+      date,
+      type,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      createdBy: req.user?.name || "Admin"
+    };
+    if (existing >= 0) db2.specialDays[existing] = entry;
+    else db2.specialDays.push(entry);
+    db2.specialDays.sort((a, b) => a.date.localeCompare(b.date));
+    saveDatabase(db2);
+    res.json({ success: true, specialDays: db2.specialDays });
+  });
+  app2.delete("/api/admin/special-days/:date", authMiddleware, requireAdminMiddleware, (req, res) => {
+    const date = String(req.params.date || "");
+    db2.specialDays = (db2.specialDays || []).filter((day) => day.date !== date);
+    saveDatabase(db2);
+    res.json({ success: true, specialDays: db2.specialDays });
+  });
   app2.get("/api/auth/setup-info", (req, res) => {
     const hasAdmin = db2.users.some((u) => u.isAdmin && u.isActive);
     const dynamicPresets = db2.users.filter((u) => u.isActive && u.rawCode).slice(0, 6).map((u) => ({
@@ -657,6 +709,38 @@ async function startServer() {
       message: "Je toegangscode is succesvol gewijzigd. Je wordt nu uitgelogd en kunt met de nieuwe code inloggen."
     });
   });
+  app2.get("/api/maintenance/status", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      enabled: db2.maintenance?.enabled ?? false,
+      updatedAt: db2.maintenance?.updatedAt ?? null,
+      updatedBy: db2.maintenance?.updatedBy ?? null
+    });
+  });
+  app2.put(
+    "/api/admin/maintenance",
+    authMiddleware,
+    requireAdminMiddleware,
+    (req, res) => {
+      const { enabled } = req.body;
+      if (typeof enabled !== "boolean") {
+        return res.status(400).json({
+          error: "Ongeldige onderhoudsinstelling."
+        });
+      }
+      db2.maintenance = {
+        enabled,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedBy: req.user.name
+      };
+      saveDatabase(db2);
+      return res.json({
+        success: true,
+        maintenance: db2.maintenance,
+        message: enabled ? "Onderhoudsmodus ingeschakeld." : "Onderhoudsmodus uitgeschakeld."
+      });
+    }
+  );
   const schedulerAuthClient = new import_google_auth_library.OAuth2Client();
   async function verifySchedulerRequest(req) {
     const authHeader = req.headers.authorization;
@@ -738,7 +822,13 @@ async function startServer() {
     return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
   function htmlToTelegramText(html) {
-    return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|section|article|h[1-6]|li|tr)>/gi, "\n").replace(/<li\b[^>]*>/gi, "\u2022 ").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|section|article|h[1-6]|li|tr)>/gi, "\n").replace(/<li\b[^>]*>/gi, "\u2022 ").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&egrave;/gi, "\xE8").replace(/&eacute;/gi, "\xE9").replace(/&euml;/gi, "\xEB").replace(/&agrave;/gi, "\xE0").replace(/&ocirc;/gi, "\xF4").replace(/&uuml;/gi, "\xFC").replace(/&ndash;/gi, "\u2013").replace(/&mdash;/gi, "\u2014").replace(/&rsquo;/gi, "\u2019").replace(/&lsquo;/gi, "\u2018").replace(/&rdquo;/gi, "\u201D").replace(/&ldquo;/gi, "\u201C").replace(/&hellip;/gi, "\u2026").replace(
+      /&#(\d+);/g,
+      (_, code) => String.fromCodePoint(Number(code))
+    ).replace(
+      /&#x([0-9a-f]+);/gi,
+      (_, code) => String.fromCodePoint(parseInt(code, 16))
+    ).replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   }
   async function sendOCPlanningUpdateToTelegram(slides) {
     const changedSlides = slides.filter((slide) => slide.dated);
@@ -798,18 +888,44 @@ ${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}
         html: await fetchOCPlanningSlideHtml(slide.id)
       }))
     );
-    const heading = `\u{1F68C} <b>OC BUS GBR \xB7 ACTUELE DAGPLANNING</b>\\n<i>Automatische update \xB7 ${new Intl.DateTimeFormat("nl-BE", {
+    const now = /* @__PURE__ */ new Date();
+    const dateLabel = new Intl.DateTimeFormat("nl-BE", {
       timeZone: OC_PLANNING_TIME_ZONE,
-      dateStyle: "full",
-      timeStyle: "short"
-    }).format(/* @__PURE__ */ new Date())}</i>\\n\\n`;
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    }).format(now);
+    const timeLabel = new Intl.DateTimeFormat("nl-BE", {
+      timeZone: OC_PLANNING_TIME_ZONE,
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(now);
+    const heading = `\u{1F68C} <b>OC BUS GBR</b>
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F4C5} ${escapeTelegramHtml(dateLabel)}
+\u{1F552} Update om ${timeLabel}
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+
+`;
     const maxLength = 3500;
     const messages = [];
     let message = heading;
-    for (const slide of slides) {
-      const category = slide.dated ? "Dagplanning" : "Mededeling";
-      const content = htmlToTelegramText(slide.html);
-      const section = `<b>${escapeTelegramHtml(category)}: ${escapeTelegramHtml(slide.title)}</b>\\n${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}\\n\\n`;
+    const orderedSlides = [
+      ...slides.filter((slide) => !slide.dated),
+      ...slides.filter((slide) => slide.dated)
+    ];
+    for (const slide of orderedSlides) {
+      const isDayPlanning = slide.dated;
+      const category = isDayPlanning ? "\u{1F4CB} DAGPLANNING" : "\u{1F4E2} MEDEDELING";
+      const content = htmlToTelegramText(slide.html).replace(/\n{3,}/g, "\n\n").trim();
+      if (!content) continue;
+      const section = `${category}
+<b>${escapeTelegramHtml(slide.title)}</b>
+\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+${escapeTelegramHtml(content)}
+
+`;
       if ((message + section).length > maxLength && message !== heading) {
         messages.push(message.trim());
         message = heading;
@@ -822,8 +938,14 @@ ${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}
           message = heading;
           continue;
         }
-        messages.push((message + remaining.slice(0, available)).trim());
-        remaining = remaining.slice(available);
+        let splitAt = remaining.lastIndexOf("\n", available);
+        if (splitAt < Math.floor(available * 0.5)) {
+          splitAt = available;
+        }
+        messages.push(
+          (message + remaining.slice(0, splitAt)).trim()
+        );
+        remaining = remaining.slice(splitAt).trimStart();
         message = heading;
       }
       message += remaining;
@@ -840,7 +962,9 @@ ${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}
         throw new Error("Minstens \xE9\xE9n Telegram-bericht kon niet worden verstuurd.");
       }
     }
-    console.log(`Automatische OC Planning-update verstuurd (${messages.length} Telegram-bericht(en)).`);
+    console.log(
+      `OC Planning-update verstuurd (${messages.length} Telegram-bericht(en)).`
+    );
   }
   app2.post(
     "/api/oc-planning/scheduled-telegram",
@@ -865,6 +989,9 @@ ${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}
       try {
         const claimed = await claimScheduledTelegramRun(runId);
         if (!claimed) {
+          console.warn(
+            `[Scheduler] VERZENDING OVERGESLAGEN: ${runId} bestaat al in Firestore.`
+          );
           return res.status(200).json({
             success: true,
             duplicate: true,
