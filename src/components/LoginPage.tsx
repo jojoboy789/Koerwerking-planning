@@ -224,7 +224,7 @@ export const LoginPage: React.FC = () => {
           </h1>
 
           <p className="login-subtitle leading-relaxed text-slate-300">
-            Meld je aan om je planning te bekijken.
+            Meld je aan om je planning te bekijken. Als je durft,....😈
           </p>
 
           {!maintenanceActive && (
