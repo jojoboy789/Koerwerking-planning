@@ -133,13 +133,24 @@ export const LoginPage: React.FC = () => {
           min-height: 0;
           background-color: #100d1c;
           background-image:
-            radial-gradient(ellipse at 88% 8%, rgba(249, 115, 22, 0.24) 0%, transparent 38%),
-            radial-gradient(ellipse at 8% 92%, rgba(139, 92, 246, 0.22) 0%, transparent 42%),
-            linear-gradient(145deg, #100d1c 0%, #21132f 48%, #0b1020 100%);
+            linear-gradient(rgba(8, 10, 20, 0.48), rgba(8, 10, 20, 0.58)),
+            url('/hallooooow.png');
+          background-position: center;
           background-repeat: no-repeat;
           background-size: cover;
           overflow: hidden;
           isolation: isolate;
+        }
+
+        .maintenance-warning-pattern {
+          position: absolute;
+          inset: 0;
+          z-index: 2;
+          pointer-events: none;
+          opacity: .23;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='130' viewBox='0 0 150 130'%3E%3Cg fill='%23ffdc00' fill-opacity='.12' stroke='%23ffdc00' stroke-opacity='.72' stroke-width='2'%3E%3Cpath d='M75 13 L130 112 H20 Z'/%3E%3C/g%3E%3Cpath d='M75 45 V76 M75 89 V91' stroke='%2317202b' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E");
+          background-size: 150px 130px;
+          background-position: center;
         }
         .login-content { width: 100%; max-height: 100%; display: flex; flex-direction: column; justify-content: center; }
         .login-brand { margin-bottom: clamp(6px, 1.2vh, 14px); }
@@ -177,46 +188,23 @@ export const LoginPage: React.FC = () => {
         }
       `}</style>
 
-      {/* Achtergrondaccenten */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-orange-500/20 blur-3xl"
-      />
-
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-violet-500/20 blur-3xl"
-      />
-
-      {/* Subtiele Halloween-accenten voor de normale loginpagina */}
-      {!maintenanceActive && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(
-              '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="180" viewBox="0 0 220 180"><g fill="none" stroke="#c4b5fd" stroke-width="1.3" opacity=".32"><path d="M0 0 L70 70 M0 35 L70 70 M35 0 L70 70 M0 70 L70 70 M70 0 L70 70 M0 0 Q35 0 70 70 Q70 35 0 70 Q35 35 0 0"/><path d="M220 180 L150 110 M220 145 L150 110 M185 180 L150 110 M220 110 L150 110 M150 180 L150 110 M220 180 Q185 180 150 110 Q150 145 220 110 Q185 145 220 180"/></g><g fill="#fb923c" opacity=".16"><path d="M105 20 C90 10 75 20 76 35 C65 44 72 61 86 63 C94 76 113 72 118 60 C133 53 129 35 118 30 C117 22 111 19 105 20 Z"/><path d="M105 17 L112 6 L116 24 Z"/></g><g fill="#a78bfa" opacity=".20"><path d="M125 98 Q140 78 155 98 L169 115 L155 112 L146 125 L137 112 L123 115 Z"/></g><g fill="#fb923c" opacity=".10"><path d="M105 135 C85 130 76 149 87 163 C99 178 123 172 126 156 C140 144 127 128 115 133 Z"/></g></svg>'
-            )}")`,
-            backgroundRepeat: 'repeat',
-            backgroundSize: '180px 150px',
-          }}
-        />
-      )}
-
-      {/* Onderhoudspatroon met waarschuwingsdriehoeken */}
+      {/* Halloween-onderhoudsachtergrond: wordt uitsluitend getoond wanneer onderhoud actief is. */}
       {maintenanceActive && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-0 overflow-hidden opacity-20"
+          className="absolute inset-0 z-0"
           style={{
-            backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(
-              '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="90" viewBox="0 0 100 90"><path d="M50 8 L94 82 H6 Z" fill="#ffdc00" stroke="#ffdc00" stroke-width="3"/><text x="50" y="66" font-size="43" font-family="Arial" font-weight="900" text-anchor="middle" fill="#17202b">!</text></svg>'
-            )}")`,
-            backgroundRepeat: 'repeat',
-            backgroundSize: 'clamp(78px, 18vw, 100px) clamp(70px, 16.2vw, 90px)',
+            backgroundImage:
+              "linear-gradient(rgba(8, 5, 12, 0.28), rgba(8, 5, 12, 0.42)), url('/halloween-maintenance-background.png')",
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            backgroundSize: 'cover',
           }}
         />
       )}
+
+
+      {/* Alleen de nieuwe Halloween-foto als achtergrond. Geen herhalende decoratieve patronen. */}
 
       {/* Login */}
       <main className="login-content relative z-10 w-full max-w-md">
