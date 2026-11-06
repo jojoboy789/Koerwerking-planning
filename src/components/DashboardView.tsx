@@ -192,11 +192,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   return <div className="mx-auto max-w-[1600px] space-y-6 px-3 py-4 pb-24 font-sans sm:px-6 sm:py-6 lg:px-8">
     {showInviteModal&&<TelegramInvitationModal onClose={closeInvite} inviteUrl={TELEGRAM_INVITE_URL}/>}
 
-    {/* Header / dashboard identity */}
+    {/* Header met geïntegreerde komende diensten */}
     <header className="relative isolate overflow-hidden rounded-[2rem] bg-[#101923] px-5 py-6 text-white shadow-xl sm:px-8 sm:py-8">
       <div className="absolute -right-12 -top-24 -z-10 h-72 w-72 rounded-full bg-yellow-400/15 blur-3xl" />
       <div className="absolute bottom-0 right-0 -z-10 h-1.5 w-2/5 bg-gradient-to-l from-[#ffdc00] to-transparent" />
-      <div className="flex flex-wrap items-center justify-between gap-5">
+      <div className="relative flex flex-wrap items-center justify-between gap-5">
         <div className="min-w-0">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.18em] text-yellow-300"><Sparkles size={13}/> Koerwerking planning</div>
           <h1 className="text-2xl font-black tracking-tight sm:text-4xl">Welkom terug{user?.name ? `, ${user.name}` : ''} <span aria-hidden="true">👋</span></h1>
@@ -205,6 +205,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.07] px-4 py-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#ffdc00] text-[#101923]"><CalendarDays size={22}/></div>
           <div><div className="text-xs font-semibold text-slate-300">Huidige periode</div><div className="text-lg font-extrabold">{MONTH_NAMES[currentMonth-1]} {currentYear}</div><div className="text-xs text-slate-400">{user?.role||'Teamlid'}</div></div>
+        </div>
+      </div>
+
+      <div className="relative mt-7 border-t border-white/10 pt-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="rounded-xl bg-white/10 p-2.5 text-yellow-300"><CalendarCheck2 size={20}/></span>
+            <div><h2 className="text-lg font-black text-white">Mijn komende diensten</h2><p className="text-xs text-slate-300">Vandaag, morgen en overmorgen</p></div>
+          </div>
+          <button type="button" onClick={() => onNavigate('planning')} className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-extrabold text-white transition hover:border-amber-300/50 hover:bg-white/15">Volledige planning <ArrowRight size={14}/></button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {upcomingDays.map(({date, code, loading}, index) => {
+            const shift = code ? (Object.values(SHIFT_DEFINITIONS).find((item) => item.code === code) as {label?: string; colorClass?: string} | undefined) : undefined;
+            const title = index === 0 ? 'Vandaag' : index === 1 ? 'Morgen' : 'Overmorgen';
+            const hours = code === 'V' ? '05:00 – 13:00' : code === 'D' ? '08:00 – 16:00 / 09:00 – 17:00' : code === 'L' ? '13:00 – 21:00' : '';
+            const dayNames = ['zo','ma','di','wo','do','vr','za'];
+            const status = loading ? 'Laden…' : code ? (shift?.label || (code === 'X' ? 'Niet inplannen' : code === 'R' ? 'Rustdag' : `Dienst ${code}`)) : 'Nog niet ingevuld';
+            return <div key={date.toISOString()} className={`min-w-0 rounded-2xl border p-4 ${index === 0 ? 'border-amber-300/70 bg-amber-300/10' : 'border-white/10 bg-white/[0.055]'}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div><p className={`text-xs font-extrabold uppercase tracking-wider ${index === 0 ? 'text-amber-300' : 'text-slate-300'}`}>{title}</p><p className="mt-1 text-sm font-bold text-white">{dayNames[date.getDay()]} {date.getDate()} {MONTH_NAMES[date.getMonth()]}</p></div>
+                {code && !loading && <span className={`flex h-9 min-w-9 items-center justify-center rounded-xl px-2 text-sm font-black ${shift?.colorClass || 'bg-slate-200 text-slate-800'}`}>{code}</span>}
+              </div>
+              <p className="mt-3 text-base font-black text-white sm:text-lg">{status}</p>
+              {!loading && hours && <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 sm:text-sm"><Clock3 size={14} className="shrink-0"/>{hours}</p>}
+            </div>;
+          })}
         </div>
       </div>
     </header>
@@ -282,31 +309,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
           <div className="relative mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-extrabold text-white">Naar OC planning <ArrowRight size={15}/></div>
         </button>
-
-    {/* Mini calendar: today, tomorrow and the day after */}
-    <Surface className="overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
-        <div className="flex items-center gap-3"><span className="rounded-xl bg-amber-100 p-2.5 text-amber-800"><CalendarCheck2 size={20}/></span><div><h2 className="text-lg font-black text-slate-900">Mijn komende diensten</h2><p className="text-xs text-slate-500">Vandaag, morgen en overmorgen</p></div></div>
-        <button type="button" onClick={() => onNavigate('planning')} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-xs font-extrabold text-slate-700 transition hover:bg-amber-100">Volledige planning <ArrowRight size={14}/></button>
-      </div>
-      <div className="grid gap-3 p-4 sm:grid-cols-3 sm:p-5">
-        {upcomingDays.map(({date, code, loading}, index) => {
-          const shift = code ? (Object.values(SHIFT_DEFINITIONS).find((item) => item.code === code) as {label?: string; colorClass?: string} | undefined) : undefined;
-          const title = index === 0 ? 'Vandaag' : index === 1 ? 'Morgen' : 'Overmorgen';
-          const hours = code === 'V' ? '05:00 – 13:00' : code === 'D' ? '08:00 – 16:00 / 09:00 – 17:00' : code === 'L' ? '13:00 – 21:00' : '';
-          const dayNames = ['zo','ma','di','wo','do','vr','za'];
-          const status = loading ? 'Laden…' : code ? (shift?.label || (code === 'X' ? 'Niet inplannen' : code === 'R' ? 'Rustdag' : `Dienst ${code}`)) : 'Nog niet ingevuld';
-          return <div key={date.toISOString()} className={`rounded-2xl border p-4 ${index === 0 ? 'border-amber-300 bg-amber-50 ring-1 ring-amber-200' : 'border-slate-200 bg-slate-50'}`}>
-            <div className="flex items-start justify-between gap-2"><div><p className={`text-xs font-extrabold uppercase tracking-wider ${index === 0 ? 'text-amber-800' : 'text-slate-500'}`}>{title}</p><p className="mt-1 text-sm font-bold text-slate-800">{dayNames[date.getDay()]} {date.getDate()} {MONTH_NAMES[date.getMonth()]}</p></div>
-              {code && !loading && <span className={`flex h-10 min-w-10 items-center justify-center rounded-xl px-2 text-sm font-black ${shift?.colorClass || 'bg-slate-200 text-slate-800'}`}>{code}</span>}
-            </div>
-            <p className="mt-4 text-lg font-black text-slate-900">{status}</p>{!loading && hours && <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600"><Clock3 size={14} className="shrink-0"/>{hours}</p>}
-          </div>;
-        })}
-      </div>
-    </Surface>
-
-
 
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,1fr)]">
       {/* Main workspace */}

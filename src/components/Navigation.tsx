@@ -1,7 +1,24 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Calendar, Users, Shield, LogOut, X, UserCheck, Menu, CalendarCheck, MessageSquare, Send, Key, BusFront, Clock, } from 'lucide-react';
+import {
+  LayoutDashboard,
+  CalendarDays,
+  Users,
+  Shield,
+  LogOut,
+  X,
+  UserCheck,
+  Menu,
+  CalendarCheck,
+  MessageSquare,
+  Send,
+  KeyRound,
+  BusFront,
+  Clock3,
+  ChevronRight,
+  Sparkles,
+  PanelLeftClose,
+} from 'lucide-react';
 import { ChangePasswordModal } from './ChangePasswordModal';
 
 /**
@@ -9,43 +26,120 @@ import { ChangePasswordModal } from './ChangePasswordModal';
  * Voorbeeld: 'Jonas': 'jonasje.PNG'
  */
 const USER_AVATARS: Record<string, string> = {
-  'Jonas': 'jonasje.PNG',
-  'Dylan': 'Dylantje.PNG',
-  'Illya': 'illyatje.PNG',
-  'Jordy': 'Jordyyyy.PNG',
-  'Bruno': 'Brunotje.PNG',
-  'Kurt': 'Kurtje.PNG',
+  Jonas: 'jonasje.PNG',
+  Dylan: 'Dylantje.PNG',
+  Illya: 'illyatje.PNG',
+  Jordy: 'Jordyyyy.PNG',
+  Bruno: 'Brunotje.PNG',
+  Kurt: 'Kurtje.PNG',
 };
-
 
 interface NavigationProps {
   currentTab: string;
   onSelectTab: (tab: string) => void;
 }
 
+type NavItem = {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  show: boolean;
+  badge?: string;
+  description: string;
+};
+
 export const Navigation: React.FC<NavigationProps> = ({
   currentTab,
   onSelectTab,
 }) => {
-  const { user, logout, canViewOverview, canEditPlanning, isAdmin, canPlannerMode } = useAuth();
+  const {
+    user,
+    logout,
+    canViewOverview,
+    canEditPlanning,
+    isAdmin,
+    canPlannerMode,
+  } = useAuth();
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<{ src: string; alt: string } | null>(null);
+  const [avatarFailed, setAvatarFailed] = useState(false);
 
-const [photoPreview, setPhotoPreview] = useState<{
-  src: string;
-  alt: string;
-} | null>(null);
-
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, show: canEditPlanning || isAdmin },
-    { id: 'planning', label: 'Mijn Planning', icon: Calendar, show: canEditPlanning || isAdmin },
-    { id: 'final_planning', label: 'Final Planning', icon: CalendarCheck, show: canEditPlanning || canViewOverview },
-    { id: 'team_planning', label: 'Team Plannen', icon: UserCheck, show: canPlannerMode || isAdmin, badge: 'PLANNER' },
-    { id: 'chat', label: 'Planner Chat', icon: MessageSquare, show: canPlannerMode || isAdmin },
-    { id: 'overview', label: 'Overzicht', icon: Users, show: canViewOverview, badge: 'LIVE' },
-    { id: 'admin', label: 'Admin beheer', icon: Shield, show: isAdmin, badge: 'ADMIN' },
-    { id: 'oc_planning', label: 'OC Planning', icon: BusFront, show: Boolean(user), badge: 'LIVE' },
+  const navItems: NavItem[] = [
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: LayoutDashboard,
+      show: canEditPlanning || isAdmin,
+      description: 'Startpagina en meldingen',
+    },
+    {
+      id: 'planning',
+      label: 'Mijn Planning',
+      icon: CalendarDays,
+      show: canEditPlanning || isAdmin,
+      description: 'Je persoonlijke planning',
+    },
+    {
+      id: 'final_planning',
+      label: 'Final Planning',
+      icon: CalendarCheck,
+      show: canEditPlanning || canViewOverview,
+      description: 'De definitieve planning',
+    },
+    {
+      id: 'team_planning',
+      label: 'Team Plannen',
+      icon: UserCheck,
+      show: canPlannerMode || isAdmin,
+      badge: 'PLANNER',
+      description: 'Planning voor het team beheren',
+    },
+    {
+      id: 'chat',
+      label: 'Planner Chat',
+      icon: MessageSquare,
+      show: canPlannerMode || isAdmin,
+      description: 'Overleg met planners',
+    },
+    {
+      id: 'overview',
+      label: 'Overzicht',
+      icon: Users,
+      show: canViewOverview,
+      badge: 'LIVE',
+      description: 'Live teamoverzicht',
+    },
+    {
+      id: 'admin',
+      label: 'Admin beheer',
+      icon: Shield,
+      show: isAdmin,
+      badge: 'ADMIN',
+      description: 'Gebruikers en instellingen',
+    },
+    {
+      id: 'oc_planning',
+      label: 'OC Planning',
+      icon: BusFront,
+      show: Boolean(user),
+      badge: 'LIVE',
+      description: 'Operationele planning',
+    },
   ];
+
+  const visibleItems = useMemo(() => navItems.filter((item) => item.show), [
+    canViewOverview,
+    canEditPlanning,
+    isAdmin,
+    canPlannerMode,
+    user,
+  ]);
+  const activeItem = visibleItems.find((item) => item.id === currentTab);
+  const avatarFile = user?.name ? USER_AVATARS[user.name.trim()] : undefined;
+  const avatarSrc = avatarFile && !avatarFailed ? `/${avatarFile}` : undefined;
+  const initials = user?.avatar || (user?.name ? user.name.substring(0, 2).toUpperCase() : 'U');
 
   const handleTabClick = (tab: string) => {
     onSelectTab(tab);
@@ -53,182 +147,300 @@ const [photoPreview, setPhotoPreview] = useState<{
   };
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+    setAvatarFailed(false);
+  }, [user?.name]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
         setIsMenuOpen(false);
         setShowChangePasswordModal(false);
         setPhotoPreview(null);
       }
     };
+
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMenuOpen]);
+
   return (
     <>
-      {/* Top Navigation Bar */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsMenuOpen(true)} className="p-2 rounded-lg hover:bg-slate-100">
-              <Menu className="w-6 h-6 text-slate-700" />
+      <header className="sticky top-0 z-40 border-b border-slate-800/70 bg-[#111827] text-white shadow-lg shadow-slate-950/10">
+        <div className="mx-auto flex min-h-[72px] max-w-[1600px] items-center justify-between gap-3 px-3 sm:px-5 lg:px-7">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen(true)}
+              className="group flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-white transition hover:border-[#ffdc00]/50 hover:bg-[#ffdc00] hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-[#ffdc00] focus:ring-offset-2 focus:ring-offset-[#111827]"
+              aria-label="Navigatiemenu openen"
+              aria-expanded={isMenuOpen}
+              aria-controls="main-navigation-drawer"
+            >
+              <Menu className="h-5 w-5" />
             </button>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">M</div>
-              <h1 className="font-bold text-lg text-slate-900">Mijn Planning</h1>
+
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#ffdc00] text-slate-950 shadow-[0_5px_18px_rgba(255,220,0,0.18)]">
+                <BusFront className="h-5 w-5" strokeWidth={2.5} />
+                <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#111827] bg-emerald-400" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-sm font-black tracking-wide text-white sm:text-base">
+                    KOERWERKING
+                  </p>
+                  <span className="hidden rounded-md border border-[#ffdc00]/25 bg-[#ffdc00]/10 px-1.5 py-0.5 text-[9px] font-black tracking-[0.16em] text-[#ffdc00] sm:inline-flex">
+                    PORTAAL
+                  </span>
+                </div>
+                <div className="flex min-w-0 items-center gap-1.5 text-xs text-slate-400">
+                  <span className="truncate">{activeItem?.label || 'Planning en teambeheer'}</span>
+                  <ChevronRight className="h-3 w-3 shrink-0 text-slate-600" />
+                  <span className="hidden truncate text-slate-500 sm:inline">Werkruimte</span>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2.5">
-            {(() => {
-              const avatarFile = user?.name
-                ? USER_AVATARS[user.name.trim()]
-                : undefined;
-              const avatarSrc = avatarFile ? `/${avatarFile}` : undefined;
-              const initials = user?.avatar || (
-                user?.name ? user.name.substring(0, 2).toUpperCase() : 'U'
-              );
 
-              return (
-                <button
-                  type="button"
-                  onClick={() => avatarSrc && setPhotoPreview({
-                    src: avatarSrc,
-                    alt: `Profielfoto van ${user?.name || 'gebruiker'}`
-                  })}
-                  disabled={!avatarSrc}
-                  className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-sm ring-2 ring-white disabled:cursor-default"
-                  title={avatarSrc ? `Bekijk foto van ${user?.name}` : (user?.name || 'Gebruiker')}
-                  aria-label={avatarSrc ? `Bekijk profielfoto van ${user?.name}` : 'Geen profielfoto beschikbaar'}
-                >
-                  {avatarSrc ? (
-                    <img
-                      src={avatarSrc}
-                      alt={`Profielfoto van ${user?.name || 'gebruiker'}`}
-                      className="h-full w-full object-cover"
-                      onError={(event) => {
-                        event.currentTarget.style.display = 'none';
-                      }}
-                    />
-                  ) : (
-                    initials
-                  )}
-                </button>
-              );
-            })()}
-            <span className="text-xs text-slate-600 truncate max-w-[100px]">{user?.name}</span>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <div className="hidden text-right sm:block">
+              <p className="max-w-[180px] truncate text-sm font-bold text-white">{user?.name || 'Gebruiker'}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Aangemeld</p>
+            </div>
             <button
+              type="button"
+              onClick={() => avatarSrc && setPhotoPreview({
+                src: avatarSrc,
+                alt: `Profielfoto van ${user?.name || 'gebruiker'}`,
+              })}
+              disabled={!avatarSrc}
+              className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-br from-[#ffdc00] to-amber-500 text-xs font-black text-slate-950 shadow-md transition hover:scale-[1.04] disabled:cursor-default"
+              title={avatarSrc ? `Bekijk foto van ${user?.name}` : (user?.name || 'Gebruiker')}
+              aria-label={avatarSrc ? `Bekijk profielfoto van ${user?.name}` : 'Profielfoto niet beschikbaar'}
+            >
+              {avatarSrc ? (
+                <img
+                  src={avatarSrc}
+                  alt={`Profielfoto van ${user?.name || 'gebruiker'}`}
+                  className="h-full w-full object-cover"
+                  onError={() => setAvatarFailed(true)}
+                />
+              ) : initials}
+            </button>
+            <button
+              type="button"
               onClick={logout}
-              className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-rose-400/20 bg-rose-500/10 text-rose-300 transition hover:border-rose-400/40 hover:bg-rose-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-rose-400"
               aria-label="Uitloggen"
               title="Uitloggen"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="h-[18px] w-[18px]" />
             </button>
           </div>
         </div>
+        <div className="h-[3px] bg-gradient-to-r from-[#ffdc00] via-[#ffdc00]/70 to-transparent" />
       </header>
 
-      {/* Slide-in Menu Container */}
-      <div className={`fixed inset-0 z-50 ${isMenuOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-        
-        {/* Backdrop Overlay */}
-        <div
-          className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ease-in-out ${isMenuOpen ? 'opacity-100' : 'opacity-0'}`}
+      {/* Navigatiedrawer */}
+      <div
+        className={`fixed inset-0 z-[60] ${isMenuOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        aria-hidden={!isMenuOpen}
+      >
+        <button
+          type="button"
+          tabIndex={isMenuOpen ? 0 : -1}
+          aria-label="Menu sluiten"
           onClick={() => setIsMenuOpen(false)}
+          className={`absolute inset-0 h-full w-full bg-slate-950/65 backdrop-blur-sm transition-opacity duration-300 ${
+            isMenuOpen ? 'opacity-100' : 'opacity-0'
+          }`}
         />
-        
-        {/* Menu Panel */}
-        <div
-          className={`relative w-80 max-w-[85vw] h-full bg-white shadow-2xl flex flex-col p-6 transform transition-transform duration-300 ease-in-out ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+
+        <aside
+          id="main-navigation-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Hoofdnavigatie"
+          className={`absolute left-0 top-0 flex h-full w-[min(390px,88vw)] flex-col overflow-hidden border-r border-white/10 bg-[#111827] text-white shadow-2xl transition-transform duration-300 ease-out ${
+            isMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
         >
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">M</div>
-              <h2 className="font-bold text-lg text-slate-900">Menu</h2>
+          <div className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-[#1f2937] to-[#111827] px-5 pb-5 pt-6">
+            <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full border-[28px] border-[#ffdc00]/[0.06]" />
+            <div className="pointer-events-none absolute -right-2 top-16 h-20 w-20 rounded-full bg-[#ffdc00]/[0.06] blur-2xl" />
+
+            <div className="relative flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ffdc00] text-slate-950 shadow-lg shadow-yellow-500/10">
+                  <BusFront className="h-6 w-6" strokeWidth={2.5} />
+                </div>
+                <div>
+                  <p className="text-sm font-black tracking-[0.12em]">KOERWERKING</p>
+                  <p className="mt-1 text-xs text-slate-400">Planning & teamomgeving</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-slate-300 transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ffdc00]"
+                aria-label="Menu sluiten"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <button onClick={() => setIsMenuOpen(false)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500">
-              <X className="w-6 h-6" />
-            </button>
+
+            <div className="relative mt-6 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#ffdc00] text-sm font-black text-slate-950">
+                {avatarSrc ? (
+                  <img
+                    src={avatarSrc}
+                    alt={`Profielfoto van ${user?.name || 'gebruiker'}`}
+                    className="h-full w-full object-cover"
+                    onError={() => setAvatarFailed(true)}
+                  />
+                ) : initials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-white">{user?.name || 'Gebruiker'}</p>
+                <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                  Sessie actief
+                </p>
+              </div>
+              <Sparkles className="h-4 w-4 text-[#ffdc00]/70" />
+            </div>
           </div>
 
-          <nav className="flex-1 space-y-2">
-            {navItems.filter(item => item.show).map(item => {
-              const Icon = item.icon;
-              const isActive = currentTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleTabClick(item.id)}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-base font-semibold transition-colors ${
-                    isActive
-                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                      : 'text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                    <span>{item.label}</span>
-                  </div>
-                  {item.badge && (
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
-                        isActive ? 'bg-indigo-500 text-indigo-100' : 'bg-slate-100 text-slate-600'
+          <nav className="min-h-0 flex-1 overflow-y-auto px-4 py-5" aria-label="Hoofdnavigatie">
+            <div className="mb-3 flex items-center justify-between px-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Werkruimte</p>
+              <span className="rounded-md bg-white/[0.06] px-2 py-1 text-[10px] font-bold tabular-nums text-slate-400">
+                {visibleItems.length} {visibleItems.length === 1 ? 'pagina' : 'pagina’s'}
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              {visibleItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = currentTab === item.id;
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleTabClick(item.id)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl px-3 py-3 text-left transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#ffdc00] ${
+                      isActive
+                        ? 'bg-[#ffdc00] text-slate-950 shadow-lg shadow-yellow-500/10'
+                        : 'text-slate-300 hover:bg-white/[0.07] hover:text-white'
+                    }`}
+                  >
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                      isActive
+                        ? 'bg-slate-950/10 text-slate-950'
+                        : 'bg-white/[0.06] text-slate-400 group-hover:bg-white/10 group-hover:text-[#ffdc00]'
                     }`}>
-                        {item.badge}
+                      <Icon className="h-[19px] w-[19px]" strokeWidth={2.1} />
                     </span>
-                  )}
-                </button>
-              );
-            })}
+
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-bold">{item.label}</span>
+                      <span className={`mt-0.5 block truncate text-[10px] ${
+                        isActive ? 'text-slate-800/70' : 'text-slate-500 group-hover:text-slate-400'
+                      }`}>
+                        {item.description}
+                      </span>
+                    </span>
+
+                    {item.badge && (
+                      <span className={`rounded-md px-2 py-1 text-[9px] font-black tracking-wider ${
+                        isActive
+                          ? 'bg-slate-950/10 text-slate-900'
+                          : item.badge === 'ADMIN'
+                            ? 'border border-rose-400/20 bg-rose-400/10 text-rose-300'
+                            : item.badge === 'PLANNER'
+                              ? 'border border-violet-400/20 bg-violet-400/10 text-violet-300'
+                              : 'border border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                      }`}>
+                        {item.badge}
+                      </span>
+                    )}
+                    {isActive && <span className="absolute bottom-3 left-0 top-3 w-[3px] rounded-r-full bg-slate-950/70" />}
+                  </button>
+                );
+              })}
+            </div>
           </nav>
-          
-          <div className="mt-4 space-y-2">
+
+          <div className="border-t border-white/10 bg-black/10 px-4 py-4">
+            <p className="mb-2 px-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Extra</p>
+
             <button
+              type="button"
               onClick={() => {
                 setShowChangePasswordModal(true);
                 setIsMenuOpen(false);
               }}
-              className="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-base font-semibold text-slate-700 hover:bg-slate-100"
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-xs font-semibold text-slate-300 transition hover:bg-white/[0.07] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ffdc00]"
             >
-              <Key className="w-5 h-5 text-slate-400" />
-              <span>Verander wachtwoord</span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06] text-slate-400">
+                <KeyRound className="h-4 w-4" />
+              </span>
+              <span className="flex-1">Verander wachtwoord</span>
+              <ChevronRight className="h-4 w-4 text-slate-600" />
             </button>
+
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <a
+                href="https://t.me/+B0GMB0QZaM01ZWJk"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-[46px] items-center justify-center gap-2 rounded-xl border border-sky-400/20 bg-sky-400/10 px-2 py-2 text-center text-[11px] font-bold text-sky-200 transition hover:border-sky-300/40 hover:bg-sky-400/20 focus:outline-none focus:ring-2 focus:ring-sky-300"
+              >
+                <Send className="h-4 w-4 shrink-0" />
+                Telegram
+              </a>
+              <a
+                href="https://studio--studio-7879467716-81e7e.us-central1.hosted.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-[46px] items-center justify-center gap-2 rounded-xl border border-[#ffdc00]/30 bg-[#ffdc00] px-2 py-2 text-center text-[11px] font-black text-slate-950 transition hover:bg-[#f2d000] focus:outline-none focus:ring-2 focus:ring-[#ffdc00] focus:ring-offset-2 focus:ring-offset-[#111827]"
+              >
+                <Clock3 className="h-4 w-4 shrink-0" />
+                Uur prestatie
+              </a>
+            </div>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-rose-400/20 bg-rose-500/[0.07] px-3 py-2.5 text-xs font-bold text-rose-300 transition hover:bg-rose-500/15 focus:outline-none focus:ring-2 focus:ring-rose-400"
+            >
+              <LogOut className="h-4 w-4" />
+              Uitloggen
+            </button>
+
+            <div className="mt-4 flex items-center justify-between border-t border-white/[0.07] pt-3 text-[9px] font-medium text-slate-600">
+              <span>Koerwerking planning</span>
+              <span className="flex items-center gap-1"><PanelLeftClose className="h-3 w-3" /> Navigatie</span>
+            </div>
           </div>
-
-          {/* Telegram Invitation Link */}
-<div className="mt-8 space-y-2">
-  <a
-    href="https://t.me/+B0GMB0QZaM01ZWJk"
-    target="_blank"
-    rel="noopener noreferrer"
-    className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors bg-sky-100 text-sky-700 hover:bg-sky-200 border border-sky-200/80"
-  >
-    <Send className="w-5 h-5 text-sky-600" />
-    <span>Word lid van Telegram</span>
-  </a>
-
-  {/* Uur prestatie */}
-  <a
-    href="https://studio--studio-7879467716-81e7e.us-central1.hosted.app/"
-    target="_blank"
-    rel="noopener noreferrer"
-    className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors bg-[#ffdc00] text-slate-900 hover:bg-[#f0d000] border border-yellow-400/80 shadow-sm"
-  >
-    <Clock className="w-5 h-5 text-slate-900" />
-    <span>Uur prestatie</span>
-  </a>
-</div>
-
-          {/* Footer with User Info */}
-          <div className="mt-4 pt-4 border-t border-slate-200">
-             <div className="text-xs text-slate-500">
-                Ingelogd als <span className="font-bold text-slate-700">{user?.name}</span>
-             </div>
-          </div>
-        </div>
+        </aside>
       </div>
+
       {photoPreview && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 backdrop-blur-md"
           role="dialog"
           aria-modal="true"
           aria-label="Profielfoto in groot formaat"
@@ -236,7 +448,7 @@ const [photoPreview, setPhotoPreview] = useState<{
         >
           <button
             type="button"
-            className="absolute right-4 top-4 rounded-full bg-white/15 p-3 text-white transition hover:bg-white/25"
+            className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-[#ffdc00]"
             onClick={() => setPhotoPreview(null)}
             aria-label="Foto sluiten"
           >
@@ -250,7 +462,10 @@ const [photoPreview, setPhotoPreview] = useState<{
           />
         </div>
       )}
-      {showChangePasswordModal && <ChangePasswordModal onClose={() => setShowChangePasswordModal(false)} />}
+
+      {showChangePasswordModal && (
+        <ChangePasswordModal onClose={() => setShowChangePasswordModal(false)} />
+      )}
     </>
   );
 };

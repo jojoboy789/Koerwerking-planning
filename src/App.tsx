@@ -15,7 +15,7 @@ import { OCPlanningView } from './components/OCPlanningView';
 
 
 // Update-popup version: bump this value (e.g. to "v2") for the next major update.
-const UPDATE_POPUP_VERSION = 'v1.1';
+const UPDATE_POPUP_VERSION = 'v1.3';
 const UPDATE_POPUP_STORAGE_KEY = `koerwerking-update-popup-${UPDATE_POPUP_VERSION}`;
 
 const UpdateWelcomePopup: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -34,30 +34,41 @@ const UpdateWelcomePopup: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         aria-modal="true"
         aria-labelledby="update-popup-title"
       >
-        <div className="update-popup-ribbon">NIEUWE UPDATE • NIEUWE VIBES</div>
-        <div className="update-popup-emoji" aria-hidden="true">🎉</div>
-        <h2 id="update-popup-title">JAWADDE! WAT EEN UPDATE! 2.0</h2>
-        <p className="update-popup-intro">
-          De Koerwerking-planning heeft een stevige make-over gekregen.
-          Er zijn heel wat veranderingen, verbeteringen en nieuwe snufjes toegevoegd.
-          Kortom: er is weer serieus aan de knoppen gedraaid!
+      <div className="update-popup-ribbon">✨ KLEINE UPDATE • VERSIE 2.2</div>
+
+      <div className="update-popup-emoji" aria-hidden="true">🚀</div>
+
+      <h2 id="update-popup-title">
+        WE ZIJN WEER EEN STAPJE VERDER! 🎉
+      </h2>
+
+      <p className="update-popup-intro">
+       De Koerwerking-planning kreeg een kleine update!
+Enkele verbeteringen en handige aanpassingen maken alles weer wat vlotter. 😉
+      </p>
+
+      <div className="update-popup-note">
+        <strong>💬 Heb je feedback of een leuk idee?</strong>
+        <p>
+          Een foutje gespot? Een ideetje? Of denk je dat Jonas nog wat werk nodig heeft? 🤣
+Laat het gerust weten! Jonas sleutelt met plezier verder aan de planning.
+Alle suggesties zijn welkom!
         </p>
-        <div className="update-popup-note">
-          <strong>💬 Vragen, opmerkingen of een geweldig idee?</strong>
-          <p>
-            Je mag Jonas gerust lastigvallen! Geen schrik, hij bijt niet…
-            meestal toch. 🤣 Heb je een idee om de planning nog beter te maken?
-            Laat het zeker weten. Alle suggesties zijn welkom!
-          </p>
-        </div>
-        <p className="update-popup-signoff">
-          Samen maken we er iets fantastisch van!<br />
-          <strong>Groetjeeees! 👋 Jonas</strong>
-        </p>
-        <button className="update-popup-button" onClick={handleOkay} type="button">
-          OKÉ, IK BEN MEE! 🎆
-        </button>
-        <div className="update-popup-footnote">Eenmalige update-melding • beloofd 😉</div>
+      </div>
+
+      <p className="update-popup-signoff">
+        Bedankt om mee te bouwen aan de Koerwerking-planning! ❤️
+        <br />
+        <strong>Groetjeeees! 👋 Jonas</strong>
+      </p>
+
+      <button className="update-popup-button" onClick={handleOkay} type="button">
+        TOP, IK BEN MEE! 👍
+      </button>
+
+      <div className="update-popup-footnote">
+        Kleine update, weer een stap vooruit! • Versie 2.2
+      </div>
       </section>
       {celebrate && (
         <div className="update-fireworks" aria-hidden="true">
