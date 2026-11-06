@@ -15,7 +15,7 @@ import { OCPlanningView } from './components/OCPlanningView';
 
 
 // Update-popup version: bump this value (e.g. to "v2") for the next major update.
-const UPDATE_POPUP_VERSION = 'v1.6';
+const UPDATE_POPUP_VERSION = 'v2.3';
 const UPDATE_POPUP_STORAGE_KEY = `koerwerking-update-popup-${UPDATE_POPUP_VERSION}`;
 
 const UpdateWelcomePopup: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -34,7 +34,7 @@ const UpdateWelcomePopup: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         aria-modal="true"
         aria-labelledby="update-popup-title"
       >
-      <div className="update-popup-ribbon">✨ KLEINE UPDATE • VERSIE 2.2</div>
+      <div className="update-popup-ribbon">✨ KLEINE UPDATE • VERSIE 2.3</div>
 
       <div className="update-popup-emoji" aria-hidden="true">🚀</div>
 
@@ -67,7 +67,7 @@ Alle suggesties zijn welkom!
       </button>
 
       <div className="update-popup-footnote">
-        Kleine update, weer een stap vooruit! • Versie 2.2
+        Kleine update, weer een stap vooruit! • Versie 2.3
       </div>
       </section>
       {celebrate && (

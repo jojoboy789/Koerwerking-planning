@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
+import { api, type SpecialDay } from '../services/api';
 import { SHIFT_DEFINITIONS } from '../types';
 import { TelegramInvitationModal } from './TelegramInvitationModal';
 import {
@@ -36,8 +36,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   const [showInviteModal,setShowInviteModal] = useState(false);
   const [planningStats,setPlanningStats] = useState({v:0,d:0,l:0,x:0,total:0,lastSaved:undefined as string|undefined});
   const [upcomingDays, setUpcomingDays] = useState<{date: Date; code?: string; loading: boolean}[]>([]);
+  const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
 
   const [transportDoorKoer, setTransportDoorKoer] = useState<{ text: string; date: string | null } | null>(null);
+
+  // Haal vervangende feestdagen en stakingsdagen op.
+  useEffect(() => {
+    let active = true;
+
+    api.getSpecialDays()
+      .then((result) => {
+        if (active) {
+          setSpecialDays(result.specialDays || []);
+        }
+      })
+      .catch((error) => {
+        console.error('Speciale dagen ophalen mislukt:', error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
 
   // Lees uitsluitend de tekst die NA het label "Transport door Koer:"
   // in hetzelfde <p>-element staat. De volgende <p> is "Koerwerking"
@@ -217,20 +238,124 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <button type="button" onClick={() => onNavigate('planning')} className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-extrabold text-white transition hover:border-amber-300/50 hover:bg-white/15">Volledige planning <ArrowRight size={14}/></button>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
-          {upcomingDays.map(({date, code, loading}, index) => {
-            const shift = code ? (Object.values(SHIFT_DEFINITIONS).find((item) => item.code === code) as {label?: string; colorClass?: string} | undefined) : undefined;
-            const title = index === 0 ? 'Vandaag' : index === 1 ? 'Morgen' : 'Overmorgen';
-            const hours = code === 'V' ? '05:00 – 13:00' : code === 'D' ? '08:00 – 16:00 / 09:00 – 17:00' : code === 'L' ? '13:00 – 21:00' : '';
-            const dayNames = ['zo','ma','di','wo','do','vr','za'];
-            const status = loading ? 'Laden…' : code ? (shift?.label || (code === 'X' ? 'Niet inplannen' : code === 'R' ? 'Rustdag' : `Dienst ${code}`)) : 'Nog niet ingevuld';
-            return <div key={date.toISOString()} className={`min-w-0 rounded-2xl border p-4 ${index === 0 ? 'border-amber-300/70 bg-amber-300/10' : 'border-white/10 bg-white/[0.055]'}`}>
-              <div className="flex items-start justify-between gap-2">
-                <div><p className={`text-xs font-extrabold uppercase tracking-wider ${index === 0 ? 'text-amber-300' : 'text-slate-300'}`}>{title}</p><p className="mt-1 text-sm font-bold text-white">{dayNames[date.getDay()]} {date.getDate()} {MONTH_NAMES[date.getMonth()]}</p></div>
-                {code && !loading && <span className={`flex h-9 min-w-9 items-center justify-center rounded-xl px-2 text-sm font-black ${shift?.colorClass || 'bg-slate-200 text-slate-800'}`}>{code}</span>}
+          {upcomingDays.map(({ date, code, loading }, index) => {
+            const shift = code
+              ? (Object.values(SHIFT_DEFINITIONS).find(
+                  (item) => item.code === code
+                ) as { label?: string; colorClass?: string } | undefined)
+              : undefined;
+
+            const title = index === 0
+              ? 'Vandaag'
+              : index === 1
+                ? 'Morgen'
+                : 'Overmorgen';
+
+            const hours =
+              code === 'V' ? '05:00 – 13:00'
+              : code === 'D' ? '08:00 – 16:00 / 09:00 – 17:00'
+              : code === 'L' ? '13:00 – 21:00'
+              : '';
+
+            const dayNames = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+            const isPublicHoliday = getBelgianHolidays(date.getFullYear()).has(dateKey(date));
+
+            const specialDay = specialDays.find(
+              (item) => item.date === dateKey(date)
+            );
+
+            // Een staking krijgt voorrang op weekend- en feestdagstatus.
+            const isStrike = specialDay?.type === 'strike';
+            const isReplacementHoliday = specialDay?.type === 'replacementHoliday';
+
+            const noKoerDienst =
+              !isStrike && (isReplacementHoliday || isPublicHoliday || isWeekend);
+
+            let status = 'Nog niet ingevuld';
+
+            if (loading) {
+              status = 'Laden…';
+            } else if (isStrike) {
+              status = 'Staking';
+            } else if (noKoerDienst) {
+              status = 'Geen Koerdienst';
+            } else if (code) {
+              status = shift?.label ||
+                (code === 'X' ? 'Niet inplannen'
+                  : code === 'R' ? 'Rustdag'
+                  : `Dienst ${code}`);
+            }
+
+            const showCode = !loading && !isStrike && !noKoerDienst && !!code;
+            const showHours = !loading && !isStrike && !noKoerDienst && !!hours;
+
+            return (
+              <div
+                key={date.toISOString()}
+                className={`min-w-0 rounded-2xl border p-4 ${
+                  isStrike && !loading
+                    ? 'border-red-400/60 bg-red-500/10'
+                    : noKoerDienst && !loading
+                      ? 'border-slate-400/30 bg-white/[0.035]'
+                      : index === 0
+                        ? 'border-amber-300/70 bg-amber-300/10'
+                        : 'border-white/10 bg-white/[0.055]'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className={`text-xs font-extrabold uppercase tracking-wider ${
+                      isStrike && !loading
+                        ? 'text-red-300'
+                        : index === 0
+                          ? 'text-amber-300'
+                          : 'text-slate-300'
+                    }`}>
+                      {title}
+                    </p>
+
+                    <p className="mt-1 text-sm font-bold text-white">
+                      {dayNames[date.getDay()]} {date.getDate()} {MONTH_NAMES[date.getMonth()]}
+                    </p>
+                  </div>
+
+                  {showCode && (
+                    <span className={`flex h-9 min-w-9 items-center justify-center rounded-xl px-2 text-sm font-black ${
+                      shift?.colorClass || 'bg-slate-200 text-slate-800'
+                    }`}>
+                      {code}
+                    </span>
+                  )}
+
+                  {!loading && isStrike && (
+                    <span className="flex h-9 items-center justify-center rounded-xl bg-red-500/20 px-3 text-xs font-black text-red-300">
+                      STAKING
+                    </span>
+                  )}
+
+                  {!loading && noKoerDienst && (
+                    <span className="flex h-9 items-center justify-center rounded-xl bg-slate-500/20 px-3 text-xs font-black text-slate-300">
+                      GEEN DIENST
+                    </span>
+                  )}
+                </div>
+
+                <p className={`mt-3 text-base font-black sm:text-lg ${
+                  isStrike && !loading ? 'text-red-300' : 'text-white'
+                }`}>
+                  {status}
+                </p>
+
+                {showHours && (
+                  <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 sm:text-sm">
+                    <Clock3 size={14} className="shrink-0" />
+                    {hours}
+                  </p>
+                )}
               </div>
-              <p className="mt-3 text-base font-black text-white sm:text-lg">{status}</p>
-              {!loading && hours && <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 sm:text-sm"><Clock3 size={14} className="shrink-0"/>{hours}</p>}
-            </div>;
+            );
           })}
         </div>
       </div>
