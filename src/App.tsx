@@ -15,7 +15,7 @@ import { OCPlanningView } from './components/OCPlanningView';
 
 
 // Update-popup version: bump this value (e.g. to "v2") for the next major update.
-const UPDATE_POPUP_VERSION = 'v1.3';
+const UPDATE_POPUP_VERSION = 'v1.6';
 const UPDATE_POPUP_STORAGE_KEY = `koerwerking-update-popup-${UPDATE_POPUP_VERSION}`;
 
 const UpdateWelcomePopup: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -72,15 +72,50 @@ Alle suggesties zijn welkom!
       </section>
       {celebrate && (
         <div className="update-fireworks" aria-hidden="true">
-          {Array.from({ length: 100 }, (_, i) => (
-            <i key={i} style={{
-              '--piece-x': `${(i * 37) % 100}%`,
-              '--piece-y': `${35 + ((i * 19) % 45)}%`,
-              '--piece-dx': `${((i * 53) % 620) - 310}px`,
-              '--piece-dy': `${-180 - ((i * 29) % 430)}px`,
-              '--piece-delay': `${(i % 13) * 24}ms`,
-              '--piece-rotate': `${(i * 47) % 720}deg`,
-            } as React.CSSProperties} />
+          {[
+            { x: 16, y: 27, delay: 0, scale: 1.12, tone: 'gold' },
+            { x: 78, y: 23, delay: 90, scale: 1.18, tone: 'blue' },
+            { x: 49, y: 43, delay: 210, scale: 1.42, tone: 'gold' },
+            { x: 25, y: 68, delay: 330, scale: 1.02, tone: 'pink' },
+            { x: 84, y: 64, delay: 420, scale: 1.12, tone: 'blue' },
+            { x: 52, y: 17, delay: 560, scale: 0.92, tone: 'pink' },
+            { x: 7, y: 49, delay: 680, scale: 0.88, tone: 'blue' },
+          ].map((burst, burstIndex) => (
+            <div
+              className={`update-firework-burst update-firework-${burst.tone}`}
+              key={burstIndex}
+              style={{
+                '--burst-x': `${burst.x}%`,
+                '--burst-y': `${burst.y}%`,
+                '--burst-delay': `${burst.delay}ms`,
+                '--burst-scale': burst.scale,
+              } as React.CSSProperties}
+            >
+              <span className="update-firework-flash" />
+              <span className="update-firework-core" />
+              {Array.from({ length:  52 }, (_, particleIndex) => {
+                const angle = (360 / 52) * particleIndex + (burstIndex * 11);
+                const distance = 115 + ((particleIndex * 37 + burstIndex * 23) % 155);
+                const duration = 1050 + ((particleIndex * 37 + burstIndex * 53) % 650);
+                const delay = burst.delay + ((particleIndex * 17) % 130);
+                const length = 24 + ((particleIndex * 17 + burstIndex * 11) % 34);
+
+                return (
+                  <i
+                    className="update-firework-particle"
+                    key={particleIndex}
+                    style={{
+                      '--particle-angle': `${angle}deg`,
+                      '--particle-distance': `${distance}px`,
+                      '--particle-duration': `${duration}ms`,
+                      '--particle-delay': `${delay}ms`,
+                      '--particle-length': `${length}px`,
+                      '--particle-depth': `${0.65 + ((particleIndex * 7) % 8) / 10}`,
+                    } as React.CSSProperties}
+                  />
+                );
+              })}
+            </div>
           ))}
           <span className="update-fireworks-message">🎉 YESSS! 🎉</span>
         </div>
