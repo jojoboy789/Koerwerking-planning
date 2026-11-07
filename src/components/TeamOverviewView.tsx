@@ -110,6 +110,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   const [currentMonth, setCurrentMonth] = useState<number>(() => new Date().getMonth() + 1);
   
   const [showFinalizeModal, setShowFinalizeModal] = useState<boolean>(false);
+  const [showAIPlannerPage, setShowAIPlannerPage] = useState<boolean>(false);
 
   const [teamData, setTeamData] = useState<TeamMemberOverview[]>([]);
   const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
@@ -463,6 +464,24 @@ setIsSavingDay(false);
 
   const monthDisplay = `${MONTH_NAMES[currentMonth - 1]} ${currentYear}`.toUpperCase();
 
+  if (showAIPlannerPage && (canPlannerMode || isAdmin)) {
+    return (
+      <AIPlannerPanel
+        members={teamData as unknown as AIPlannerMember[]}
+        year={currentYear}
+        month={currentMonth}
+        specialDays={specialDays as unknown as AIPlannerSpecialDay[]}
+        canUse={Boolean(canPlannerMode || isAdmin)}
+        onApplied={fetchOverview}
+        onBack={() => setShowAIPlannerPage(false)}
+        onMonthChange={(year, month) => {
+          setCurrentYear(year);
+          setCurrentMonth(month);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-4 overflow-x-hidden bg-slate-50 px-2.5 py-3 font-sans sm:space-y-6 sm:px-5 sm:py-5 md:space-y-7 md:px-8 md:py-7">
       {/* Header & Controls */}
@@ -483,6 +502,16 @@ setIsSavingDay(false);
 
         {/* Action button to Planner Mode & Month Navigation */}
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 md:w-auto">
+          {(canPlannerMode || isAdmin) && (
+            <button
+              onClick={() => setShowAIPlannerPage(true)}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-extrabold text-[#17202b] shadow-sm transition-colors hover:border-yellow-400 hover:bg-yellow-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00] focus-visible:ring-offset-2 sm:w-auto"
+            >
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span>AI-planning</span>
+            </button>
+          )}
+
           {(canPlannerMode || isAdmin) && (
             <button
               onClick={() => setShowFinalizeModal(true)}
@@ -525,18 +554,6 @@ setIsSavingDay(false);
           </div>
         </div>
       </div>
-
-      {/* AI KOERPLANNER: alleen zichtbaar voor planners en beheerders */}
-      {(canPlannerMode || isAdmin) && (
-        <AIPlannerPanel
-          members={teamData as unknown as AIPlannerMember[]}
-          year={currentYear}
-          month={currentMonth}
-          specialDays={specialDays as unknown as AIPlannerSpecialDay[]}
-          canUse={Boolean(canPlannerMode || isAdmin)}
-          onApplied={fetchOverview}
-        />
-      )}
 
       {/* Legend & Search Filters */}
       <div className="flex flex-col items-stretch gap-3 text-xs lg:flex-row lg:items-center lg:justify-between lg:gap-4">

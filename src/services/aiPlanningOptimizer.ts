@@ -30,8 +30,19 @@ export interface AIPlannerAssignment {
   score: number;
 }
 
+export interface AIRestDayWarning {
+  date: string;
+  day: number;
+  memberId: string;
+  memberName: string;
+  assignedShift: Shift;
+  preference: "2e keuze" | "3e keuze";
+  message: string;
+}
+
 export interface AIPlannerResult {
   assignments: AIPlannerAssignment[];
+  restDayWarnings: AIRestDayWarning[];
   uncovered: Array<{ date: string; shift: Shift }>;
   skippedDates: Array<{ date: string; reason: string }>;
   stats: {
@@ -122,6 +133,7 @@ export function generateAIPlanningProposal(input: {
 }): AIPlannerResult {
   const { members, year, month, period, weekNumber, specialDays = [] } = input;
   const assignments: AIPlannerAssignment[] = [];
+  const restDayWarnings: AIPlannerResult["restDayWarnings"] = [];
   const uncovered: AIPlannerResult["uncovered"] = [];
   const skippedDates: AIPlannerResult["skippedDates"] = [];
   const assignedCount = new Map<string, number>();
@@ -200,6 +212,23 @@ export function generateAIPlanningProposal(input: {
         preference: chosen.preference.label,
         score: chosen.score,
       });
+
+      // Een R als eerste keuze blijft een rustdagvoorkeur.
+      // Als de AI via keuze 2 of 3 toch een dienst toewijst, moet de planner dit expliciet beoordelen.
+      if (
+        chosen.member.planning?.days?.[day] === "R" &&
+        (chosen.preference.label === "2e keuze" || chosen.preference.label === "3e keuze")
+      ) {
+        restDayWarnings.push({
+          date: key,
+          day,
+          memberId: chosen.member.user.id,
+          memberName: chosen.member.user.name,
+          assignedShift: shift,
+          preference: chosen.preference.label,
+          message: `${chosen.member.user.name} heeft ${shift} toegewezen gekregen via de ${chosen.preference.label.toLowerCase()}, terwijl de eerste keuze een rustdag (R) is. Controleer of de rustdag verplaatst moet worden.`,
+        });
+      }
     }
   }
 
@@ -214,13 +243,14 @@ export function generateAIPlanningProposal(input: {
 
   return {
     assignments,
+    restDayWarnings,
     uncovered,
     skippedDates,
     stats,
     notes: [
       "Dit is een lokaal gegenereerd voorstel, geen opgeslagen planning.",
       "Eerste, tweede en derde keuze worden alleen gelezen tijdens het genereren. Bij toepassen wordt alleen de eerste keuze vervangen.",
-      "X is een harde uitsluiting. Bij R mogen tweede en derde keuzes worden overwogen; controleer of de rustdag moet verschuiven.",
+      "X is een harde uitsluiting. Bij R mogen tweede en derde keuzes worden overwogen; voor elke toegewezen dienst op een R-dag wordt een waarschuwing voor de planner getoond.",
       "Per gewone werkdag wordt maximaal één V, één D en één L voorgesteld.",
       "Weekends, Belgische feestdagen en speciale kalenderdagen worden overgeslagen.",
       "Definitieve dagen worden overgeslagen. Controleer de uitkomst altijd vóór manuele overname.",
