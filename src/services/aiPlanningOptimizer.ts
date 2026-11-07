@@ -28,7 +28,6 @@ export interface AIPlannerAssignment {
   shift: Shift;
   preference: "1e keuze" | "2e keuze" | "3e keuze" | "Geen voorkeur";
   score: number;
-  restDayMoveWarning?: boolean;
 }
 
 export interface AIPlannerResult {
@@ -42,7 +41,6 @@ export interface AIPlannerResult {
     thirdChoices: number;
     noPreference: number;
     uniqueMembers: number;
-    processedDays: number;
   };
   notes: string[];
 }
@@ -112,8 +110,7 @@ function preferenceFor(member: AIPlannerMember, day: number, shift: Shift) {
 
 /**
  * Creates a read-only proposal. It does not save or modify any planning data.
- * Existing finalised days are skipped. X is unavailable; R may use a matching
- * second/third preference, but requires a planner-approved rest-day move.
+ * Existing finalised days are skipped. X is unavailable; R may be reconsidered via alternatives.
  */
 export function generateAIPlanningProposal(input: {
   members: AIPlannerMember[];
@@ -129,7 +126,6 @@ export function generateAIPlanningProposal(input: {
   const skippedDates: AIPlannerResult["skippedDates"] = [];
   const assignedCount = new Map<string, number>();
   const assignedByShift = new Map<string, number>();
-  let processedDays = 0;
 
   const daysInMonth = new Date(year, month, 0).getDate();
 
@@ -160,15 +156,13 @@ export function generateAIPlanningProposal(input: {
       continue;
     }
 
-    processedDays += 1;
     const usedToday = new Set<string>();
 
     for (const shift of SHIFT_ORDER) {
       const candidates = members
         .filter((member) => {
           const first = member.planning?.days?.[day] || "";
-          // X is a hard exclusion. R may be considered only through a matching
-          // second or third choice; the planner must approve moving that rest day.
+          // X is een harde uitsluiting. R mag via tweede of derde keuze worden herbekeken.
           if (first === "X") return false;
           return !usedToday.has(member.user.id);
         })
@@ -205,7 +199,6 @@ export function generateAIPlanningProposal(input: {
         shift,
         preference: chosen.preference.label,
         score: chosen.score,
-        restDayMoveWarning: chosen.member.planning?.days?.[day] === "R",
       });
     }
   }
@@ -217,7 +210,6 @@ export function generateAIPlanningProposal(input: {
     thirdChoices: assignments.filter((item) => item.preference === "3e keuze").length,
     noPreference: assignments.filter((item) => item.preference === "Geen voorkeur").length,
     uniqueMembers: new Set(assignments.map((item) => item.memberId)).size,
-    processedDays,
   };
 
   return {
@@ -227,12 +219,11 @@ export function generateAIPlanningProposal(input: {
     stats,
     notes: [
       "Dit is een lokaal gegenereerd voorstel, geen opgeslagen planning.",
-      "Eerste, tweede en derde keuze worden alleen gelezen. Ze worden niet gewijzigd.",
-      "X is een harde uitsluiting. Bij eerste keuze R kan een passende tweede/derde keuze worden voorgesteld, met verplichte waarschuwing dat de rustdag verplaatst moet worden.",
+      "Eerste, tweede en derde keuze worden alleen gelezen tijdens het genereren. Bij toepassen wordt alleen de eerste keuze vervangen.",
+      "X is een harde uitsluiting. Bij R mogen tweede en derde keuzes worden overwogen; controleer of de rustdag moet verschuiven.",
       "Per gewone werkdag wordt maximaal één V, één D en één L voorgesteld.",
       "Weekends, Belgische feestdagen en speciale kalenderdagen worden overgeslagen.",
       "Definitieve dagen worden overgeslagen. Controleer de uitkomst altijd vóór manuele overname.",
-      `Aantal effectief verwerkte werkdagen: ${processedDays}.`,
     ],
   };
 }

@@ -52,6 +52,8 @@ interface StoredPlanning {
   days: Record<number, string>;
   secondChoices?: Record<number, string>;
   thirdChoices?: Record<number, string>;
+  /** AI-resultaat per dag, apart van de persoonlijke voorkeuren. */
+  aiDays?: Record<number, string>;
   finalDays?: Record<number, string>;
   isFinal: boolean;
   updatedAt: string;
@@ -2312,6 +2314,109 @@ for (const [key, value] of Object.entries(secondChoices || {})) {
       success: true,
       message: `Planning voor ${targetUser.name} succesvol opgeslagen.`,
       planning: existingIndex >= 0 ? db.plannings[existingIndex] : db.plannings[db.plannings.length - 1],
+    });
+  });
+
+  // Apply an approved AI proposal to the first-choice planning. Second and third choices stay untouched.
+  app.post('/api/admin/planning/:year/:month/apply-ai-proposal', authMiddleware, requirePlannerOrAdminMiddleware, (req: AuthenticatedRequest, res: Response) => {
+    const y = Number.parseInt(req.params.year, 10);
+    const m = Number.parseInt(req.params.month, 10);
+    const assignments = req.body?.assignments;
+    const requestedDays = req.body?.days;
+
+    if (!Number.isInteger(y) || y < 2000 || y > 2100 || !Number.isInteger(m) || m < 1 || m > 12) {
+      return res.status(400).json({ error: 'Ongeldig jaar of maand.' });
+    }
+    if (!Array.isArray(assignments) || assignments.length === 0 || assignments.length > 1000) {
+      return res.status(400).json({ error: 'Geen geldige AI-toewijzingen ontvangen.' });
+    }
+    const daysInMonth = new Date(y, m, 0).getDate();
+    if (!Array.isArray(requestedDays) || requestedDays.length === 0 || requestedDays.length > daysInMonth) {
+      return res.status(400).json({ error: 'Geen geldige werkdagen ontvangen.' });
+    }
+
+    const days = [...new Set<number>(requestedDays)];
+    if (days.length !== requestedDays.length || days.some(day => !Number.isInteger(day) || day < 1 || day > daysInMonth)) {
+      return res.status(400).json({ error: 'De lijst met werkdagen bevat ongeldige of dubbele dagen.' });
+    }
+    const daySet = new Set(days);
+    const seenSlots = new Set<string>();
+    const seenMembers = new Set<string>();
+    for (const item of assignments) {
+      if (!item || typeof item.memberId !== 'string' || !Number.isInteger(item.day) || item.day < 1 || item.day > daysInMonth || !['V', 'D', 'L'].includes(item.shift) || !daySet.has(item.day)) {
+        return res.status(400).json({ error: 'Een of meer toewijzingen bevatten ongeldige gegevens.' });
+      }
+      const slot = `${item.day}:${item.shift}`;
+      const memberDay = `${item.memberId}:${item.day}`;
+      if (seenSlots.has(slot) || seenMembers.has(memberDay)) {
+        return res.status(400).json({ error: 'Dubbele dienst of dubbele toewijzing voor hetzelfde teamlid op één dag.' });
+      }
+      seenSlots.add(slot);
+      seenMembers.add(memberDay);
+    }
+
+    // Gebruik exact dezelfde actieve teamleden als het teamoverzicht.
+    const activeUsers = db.users.filter(u => {
+      if (!u.isActive) return false;
+      const role = (u.role || '').trim().toLowerCase();
+      return role !== 'planning' && role !== 'planner';
+    });
+    const activeIds = new Set(activeUsers.map(u => u.id));
+
+    // Controleer alles vóór de eerste wijziging. Definitieve dagen blijven onaangeroerd.
+    for (const item of assignments) {
+      if (!activeIds.has(item.memberId)) {
+        return res.status(400).json({ error: `Actief teamlid niet gevonden (${item.memberId}).` });
+      }
+    }
+    for (const user of activeUsers) {
+      const existing = db.plannings.find(p => p.userId === user.id && p.year === y && p.month === m);
+      for (const day of days) {
+        if (existing?.isFinal || (existing?.finalDays && Object.prototype.hasOwnProperty.call(existing.finalDays, day))) {
+          return res.status(409).json({ error: `De planning van ${user.name} bevat een definitieve dag (${day}). Het AI-voorstel is niet toegepast.` });
+        }
+      }
+    }
+
+    const assignmentByMemberDay = new Map<string, string>();
+    for (const item of assignments) assignmentByMemberDay.set(`${item.memberId}:${item.day}`, item.shift);
+
+    const now = new Date().toISOString();
+    for (const user of activeUsers) {
+      let planning = db.plannings.find(p => p.userId === user.id && p.year === y && p.month === m);
+      if (!planning) {
+        planning = {
+          id: `pln-${user.id}-${y}-${m}`,
+          userId: user.id,
+          userName: user.name,
+          year: y,
+          month: m,
+          days: {},
+          secondChoices: {},
+          thirdChoices: {},
+          aiDays: {},
+          isFinal: false,
+          updatedAt: now,
+          updatedBy: `${req.user!.name} (AI Koerplanner)`,
+        };
+        db.plannings.push(planning);
+      }
+      const cleanDays = { ...(planning.days || {}) };
+      for (const day of days) {
+        // De AI-uitkomst vervangt alleen de eerste keuze. Niet-toegewezen teamleden krijgen X.
+        cleanDays[day] = assignmentByMemberDay.get(`${user.id}:${day}`) || 'X';
+      }
+      planning.days = cleanDays;
+      planning.updatedAt = now;
+      planning.updatedBy = `${req.user!.name} (AI Koerplanner)`;
+    }
+
+    saveDatabase(db);
+    return res.json({
+      success: true,
+      updated: assignments.length,
+      markedUnavailable: activeUsers.length * days.length - assignments.length,
+      message: `AI-planning toegepast: ${assignments.length} diensten toegewezen. De eerste keuze is bijgewerkt; tweede en derde keuzes zijn behouden. Niet-ingezette teamleden kregen X. De planning is nog niet definitief.`,
     });
   });
 

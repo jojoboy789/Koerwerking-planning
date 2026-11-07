@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { api } from "../services/api";
 import {
   CalendarDays,
@@ -26,6 +26,7 @@ interface AIPlannerPanelProps {
   month: number;
   specialDays?: AIPlannerSpecialDay[];
   canUse: boolean;
+  onApplied?: () => Promise<void> | void;
 }
 
 const MONTHS = [
@@ -41,19 +42,13 @@ function getISOWeek(date: Date): number {
   return Math.ceil((((value.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
 
-function formatDisplayDate(dateValue: string): string {
-  // Toont ISO-datums (ook wanneer er een tijdstip achter staat) als DD/MM/JJJJ.
-  const match = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(dateValue);
-  if (!match) return dateValue;
-  return `${match[3]}/${match[2]}/${match[1]}`;
-}
-
 export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
   members,
   year,
   month,
   specialDays = [],
   canUse,
+  onApplied,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [period, setPeriod] = useState<"week" | "month">("month");
@@ -75,28 +70,12 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
     return Array.from(values);
   }, [year, month]);
 
-  // Houd de weekselectie synchroon met de actuele maand.
-  // Dit voorkomt dat de eerste generatie een oude week uit een vorige maand gebruikt.
-  useEffect(() => {
-    const defaultWeek = getISOWeek(new Date(year, month - 1, 1));
-    setWeekNumber((currentWeek) =>
-      weekOptions.includes(currentWeek) ? currentWeek : defaultWeek
-    );
-    setProposal(null);
-  }, [year, month, weekOptions]);
-
-  // Verwijder een oud voorstel zodra de gebruiker een andere periode/week kiest.
-  useEffect(() => {
-    setProposal(null);
-  }, [period, weekNumber]);
-
   // Geen knop en geen chatvenster renderen voor gewone gebruikers.
   if (!canUse) return null;
 
   const generate = () => {
     if (!canUse || busy || members.length === 0) return;
     setBusy(true);
-    setProposal(null);
     try {
       const result = generateAIPlanningProposal({
         members,
@@ -108,13 +87,39 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
       });
       setProposal(result);
       setChatReply(
-        result.stats.assignments > 0
-          ? `Voorstel klaar: ${result.stats.assignments} diensten verdeeld over ${result.stats.uniqueMembers} teamleden. Er zijn ${result.uncovered.length} openstaande diensten en ${result.assignments.filter((item) => item.restDayMoveWarning).length} rustdagen die de planner moet verplaatsen/controleren.`
-          : "Er werd geen enkele dienst gegenereerd. Dit voorstel is niet bruikbaar. Controleer of de planningsgegevens voor deze week geladen zijn."
+        `Voorstel klaar: ${result.stats.assignments} diensten verdeeld over ${result.stats.uniqueMembers} teamleden. Er zijn ${result.uncovered.length} openstaande diensten.`
       );
     } catch (error) {
       console.error("AI-planningsvoorstel maken mislukt:", error);
       setChatReply("Het voorstel kon niet worden gemaakt. Controleer de gegevens en probeer opnieuw.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const applyProposal = async () => {
+    if (!proposal || busy || !canUse) return;
+    const days = Array.from(new Set([
+      ...proposal.assignments.map((item) => item.day),
+      ...proposal.uncovered.map((item) => Number(item.date.slice(-2))),
+    ])).sort((a, b) => a - b);
+    if (days.length === 0) return;
+    const confirmed = window.confirm(
+      `AI-planning toepassen voor ${MONTHS[month - 1]} ${year}?\n\nDe eerste keuze wordt vervangen. Tweede en derde keuzes blijven behouden. Teamleden zonder dienst krijgen X. De planning wordt NIET definitief gemaakt.`
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      const result = await api.applyAIPlanningProposal(
+        year, month,
+        proposal.assignments.map(({ memberId, day, shift }) => ({ memberId, day, shift })),
+        days
+      );
+      setChatReply(result.message);
+      setProposal(null);
+      await onApplied?.();
+    } catch (error) {
+      setChatReply(error instanceof Error ? error.message : 'AI-planning toepassen is mislukt.');
     } finally {
       setBusy(false);
     }
@@ -157,85 +162,85 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-[70] flex flex-col items-end gap-3">
+    <div className="fixed bottom-5 right-5 z-[70] flex flex-col items-end gap-3">
       {isOpen && (
         <section
           role="dialog"
           aria-modal="false"
           aria-label="AI Koerplanner"
-          className="flex h-[min(82vh,820px)] max-h-[calc(100dvh-2rem)] w-[min(92vw,1040px)] flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_24px_80px_-24px_rgba(15,23,42,0.42)] sm:rounded-3xl"
+          className="flex max-h-[min(82vh,780px)] w-[min(94vw,680px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
         >
-          <header className="flex shrink-0 items-center justify-between gap-3 bg-gradient-to-r from-[#17202b] via-[#1d2938] to-[#17202b] px-5 py-4 text-white sm:px-6">
+          <header className="flex shrink-0 items-center justify-between gap-3 bg-[#17202b] px-4 py-3.5 text-white">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#ffdc00] text-[#17202b] shadow-sm">
-                <Sparkles className="h-6 w-6" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#ffdc00] text-[#17202b]">
+                <Sparkles className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <h3 className="truncate text-base font-extrabold tracking-tight sm:text-lg">AI Koerplanner</h3>
-                <p className="truncate text-xs text-slate-300 sm:text-sm">
+                <h3 className="truncate text-sm font-extrabold">AI Koerplanner</h3>
+                <p className="truncate text-[11px] text-slate-300">
                   Planner-assistent · {MONTHS[month - 1]} {year}
                 </p>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              <span className="hidden rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-200 sm:inline-flex">
+              <span className="hidden rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide text-emerald-200 sm:inline-flex">
                 Voorstelmodus
               </span>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
                 aria-label="AI Koerplanner sluiten"
-                className="rounded-xl p-2.5 text-slate-300 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00]"
+                className="rounded-lg p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
           </header>
 
-          <div className="min-h-0 space-y-4 overflow-y-auto bg-slate-50/60 p-4 sm:p-5">
-            <div className="rounded-xl border border-blue-100 bg-blue-50/90 px-4 py-3 text-sm leading-relaxed text-blue-950">
-              <strong>Veilig werken:</strong> de assistent maakt alleen een voorstel. Er wordt niets opgeslagen en je bestaande planning wordt niet aangepast.
+          <div className="min-h-0 space-y-4 overflow-y-auto p-3 sm:p-4">
+            <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-[11px] leading-relaxed text-blue-900">
+              <strong>Veilig werken:</strong> de assistent maakt eerst een voorstel. Pas na jouw bevestiging wordt alleen de eerste keuze aangepast. Definitief maken blijft een aparte manuele actie.
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <div className="mb-3 flex items-center gap-2.5 text-sm font-extrabold text-slate-900 sm:text-base">
+            <div className="rounded-xl border border-slate-200 p-3">
+              <div className="mb-3 flex items-center gap-2 text-xs font-extrabold text-slate-800">
                 <WandSparkles className="h-4 w-4 text-amber-500" />
                 Snel een voorstel maken
               </div>
-              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                <label className="block text-xs font-bold text-slate-700 sm:text-sm">
+              <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <label className="block text-[11px] font-bold text-slate-600">
                   Periode
                   <span className="relative mt-1 block">
                     <select
                       value={period}
                       onChange={(event) => setPeriod(event.target.value as "week" | "month")}
-                      className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3.5 py-3 pr-9 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-yellow-400 focus:ring-4 focus:ring-yellow-100/80"
+                      className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-8 text-sm text-slate-900 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100"
                     >
                       <option value="week">Eén week</option>
                       <option value="month">Volledige maand</option>
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-slate-500" />
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-3 h-4 w-4 text-slate-400" />
                   </span>
                 </label>
 
                 {period === "week" ? (
-                  <label className="block text-xs font-bold text-slate-700 sm:text-sm">
+                  <label className="block text-[11px] font-bold text-slate-600">
                     ISO-week
                     <span className="relative mt-1 block">
                       <select
                         value={weekNumber}
                         onChange={(event) => setWeekNumber(Number(event.target.value))}
-                        className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3.5 py-3 pr-9 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-yellow-400 focus:ring-4 focus:ring-yellow-100/80"
+                        className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-8 text-sm text-slate-900 outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100"
                       >
                         {weekOptions.map((week) => (
                           <option key={week} value={week}>Week {week}</option>
                         ))}
                       </select>
-                      <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-slate-500" />
+                      <ChevronDown className="pointer-events-none absolute right-2.5 top-3 h-4 w-4 text-slate-400" />
                     </span>
                   </label>
                 ) : (
-                  <div className="flex min-h-[46px] items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 text-sm font-medium text-slate-700">
+                  <div className="flex min-h-[42px] items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-xs text-slate-600">
                     <CalendarDays className="h-4 w-4" />
                     {MONTHS[month - 1]} {year}
                   </div>
@@ -245,7 +250,7 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
                   type="button"
                   onClick={generate}
                   disabled={busy || members.length === 0}
-                  className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl bg-[#ffdc00] px-5 py-3 text-sm font-extrabold text-[#17202b] shadow-sm transition hover:-translate-y-0.5 hover:bg-yellow-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-yellow-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl bg-[#ffdc00] px-3 py-2.5 text-xs font-extrabold text-[#17202b] transition hover:bg-yellow-300 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <WandSparkles className="h-4 w-4" />
                   {busy ? "Bezig..." : "Genereer"}
@@ -254,14 +259,7 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
             </div>
 
             {proposal && (
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h4 className="text-base font-extrabold text-slate-900 sm:text-lg">Resultaat van het voorstel</h4>
-                    <p className="mt-0.5 text-xs text-slate-600 sm:text-sm">Bekijk eerst de samenvatting en controleer daarna de diensten hieronder.</p>
-                  </div>
-                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600">Niet automatisch opgeslagen</span>
-                </div>
+              <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {[
                     ["Diensten", proposal.stats.assignments],
@@ -269,106 +267,80 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
                     ["2e/3e keuze", proposal.stats.secondChoices + proposal.stats.thirdChoices],
                     ["Open diensten", proposal.uncovered.length],
                   ].map(([label, value]) => (
-                    <div key={label} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
-                      <p className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{value}</p>
+                    <div key={label} className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                      <p className="text-[9px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
+                      <p className="mt-1 text-lg font-extrabold text-slate-900">{value}</p>
                     </div>
                   ))}
                 </div>
 
-                {proposal.assignments.some((item) => item.restDayMoveWarning) && (
-                  <div className="rounded-xl border border-orange-200 bg-orange-50/90 p-4 text-sm leading-relaxed text-orange-950">
-                    <div className="mb-2 flex items-center gap-2 font-extrabold sm:text-base">
-                      <AlertTriangle className="h-4 w-4" />
-                      Diensten ingevuld met te verplaatsen rustdag
-                    </div>
-                    <p className="mb-2">
-                      Deze diensten zijn toegewezen op basis van een tweede of derde keuze terwijl de eerste keuze R was.
-                      De planner moet de rustdag controleren en verplaatsen vóór goedkeuring.
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {proposal.assignments.filter((item) => item.restDayMoveWarning).map((item) => (
-                        <span key={`rest-${item.date}-${item.shift}`} className="rounded-lg bg-white px-2 py-1 font-semibold">
-                          {formatDisplayDate(item.date)}: {item.memberName} · {item.shift} ({item.preference})
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {proposal.uncovered.length > 0 ? (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-sm leading-relaxed text-amber-950">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-950">
                     <div className="mb-2 flex items-center gap-2 font-extrabold">
                       <AlertTriangle className="h-4 w-4" /> Niet alle diensten konden worden ingevuld
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {proposal.uncovered.map((item) => (
                         <span key={`${item.date}-${item.shift}`} className="rounded-lg bg-white px-2 py-1 font-semibold">
-                          {formatDisplayDate(item.date)}: {item.shift}
+                          {item.date}: {item.shift}
                         </span>
                       ))}
                     </div>
                   </div>
-                ) : proposal.stats.assignments > 0 ? (
-                  <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-950">
-                    <CheckCircle2 className="h-4 w-4" /> Alle vereiste V-, D- en L-diensten konden worden ingevuld.
-                  </div>
                 ) : (
-                  <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] font-bold text-amber-950">
-                    <AlertTriangle className="h-4 w-4" />
-                    Er werd geen enkele dienst gegenereerd. Dit is geen geslaagd voorstel. Controleer de geselecteerde week en de beschikbare planningsgegevens.
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-[11px] font-bold text-emerald-900">
+                    <CheckCircle2 className="h-4 w-4" /> Alle vereiste V-, D- en L-diensten konden worden ingevuld.
                   </div>
                 )}
 
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <div className="border-b border-slate-200 bg-white px-4 py-3"><h5 className="text-sm font-extrabold text-slate-900">Voorgestelde diensten</h5><p className="mt-0.5 text-xs text-slate-600">Elke regel toont de datum, dienst, medewerker en gebruikte voorkeur.</p></div>
-                  <div className="overflow-x-auto">
-                  <table className="w-full min-w-[520px] text-left text-xs sm:text-sm">
-                    <thead className="bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full min-w-[500px] text-left text-[11px]">
+                    <thead className="bg-slate-100 text-[9px] uppercase tracking-wide text-slate-500">
                       <tr>
-                        <th className="px-3.5 py-3">Datum</th>
-                        <th className="px-3.5 py-3">Shift</th>
-                        <th className="px-3.5 py-3">Teamlid</th>
-                        <th className="px-3.5 py-3">Voorkeur</th>
+                        <th className="px-3 py-2">Datum</th>
+                        <th className="px-3 py-2">Shift</th>
+                        <th className="px-3 py-2">Teamlid</th>
+                        <th className="px-3 py-2">Voorkeur</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {proposal.assignments.map((item) => (
-                        <tr key={`${item.date}-${item.shift}`} className="transition-colors hover:bg-yellow-50/70">
-                          <td className="px-3.5 py-3 font-semibold text-slate-700">{formatDisplayDate(item.date)}</td>
-                          <td className="px-3.5 py-3">
-                            <span className="inline-flex min-w-8 justify-center rounded-md bg-yellow-100 px-2.5 py-1.5 font-extrabold text-slate-900">{item.shift}</span>
+                        <tr key={`${item.date}-${item.shift}`}>
+                          <td className="px-3 py-2 font-semibold text-slate-700">{item.date}</td>
+                          <td className="px-3 py-2">
+                            <span className="rounded-md bg-yellow-100 px-2 py-1 font-extrabold text-slate-900">{item.shift}</span>
                           </td>
-                          <td className="px-3.5 py-3 text-slate-800">{item.memberName}</td>
-                          <td className="px-3.5 py-3 text-slate-600">
-                            <span className="font-semibold">{item.preference}</span>
-                            {item.restDayMoveWarning && (
-                              <span className="ml-1 inline-flex rounded-md bg-orange-100 px-2 py-1 text-[10px] font-bold text-orange-900">
-                                Rustdag verplaatsen
-                              </span>
-                            )}
-                          </td>
+                          <td className="px-3 py-2 text-slate-800">{item.memberName}</td>
+                          <td className="px-3 py-2 text-slate-500">{item.preference}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   {proposal.assignments.length === 0 && (
-                    <p className="p-4 text-sm text-slate-600">Geen toewijzingen gevonden voor deze periode.</p>
+                    <p className="p-3 text-[11px] text-slate-500">Geen toewijzingen gevonden voor deze periode.</p>
                   )}
-                  </div>
                 </div>
 
-                <ul className="space-y-1.5 text-xs leading-relaxed text-slate-600">
+                <ul className="space-y-1 text-[10px] leading-relaxed text-slate-500">
                   {proposal.notes.map((note) => <li key={note}>• {note}</li>)}
                 </ul>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <p className="mb-2 text-[11px] leading-relaxed text-amber-950">
+                    Toepassen vervangt alleen de eerste keuze. Tweede en derde keuze blijven staan. Niet-ingezette teamleden krijgen X. Definitief maken gebeurt later manueel in het teamoverzicht.
+                  </p>
+                  <button type="button" onClick={() => void applyProposal()} disabled={busy || proposal.assignments.length === 0}
+                    className="w-full rounded-xl bg-[#17202b] px-4 py-3 text-xs font-extrabold text-[#ffdc00] transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    {busy ? 'Bezig met toepassen…' : 'AI-planning toepassen'}
+                  </button>
+                </div>
               </div>
             )}
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <div className="mb-3 flex items-center gap-2.5 text-sm font-extrabold text-slate-900 sm:text-base">
+            <div className="rounded-xl border border-slate-200 p-3">
+              <div className="mb-2 flex items-center gap-2 text-xs font-extrabold text-slate-800">
                 <MessageCircle className="h-4 w-4" /> Chat met de planner-assistent
               </div>
-              <div className="mb-3 rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm leading-relaxed text-slate-800">
+              <div className="mb-3 rounded-xl bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-700">
                 {chatReply}
               </div>
               <form
@@ -380,18 +352,18 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
                   onChange={(event) => setChatInput(event.target.value)}
                   placeholder="Bijv. waarom zijn er open diensten?"
                   disabled={chatBusy}
-                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-yellow-400 focus:ring-4 focus:ring-yellow-100/80"
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100"
                 />
                 <button
                   type="submit"
                   aria-label="Bericht versturen"
-                  className="inline-flex min-h-[46px] shrink-0 items-center justify-center rounded-xl bg-[#17202b] px-4 py-3 text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-yellow-200"
+                  className="inline-flex shrink-0 items-center justify-center rounded-xl bg-[#17202b] px-3 py-2.5 text-white transition hover:bg-slate-700"
                 >
                   {chatBusy ? <span className="text-xs">…</span> : <Send className="h-4 w-4 text-[#ffdc00]" />}
                 </button>
               </form>
-              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                Gemini beantwoordt vragen op basis van de actuele planningsgegevens. Er wordt niets opgeslagen.
+              <p className="mt-2 text-[9px] text-slate-400">
+                De assistent licht de planning toe. Alleen de knop hierboven past een bevestigd voorstel toe.
               </p>
             </div>
           </div>

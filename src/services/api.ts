@@ -228,6 +228,18 @@ async updateMaintenanceMode(enabled: boolean) {
     return this.request<{ user: User; planning: MonthlyPlanning }>(`/admin/users/${userId}/planning/${year}/${month}`);
   }
 
+  async applyAIPlanningProposal(
+    year: number,
+    month: number,
+    assignments: Array<{ memberId: string; day: number; shift: 'V' | 'D' | 'L' }>,
+    days: number[]
+  ) {
+    return this.request<{ success: boolean; updated: number; markedUnavailable: number; message: string }>(
+      `/admin/planning/${year}/${month}/apply-ai-proposal`,
+      { method: 'POST', body: JSON.stringify({ assignments, days }) }
+    );
+  }
+
   async finalizePlanning(year: number, month: number, week?: number | 'all') {
     return this.request<{ success: boolean; message: string }>(
       `/admin/planning/${year}/${month}/finalize`,

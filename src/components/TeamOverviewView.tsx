@@ -534,6 +534,7 @@ setIsSavingDay(false);
           month={currentMonth}
           specialDays={specialDays as unknown as AIPlannerSpecialDay[]}
           canUse={Boolean(canPlannerMode || isAdmin)}
+          onApplied={fetchOverview}
         />
       )}
 
@@ -671,6 +672,7 @@ setIsSavingDay(false);
                 {filteredMembers.map((member) => {
                   const isCurrentLoggedUser = member.user.id === user?.id;
                   const pln = member.planning?.days || {};
+                  const aiPln = ((member.planning as (typeof member.planning & { aiDays?: Record<number, string> }) | undefined)?.aiDays || {});
                   const secondPln = member.planning?.secondChoices || {};
                   const thirdPln = member.planning?.thirdChoices || {};
 
@@ -732,7 +734,9 @@ setIsSavingDay(false);
                         const { isWeekend, holidayName } = getNonWorkingDayInfo(date);
                         const isHoliday = holidayName !== null;
                         const specialDay = getSpecialDay(date);
-                        const code = pln[dayNum] || '';
+                        // Toon de AI-bezetting als die voor deze dag bestaat; anders de persoonlijke eerste keuze.
+                        const hasAIResult = Object.prototype.hasOwnProperty.call(aiPln, dayNum);
+                        const code = hasAIResult ? (aiPln[dayNum] || '') : (pln[dayNum] || '');
                         const secondCode = secondPln[dayNum] || '';
                         const thirdCode = thirdPln[dayNum] || '';
 
@@ -789,7 +793,7 @@ setIsSavingDay(false);
                                   : code === 'X'
                                   ? 'Vrij'
                                   : 'Nog niet ingevuld'
-                              } (Klik om te bewerken)`}
+                              }${hasAIResult ? ' (AI-planning)' : ''} (Klik om te bewerken)`}
                             >
                               {code || '·'}
                             </div>
