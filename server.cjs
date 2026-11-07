@@ -1631,6 +1631,7 @@ ${message.trim()}`;
       canEditPlanning: Boolean(canEditPlanning),
       canPlannerMode: Boolean(canPlannerMode),
       isAdmin: Boolean(isAdmin),
+      deploymentPriority: "normal",
       createdAt: now,
       updatedAt: now
     };
@@ -1649,7 +1650,7 @@ ${message.trim()}`;
     if (userIndex === -1) {
       return res.status(404).json({ error: "Gebruiker niet gevonden." });
     }
-    const { name, role, canViewOverview, canEditPlanning, canPlannerMode, isAdmin, isActive } = req.body;
+    const { name, role, canViewOverview, canEditPlanning, canPlannerMode, isAdmin, isActive, deploymentPriority } = req.body;
     if (name && typeof name === "string") {
       db2.users[userIndex].name = name.trim();
     }
@@ -1673,6 +1674,13 @@ ${message.trim()}`;
         }
       }
       db2.users[userIndex].isAdmin = Boolean(isAdmin);
+    }
+    if (deploymentPriority !== void 0) {
+      const allowedPriorities = ["high", "normal", "low", "none"];
+      if (!allowedPriorities.includes(deploymentPriority)) {
+        return res.status(400).json({ error: "Ongeldige AI-inzetprioriteit." });
+      }
+      db2.users[userIndex].deploymentPriority = deploymentPriority;
     }
     if (isActive !== void 0) {
       if (!isActive && db2.users[userIndex].isAdmin) {

@@ -15,7 +15,7 @@ import { OCPlanningView } from './components/OCPlanningView';
 
 
 // Update-popup version: bump this value (e.g. to "v2") for the next major update.
-const UPDATE_POPUP_VERSION = 'v2.3';
+const UPDATE_POPUP_VERSION = 'v2.5';
 const UPDATE_POPUP_STORAGE_KEY = `koerwerking-update-popup-${UPDATE_POPUP_VERSION}`;
 
 const UpdateWelcomePopup: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -34,17 +34,27 @@ const UpdateWelcomePopup: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         aria-modal="true"
         aria-labelledby="update-popup-title"
       >
-      <div className="update-popup-ribbon">✨ KLEINE UPDATE • VERSIE 2.3</div>
+      <div className="update-popup-ribbon">✨ KLEINE UPDATE • VERSIE 2.5</div>
 
       <div className="update-popup-emoji" aria-hidden="true">🚀</div>
 
       <h2 id="update-popup-title">
-        WE ZIJN WEER EEN STAPJE VERDER! 🎉
+        Klein update, maar fijn! 
+        <p>
+          (voor de planners)🎉
+          </p>
+          <p>Lees zeker het bericht</p>
       </h2>
 
       <p className="update-popup-intro">
        De Koerwerking-planning kreeg een kleine update!
-Enkele verbeteringen en handige aanpassingen maken alles weer wat vlotter. 😉
+       </p>
+Daarom staat er tijdelijk een planning in april 2027, 
+<p>
+
+gelieve die te laten staan, </p>zodat de testen kunnen worden uitgevoerd,<p>
+</p> Dankjewel! 🙏
+<p>
       </p>
 
       <div className="update-popup-note">
@@ -67,7 +77,7 @@ Alle suggesties zijn welkom!
       </button>
 
       <div className="update-popup-footnote">
-        Kleine update, weer een stap vooruit! • Versie 2.3
+        Kleine update, weer een stap vooruit! • Versie 2.5
       </div>
       </section>
       {celebrate && (

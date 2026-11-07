@@ -111,6 +111,7 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   
   const [showFinalizeModal, setShowFinalizeModal] = useState<boolean>(false);
   const [showAIPlannerPage, setShowAIPlannerPage] = useState<boolean>(false);
+  const [showAIAnnouncement, setShowAIAnnouncement] = useState<boolean>(false);
 
   const [teamData, setTeamData] = useState<TeamMemberOverview[]>([]);
   const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
@@ -128,6 +129,30 @@ export const TeamOverviewView: React.FC<TeamOverviewViewProps> = ({ onNavigateTo
   const [isSavingDay, setIsSavingDay] = useState<boolean>(false);
   const [daySaveMessage, setDaySaveMessage] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<{ name: string; src: string } | null>(null);
+
+  // Toon de AI-planning aankondiging slechts één keer per gebruiker.
+  useEffect(() => {
+    if (!(canPlannerMode || isAdmin) || !user?.id) return;
+
+    const announcementKey = `koerwerking-ai-planning-announcement-v1-${user.id}`;
+    try {
+      if (window.localStorage.getItem(announcementKey) === 'seen') return;
+
+      setShowAIAnnouncement(true);
+      window.localStorage.setItem(announcementKey, 'seen');
+    } catch (error) {
+      // Als opslag geblokkeerd is, blijft de popup bruikbaar in deze sessie.
+      console.warn('AI-planning aankondiging kon niet lokaal worden opgeslagen:', error);
+      setShowAIAnnouncement(true);
+    }
+  }, [canPlannerMode, isAdmin, user?.id]);
+
+  const closeAIAnnouncement = () => setShowAIAnnouncement(false);
+
+  const openAIPlannerFromAnnouncement = () => {
+    setShowAIAnnouncement(false);
+    setShowAIPlannerPage(true);
+  };
 
   const daysInMonth = useMemo(() => {
     return new Date(currentYear, currentMonth, 0).getDate();
@@ -484,6 +509,48 @@ setIsSavingDay(false);
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-4 overflow-x-hidden bg-slate-50 px-2.5 py-3 font-sans sm:space-y-6 sm:px-5 sm:py-5 md:space-y-7 md:px-8 md:py-7">
+      <style>{`
+        @keyframes aiPlanningRgbGlow {
+          0%, 100% {
+            box-shadow:
+              0 0 5px rgba(255, 45, 85, 0.55),
+              0 0 12px rgba(255, 45, 85, 0.32),
+              0 0 20px rgba(255, 45, 85, 0.18);
+          }
+          33% {
+            box-shadow:
+              0 0 5px rgba(35, 220, 125, 0.6),
+              0 0 13px rgba(35, 220, 125, 0.36),
+              0 0 22px rgba(35, 220, 125, 0.2);
+          }
+          66% {
+            box-shadow:
+              0 0 5px rgba(55, 145, 255, 0.65),
+              0 0 13px rgba(55, 145, 255, 0.38),
+              0 0 22px rgba(155, 75, 255, 0.24);
+          }
+        }
+
+        .ai-planning-rgb {
+          animation: aiPlanningRgbGlow 4s ease-in-out infinite;
+          border-color: rgba(140, 120, 255, 0.65);
+          will-change: box-shadow;
+        }
+
+        .ai-planning-rgb:hover {
+          animation-duration: 1.8s;
+          transform: translateY(-1px);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .ai-planning-rgb {
+            animation: none;
+            box-shadow:
+              0 0 7px rgba(255, 45, 85, 0.35),
+              0 0 12px rgba(55, 145, 255, 0.25);
+          }
+        }
+      `}</style>
       {/* Header & Controls */}
       <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between">
         <div>
@@ -505,7 +572,7 @@ setIsSavingDay(false);
           {(canPlannerMode || isAdmin) && (
             <button
               onClick={() => setShowAIPlannerPage(true)}
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-extrabold text-[#17202b] shadow-sm transition-colors hover:border-yellow-400 hover:bg-yellow-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00] focus-visible:ring-offset-2 sm:w-auto"
+              className="ai-planning-rgb inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-extrabold text-[#17202b] shadow-sm transition-colors hover:border-yellow-400 hover:bg-yellow-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00] focus-visible:ring-offset-2 sm:w-auto"
             >
               <Sparkles className="w-4 h-4 text-amber-500" />
               <span>AI-planning</span>
@@ -1543,6 +1610,87 @@ setIsSavingDay(false);
             />
             <p className="pt-3 text-center text-sm font-bold text-slate-800">{photoPreview.name}</p>
           </div>
+        </div>
+      )}
+
+      {showAIAnnouncement && (canPlannerMode || isAdmin) && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm animate-in fade-in"
+          role="presentation"
+          onClick={closeAIAnnouncement}
+        >
+          <section
+            className="relative w-full max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl animate-in zoom-in-95"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ai-announcement-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="relative overflow-hidden bg-[#17202b] px-6 pb-7 pt-8 text-white">
+              <div className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-violet-500/30 blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-16 -left-8 h-40 w-40 rounded-full bg-cyan-400/20 blur-3xl" />
+              <button
+                type="button"
+                onClick={closeAIAnnouncement}
+                className="absolute right-4 top-4 z-10 rounded-full p-2 text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                aria-label="Melding sluiten"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-white/10 shadow-lg">
+                <Sparkles className="h-7 w-7 text-[#ffdc00]" />
+              </div>
+              <p className="relative mt-5 text-[10px] font-extrabold uppercase tracking-[0.22em] text-[#ffdc00]">
+                Nieuw in Koerwerking Planning
+              </p>
+              <h3 id="ai-announcement-title" className="relative mt-2 text-2xl font-black tracking-tight">
+                Maak kennis met AI-planning
+              </h3>
+              <p className="relative mt-2 text-sm leading-relaxed text-slate-300">
+                Plannen wordt een stukje makkelijker. Er is een nieuwe functie toegevoegd die je helpt om de planning slimmer en eenvoudiger op te stellen.
+              </p>
+            </div>
+
+            <div className="space-y-5 px-6 py-6">
+              <div className="rounded-2xl border border-violet-100 bg-violet-50/70 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">Neem gerust een kijkje!</p>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                      Ontdek zelf wat de AI-planner voor je kan betekenen. En heb je vragen, opmerkingen of loopt er iets niet helemaal zoals verwacht?
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-sm leading-relaxed text-slate-600">
+                Dan mag je Jonas altijd lastigvallen. Hij doet alsof hij het niet erg vindt. 😉
+              </p>
+
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={closeAIAnnouncement}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                >
+                  Later bekijken
+                </button>
+                <button
+                  type="button"
+                  onClick={openAIPlannerFromAnnouncement}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#17202b] px-5 py-2.5 text-xs font-extrabold text-white shadow-lg transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00] focus-visible:ring-offset-2"
+                >
+                  <Sparkles className="h-4 w-4 text-[#ffdc00]" />
+                  Neem een kijkje
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </section>
         </div>
       )}
 
