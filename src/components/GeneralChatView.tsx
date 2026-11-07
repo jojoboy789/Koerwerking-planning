@@ -12,10 +12,20 @@ export const GeneralChatView: React.FC = () => {
 
   if (!user || (!user.canPlannerMode && !user.isAdmin)) {
     return (
-      <div className="p-8 text-center text-slate-500">
-        <AlertCircle className="w-8 h-8 mx-auto mb-2" />
-        <p>Je hebt geen toegang tot deze pagina.</p>
-      </div>
+      <main className="fixed inset-0 z-50 overflow-hidden bg-slate-950" aria-label="Geen toegang">
+        <img
+          src="/geen-toegang-koerwerking.png"
+          alt="Koerman Bus op een stelplaats"
+          className="absolute inset-0 h-full w-full object-cover object-center"
+        />
+        <a
+          href="/dashboard"
+          aria-label="Terug naar dashboard"
+          className="absolute left-[51%] top-[75%] z-10 h-[10%] w-[32%] rounded-full bg-transparent text-transparent focus:outline-none focus-visible:ring-4 focus-visible:ring-white/90"
+        >
+          Terug naar dashboard
+        </a>
+      </main>
     );
   }
 
