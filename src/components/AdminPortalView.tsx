@@ -34,6 +34,7 @@ export const AdminPortalView: React.FC = () => {
   // Zoek- en Filterstate
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'ADMIN' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [lastLoginSearch, setLastLoginSearch] = useState('');
 
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
@@ -425,6 +426,51 @@ export const AdminPortalView: React.FC = () => {
     setTimeout(() => setCopiedCode(false), 2500);
   };
 
+  // Lees lastLoginAt uit de API-response. Ondersteunt ISO-datums en Firestore Timestamp-objecten.
+  const formatLastLoginAt = (value: unknown): string => {
+    if (!value) return 'Nog niet geregistreerd';
+
+    let date: Date;
+    if (value instanceof Date) {
+      date = value;
+    } else if (typeof value === 'string' || typeof value === 'number') {
+      date = new Date(value);
+    } else if (typeof value === 'object' && value !== null && 'seconds' in value) {
+      const seconds = (value as { seconds?: unknown }).seconds;
+      date = typeof seconds === 'number' ? new Date(seconds * 1000) : new Date(Number.NaN);
+    } else {
+      return 'Onbekend formaat';
+    }
+
+    if (Number.isNaN(date.getTime())) return 'Onbekend formaat';
+    return new Intl.DateTimeFormat('nl-BE', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(date);
+  };
+
+  const usersWithLastLogin = useMemo(() => {
+    const query = lastLoginSearch.trim().toLowerCase();
+    return [...users]
+      .filter((u) => !query || u.name.toLowerCase().includes(query) || (u.role || '').toLowerCase().includes(query))
+      .sort((a, b) => {
+        const aValue = (a as User & { lastLoginAt?: unknown }).lastLoginAt;
+        const bValue = (b as User & { lastLoginAt?: unknown }).lastLoginAt;
+        const toTime = (value: unknown) => {
+          if (typeof value === 'string' || typeof value === 'number' || value instanceof Date) {
+            const time = new Date(value).getTime();
+            return Number.isNaN(time) ? 0 : time;
+          }
+          if (typeof value === 'object' && value !== null && 'seconds' in value) {
+            const seconds = (value as { seconds?: unknown }).seconds;
+            return typeof seconds === 'number' ? seconds * 1000 : 0;
+          }
+          return 0;
+        };
+        return toTime(bValue) - toTime(aValue);
+      });
+  }, [users, lastLoginSearch]);
+
   // Gefilterde gebruikers voor ICT Table 2.0
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
@@ -725,6 +771,86 @@ export const AdminPortalView: React.FC = () => {
           <p className="text-[10px] text-slate-400">Wijzigingen worden onmiddellijk opgeslagen. Bestaande medewerkers zonder ingestelde voorkeur worden als Normaal weergegeven.</p>
         </section>
       )}
+
+      {/* Laatste aanmeldingen */}
+      <section className="rounded-3xl border border-cyan-200 bg-white p-5 shadow-xl md:p-6 font-sans space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-2.5 text-cyan-700">
+              <Activity className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 font-mono">
+                Laatste aanmeldingen
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Overzicht van alle gebruikers en hun meest recente login.
+              </p>
+            </div>
+          </div>
+          <div className="w-full sm:w-64">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <input
+                type="search"
+                value={lastLoginSearch}
+                onChange={(event) => setLastLoginSearch(event.target.value)}
+                placeholder="Zoek gebruiker..."
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs text-slate-700 outline-none focus:border-cyan-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-slate-200">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(145px,auto)] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <span>Gebruiker</span>
+            <span className="text-right">Laatste aanmelding</span>
+          </div>
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 p-6 text-xs text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin text-cyan-600" />
+              Aanmeldgegevens laden...
+            </div>
+          ) : usersWithLastLogin.length > 0 ? (
+            <div className="max-h-[420px] divide-y divide-slate-100 overflow-y-auto">
+              {usersWithLastLogin.map((member) => {
+                const lastLoginAt = (member as User & { lastLoginAt?: unknown }).lastLoginAt;
+                const hasLogin = Boolean(lastLoginAt);
+                return (
+                  <div key={member.id} className="grid grid-cols-[minmax(0,1fr)_minmax(145px,auto)] items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-[10px] font-bold ${
+                        member.isAdmin
+                          ? 'border-amber-200 bg-amber-50 text-amber-700'
+                          : 'border-cyan-100 bg-cyan-50 text-cyan-700'
+                      }`}>
+                        {member.avatar || member.name.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold text-slate-900">{member.name}</p>
+                        <p className="mt-0.5 truncate text-[10px] text-slate-500">
+                          {member.role || 'Teamlid'} · {member.isActive ? 'Actief account' : 'Inactief account'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-[11px] font-semibold ${hasLogin ? 'text-slate-700' : 'text-slate-400'}`}>
+                        {formatLastLoginAt(lastLoginAt)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="p-6 text-center text-xs text-slate-500">Geen gebruikers gevonden.</p>
+          )}
+        </div>
+        <p className="text-[10px] leading-relaxed text-slate-400">
+          De weergegeven datum komt uit <code>lastLoginAt</code> van de gebruikersgegevens. Als deze waarde niet door de backend wordt meegestuurd of bijgewerkt bij het inloggen, verschijnt ‘Nog niet geregistreerd’.
+        </p>
+      </section>
 
       {/* Speciale Dagen Module */}
       <section className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-xl space-y-4 font-sans">
