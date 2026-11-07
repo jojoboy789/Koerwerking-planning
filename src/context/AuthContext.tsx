@@ -87,7 +87,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const canEditPlanning = Boolean(user?.canEditPlanning || user?.isAdmin);
   const isAdmin = Boolean(user?.isAdmin);
   const roleName = (user?.role || '').toLowerCase().trim();
-  const canPlannerMode = Boolean(isAdmin || user?.canPlannerMode || roleName === 'planning' || roleName === 'planner' || (canEditPlanning && canViewOverview));
+  // AI Koerplanner en plannerfuncties vereisen expliciete plannerrechten.
+  // Alleen algemene lees- en bewerkrechten zijn NIET voldoende.
+  const canPlannerMode = Boolean(
+    isAdmin ||
+    user?.canPlannerMode === true ||
+    roleName === 'planning' ||
+    roleName === 'planner'
+  );
 
   return (
     <AuthContext.Provider

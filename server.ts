@@ -1,5 +1,6 @@
 
 import express, { Request, Response, NextFunction } from 'express';
+import { GoogleGenAI } from '@google/genai';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -598,20 +599,8 @@ async function startServer() {
     const cleanUpper = cleanInput.toUpperCase();
     const strippedInput = cleanUpper.replace(/[^A-Z0-9]/g, '');
 
-    // Allow friendly admin keywords
-    if (['ADMIN', 'ADM', 'BEHEERDER', 'ADMINISTRATOR', 'ROOT'].includes(cleanUpper)) {
-      const adminUser = db.users.find(u => u.isAdmin && u.isActive) || db.users.find(u => u.id === 'usr-admin-001');
-      if (adminUser) {
-        const token = crypto.randomBytes(32).toString('hex');
-        db.sessions[token] = { userId: adminUser.id, createdAt: Date.now() };
-        adminUser.lastLoginAt = new Date().toISOString();
-        saveDatabase(db);
-        return res.json({
-          token,
-          user: sanitizeUser(adminUser),
-        });
-      }
-    }
+    // Admin-login gebeurt uitsluitend met een geldige persoonlijke toegangscode.
+    // Een algemeen woord zoals ADMIN mag nooit een beheerderssessie aanmaken.
 
     const variants = getPossibleCodeVariants(cleanInput);
     let user: StoredUser | undefined;
@@ -1778,6 +1767,206 @@ app.get(
     });
   });
   
+  // === AI KOERPLANNER (GROQ PRIMARY + GEMINI FREE FALLBACK, READ-ONLY) ===
+  app.post(
+    '/api/ai-planner/chat',
+    authMiddleware,
+    requirePlannerOrAdminMiddleware,
+    async (req: AuthenticatedRequest, res: Response) => {
+      const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+      const year = Number(req.body?.year);
+      const month = Number(req.body?.month);
+
+      if (!message || message.length > 1200) {
+        return res.status(400).json({ error: 'Stel een vraag van maximaal 1200 tekens.' });
+      }
+      if (!Number.isInteger(year) || year < 2020 || year > 2100 ||
+          !Number.isInteger(month) || month < 1 || month > 12) {
+        return res.status(400).json({ error: 'Ongeldig planningsjaar of maand.' });
+      }
+
+      const groqApiKey = process.env.GROQ_API_KEY;
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+
+      if (!groqApiKey && !geminiApiKey) {
+        return res.status(503).json({
+          error: 'De AI-assistent is niet geconfigureerd. Voeg GROQ_API_KEY toe en eventueel GEMINI_API_KEY als reserve.'
+        });
+      }
+
+      try {
+        // Bouw context uitsluitend op uit de serverdatabase.
+        const activeMembers = db.users.filter((u) => {
+          if (!u.isActive) return false;
+          const role = (u.role || '').trim().toLowerCase();
+          return role !== 'planning' && role !== 'planner';
+        });
+
+        const teamContext = activeMembers.map((member) => {
+          const planning = db.plannings.find(
+            (p) => p.userId === member.id && p.year === year && p.month === month
+          );
+
+          const days: Record<string, { first: string; second: string; third: string; final: string }> = {};
+          for (let day = 1; day <= 31; day += 1) {
+            const first = planning?.days?.[day] || '';
+            const second = planning?.secondChoices?.[day] || '';
+            const third = planning?.thirdChoices?.[day] || '';
+            const final = planning?.finalDays?.[day] || '';
+            if (first || second || third || final) {
+              days[String(day)] = { first, second, third, final };
+            }
+          }
+
+          return {
+            teamlid: member.name,
+            functie: member.role || 'Niet opgegeven',
+            planningDefinitief: Boolean(planning?.isFinal),
+            dagen: days,
+          };
+        });
+
+        const specialDays = (db.specialDays || [])
+          .filter((item) => item.date.startsWith(`${year}-${String(month).padStart(2, '0')}-`))
+          .map((item) => ({ datum: item.date, type: item.type }));
+
+        const context = {
+          periode: `${year}-${String(month).padStart(2, '0')}`,
+          team: teamContext,
+          specialeDagen: specialDays,
+          afspraken: [
+            'V = vroeg, D = dag, L = laat, R = rustdag, X = niet inplannen.',
+            'first is de eerste keuze, second de tweede keuze en third de derde keuze.',
+            'final bevat de vastgelegde definitieve dagwaarde.',
+            'Een planning met planningDefinitief=true is afgesloten en mag niet gewijzigd worden.',
+            'Deze chat mag uitsluitend uitleg geven en voorstellen bespreken. Ze mag nooit data opslaan of wijzigen.',
+          ],
+        };
+
+        const prompt =
+          'Je bent de AI Koerplanner voor een intern teamoverzicht. ' +
+          'Antwoord altijd in helder Nederlands, vriendelijk en concreet. ' +
+          'Gebruik uitsluitend de meegeleverde planningscontext voor feiten. ' +
+          'Verzin geen diensten, voorkeuren, regels of namen. Als informatie ontbreekt, zeg dat eerlijk. ' +
+          'Maak duidelijk onderscheid tussen eerste, tweede en derde voorkeur. ' +
+          'Een definitieve planning is vergrendeld: stel nooit voor om die te wijzigen. ' +
+          'Je mag uitleggen, tellen en mogelijke aandachtspunten signaleren, maar je mag niets opslaan of aanpassen. ' +
+          'Vermeld bij conclusies welke gegevens je gebruikt.\n\n' +
+          'PLANNINGSCONTEXT:\n' + JSON.stringify(context) +
+          '\n\nVRAAG VAN DE PLANNER:\n' + message;
+
+        const providerErrors: string[] = [];
+        let reply = '';
+        let usedProvider: 'Groq' | 'Gemini' | null = null;
+
+        // 1. Groq is de primaire provider. Alleen een server-side API-key wordt gebruikt.
+        if (groqApiKey) {
+          try {
+            const groqModel = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+            const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${groqApiKey}`,
+                'Content-Type': 'application/json',
+              },
+             body: JSON.stringify({
+              model: groqModel,
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.2,
+              max_completion_tokens: 900,
+              include_reasoning: false,
+              stream: false,
+            }),
+              signal: AbortSignal.timeout(30000),
+            });
+
+            if (!groqResponse.ok) {
+              // Log geen response-body: die kan account- of requestdetails bevatten.
+              providerErrors.push(`Groq HTTP ${groqResponse.status}`);
+              console.warn(`Groq niet beschikbaar (HTTP ${groqResponse.status}); reserveprovider wordt geprobeerd.`);
+            } else {
+              const groqData = await groqResponse.json() as {
+                choices?: Array<{ message?: { content?: string | null } }>;
+              };
+              const candidate = groqData.choices?.[0]?.message?.content;
+              if (typeof candidate === 'string' && candidate.trim()) {
+                reply = candidate.trim();
+                usedProvider = 'Groq';
+              } else {
+                providerErrors.push('Groq gaf geen tekstueel antwoord');
+                console.warn('Groq gaf geen bruikbaar antwoord; reserveprovider wordt geprobeerd.');
+              }
+            }
+          } catch (groqError) {
+            const err = groqError as { name?: string; code?: string };
+            providerErrors.push(`Groq ${err?.name || err?.code || 'netwerkfout'}`);
+            console.warn('Groq-aanvraag mislukt; reserveprovider wordt geprobeerd.');
+          }
+        }
+
+        // 2. Gemini is uitsluitend de reserveprovider. Er wordt niet naar betaalde
+        // providers doorgeschakeld als beide gratis quota's op zijn.
+        if (!reply && geminiApiKey) {
+          try {
+            const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+            const geminiModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+            const retryDelaysMs = [2000, 5000];
+            let geminiResult: Awaited<ReturnType<typeof ai.models.generateContent>> | undefined;
+
+            for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
+              try {
+                geminiResult = await ai.models.generateContent({
+                  model: geminiModel,
+                  contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                  config: { temperature: 0.2, maxOutputTokens: 900 },
+                });
+                break;
+              } catch (geminiError) {
+                const err = geminiError as { status?: number | string; code?: number | string };
+                const status = Number(err?.status ?? err?.code);
+                const retryable = [429, 500, 502, 503, 504].includes(status);
+                if (!retryable || attempt >= retryDelaysMs.length) {
+                  providerErrors.push(`Gemini ${Number.isFinite(status) ? `HTTP ${status}` : 'aanvraagfout'}`);
+                  throw geminiError;
+                }
+                const delay = retryDelaysMs[attempt];
+                console.warn(`Gemini tijdelijk niet beschikbaar (HTTP ${status}); nieuwe poging over ${delay / 1000} seconden.`);
+                await new Promise((resolve) => setTimeout(resolve, delay));
+              }
+            }
+
+            const candidate = (geminiResult?.text || '').trim();
+            if (candidate) {
+              reply = candidate;
+              usedProvider = 'Gemini';
+            } else {
+              providerErrors.push('Gemini gaf geen tekstueel antwoord');
+            }
+          } catch {
+            // De concrete foutdetails worden niet doorgestuurd naar de browser of logs.
+          }
+        }
+
+        if (!reply || !usedProvider) {
+          console.error(`AI Koerplanner niet beschikbaar. Providers geprobeerd: ${providerErrors.join('; ') || 'geen provider geconfigureerd'}.`);
+          return res.status(503).json({
+            error: 'De gratis AI-providers zijn momenteel niet beschikbaar of hun gratis gebruikslimiet is bereikt. Probeer het later opnieuw.',
+          });
+        }
+
+        res.setHeader('Cache-Control', 'no-store');
+        return res.json({ success: true, reply, provider: usedProvider });
+      } catch (error) {
+        const err = error as { status?: number | string; code?: number | string };
+        const status = Number(err?.status ?? err?.code);
+        console.error(`AI Koerplanner-fout (status ${Number.isFinite(status) ? status : 'onbekend'}).`);
+        return res.status(502).json({
+          error: 'De AI-assistent kon je vraag momenteel niet verwerken. Probeer het later opnieuw.',
+        });
+      }
+    }
+  );
+
   // === GENERAL CHAT ENDPOINT ===
   app.post('/api/chat/send-message', authMiddleware, requirePlannerOrAdminMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     const { message } = req.body;

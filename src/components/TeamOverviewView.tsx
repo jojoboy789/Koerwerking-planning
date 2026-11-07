@@ -4,6 +4,11 @@ import { api } from '../services/api';
 import type { SpecialDay } from '../services/api';
 import { TeamMemberOverview, ShiftCode, SHIFT_DEFINITIONS } from '../types';
 import { WeekSelectionModal } from './WeekSelectionModal';
+import { AIPlannerPanel } from './AIPlannerPanel';
+import type {
+  AIPlannerMember,
+  AIPlannerSpecialDay,
+} from '../services/aiPlanningOptimizer';
 import {
   ChevronLeft,
   ChevronRight,
@@ -520,6 +525,17 @@ setIsSavingDay(false);
           </div>
         </div>
       </div>
+
+      {/* AI KOERPLANNER: alleen zichtbaar voor planners en beheerders */}
+      {(canPlannerMode || isAdmin) && (
+        <AIPlannerPanel
+          members={teamData as unknown as AIPlannerMember[]}
+          year={currentYear}
+          month={currentMonth}
+          specialDays={specialDays as unknown as AIPlannerSpecialDay[]}
+          canUse={Boolean(canPlannerMode || isAdmin)}
+        />
+      )}
 
       {/* Legend & Search Filters */}
       <div className="flex flex-col items-stretch gap-3 text-xs lg:flex-row lg:items-center lg:justify-between lg:gap-4">
