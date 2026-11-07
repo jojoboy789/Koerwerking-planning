@@ -15,6 +15,8 @@ import {
   ClipboardCheck,
   ShieldCheck,
   ChevronDown,
+  X,
+  CalendarCheck,
 } from "lucide-react";
 import {
   generateAIPlanningProposal,
@@ -75,6 +77,8 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
   );
   const [resultView, setResultView] = useState<"day" | "week" | "month">("week");
   const [selectedDay, setSelectedDay] = useState("");
+  const [approvedDates, setApprovedDates] = useState<string[]>([]);
+  const [showApplyConfirm, setShowApplyConfirm] = useState(false);
 
   useEffect(() => {
     const firstWeek = getISOWeek(new Date(year, month - 1, 1));
@@ -96,8 +100,29 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
       ...proposal.assignments.map((item) => item.date),
       ...proposal.uncovered.map((item) => item.date),
       ...proposal.skippedDates.map((item) => item.date),
+      ...proposal.restDayWarnings.map((item) => item.date),
     ])).sort();
   }, [proposal]);
+
+  // Alleen gewone werkdagen met een voorstel of open dienst kunnen worden goedgekeurd.
+  // Overgeslagen dagen (weekend, feestdag, definitief) zijn nooit toepasbaar.
+  const applicableDates = useMemo(() => {
+    if (!proposal) return [];
+    return Array.from(new Set([
+      ...proposal.assignments.map((item) => item.date),
+      ...proposal.uncovered.map((item) => item.date),
+    ])).sort();
+  }, [proposal]);
+
+  const toggleDate = (date: string) => {
+    setApprovedDates((current) => current.includes(date)
+      ? current.filter((item) => item !== date)
+      : [...current, date].sort());
+  };
+
+  const toggleAllDates = () => {
+    setApprovedDates((current) => current.length === applicableDates.length ? [] : applicableDates);
+  };
 
   const visibleDates = useMemo(() => {
     if (resultView === "day") return selectedDay ? resultDates.filter((date) => date === selectedDay) : resultDates.slice(0, 1);
@@ -122,6 +147,10 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
         specialDays,
       });
       setProposal(result);
+      setApprovedDates(Array.from(new Set([
+        ...result.assignments.map((item) => item.date),
+        ...result.uncovered.map((item) => item.date),
+      ])).sort());
       setResultView(period);
       setSelectedDay(result.assignments[0]?.date || result.uncovered[0]?.date || "");
       setChatReply(
@@ -135,29 +164,31 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
     }
   };
 
-  const applyProposal = async () => {
+  const applyProposal = () => {
+    if (!proposal || busy || !canUse || approvedDates.length === 0) return;
+    setShowApplyConfirm(true);
+  };
+
+  const confirmApplyProposal = async () => {
     if (!proposal || busy || !canUse) return;
-    const days = Array.from(new Set([
-      ...proposal.assignments.map((item) => item.day),
-      ...proposal.uncovered.map((item) => Number(item.date.slice(-2))),
-    ])).sort((a, b) => a - b);
+    const selectedDates = new Set(approvedDates);
+    const selectedAssignments = proposal.assignments.filter((item) => selectedDates.has(item.date));
+    const days = Array.from(selectedDates)
+      .map((date) => Number(date.slice(-2)))
+      .sort((a, b) => a - b);
     if (days.length === 0) return;
-    const restWarningText = proposal.restDayWarnings.length
-      ? `\\n\\nLET OP: ${proposal.restDayWarnings.length} rustdag(en) moeten mogelijk verplaatst worden. Controleer de waarschuwingen op de AI-pagina.`
-      : "";
-    const confirmed = window.confirm(
-      `AI-planning toepassen voor ${period === "week" ? `week ${weekNumber}` : `${MONTHS[month - 1]} ${year}`}?${restWarningText}\\n\\nAlleen de eerste keuze wordt aangepast binnen deze periode. Tweede en derde keuzes blijven behouden. Teamleden zonder dienst krijgen X. De planning wordt NIET definitief gemaakt.`
-    );
-    if (!confirmed) return;
+
+    setShowApplyConfirm(false);
     setBusy(true);
     try {
       const result = await api.applyAIPlanningProposal(
         year, month,
-        proposal.assignments.map(({ memberId, day, shift }) => ({ memberId, day, shift })),
+        selectedAssignments.map(({ memberId, day, shift }) => ({ memberId, day, shift })),
         days
       );
       setChatReply(result.message);
       setProposal(null);
+      setApprovedDates([]);
       await onApplied?.();
     } catch (error) {
       setChatReply(error instanceof Error ? error.message : "AI-planning toepassen is mislukt.");
@@ -427,6 +458,41 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
             </div>
           </div>
 
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">Welke dagen mogen worden toegepast?</h3>
+                <p className="mt-1 text-xs text-slate-500">Vink dagen uit die niet goed zijn. Die dagen blijven volledig onaangepast, ook voor X-toewijzingen.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">{approvedDates.length} / {applicableDates.length} dagen geselecteerd</span>
+                <button type="button" onClick={toggleAllDates} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                  {approvedDates.length === applicableDates.length ? "Alles uitvinken" : "Alles aanvinken"}
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {applicableDates.map((date) => {
+                const warningCount = proposal.restDayWarnings.filter((warning) => warning.date === date).length;
+                const openCount = proposal.uncovered.filter((item) => item.date === date).length;
+                const checked = approvedDates.includes(date);
+                return (
+                  <label key={date} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition ${checked ? "border-emerald-200 bg-emerald-50/60" : "border-slate-200 bg-slate-50 opacity-75"}`}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleDate(date)} className="mt-0.5 h-4 w-4 accent-emerald-600" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-extrabold capitalize text-slate-900">{formatDate(date)}</span>
+                      <span className="mt-1 flex flex-wrap gap-1.5">
+                        {warningCount > 0 && <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-900">{warningCount} rustdagcontrole</span>}
+                        {openCount > 0 && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">{openCount} open dienst(en)</span>}
+                        {warningCount === 0 && openCount === 0 && <span className="text-[10px] font-semibold text-emerald-700">Geen waarschuwingen</span>}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
           {proposal.skippedDates.length > 0 && (
             <details className="rounded-2xl border border-slate-200 bg-white p-4">
               <summary className="cursor-pointer text-sm font-bold text-slate-800">Overgeslagen dagen ({proposal.skippedDates.length})</summary>
@@ -443,8 +509,8 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
 
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
             <h3 className="text-sm font-extrabold text-amber-950">4. Voorstel toepassen</h3>
-            <p className="mt-1 text-xs leading-relaxed text-amber-900">Bij toepassen worden de eerste keuzes in de geselecteerde periode vervangen door het AI-resultaat. Teamleden zonder toegewezen dienst krijgen X. Tweede en derde keuzes blijven ongewijzigd. Dit maakt de planning niet definitief.</p>
-            <button type="button" onClick={() => void applyProposal()} disabled={busy || proposal.assignments.length === 0} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#17202b] px-4 py-3 text-sm font-extrabold text-[#ffdc00] shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
+            <p className="mt-1 text-xs leading-relaxed text-amber-900">Alleen de {approvedDates.length} aangevinkte dag(en) worden toegepast. Uitgevinkte dagen blijven volledig ongewijzigd. Op geselecteerde dagen worden alleen de eerste keuzes vervangen; teamleden zonder toegewezen dienst krijgen X. Tweede en derde keuzes blijven ongewijzigd. Dit maakt de planning niet definitief.</p>
+            <button type="button" onClick={() => void applyProposal()} disabled={busy || approvedDates.length === 0} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#17202b] px-4 py-3 text-sm font-extrabold text-[#ffdc00] shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
               <CheckCircle2 className="h-4 w-4" />{busy ? "Bezig met toepassen..." : "Ik heb gecontroleerd, pas AI-planning toe"}
             </button>
           </div>
@@ -459,6 +525,102 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
           <button type="submit" disabled={chatBusy || !chatInput.trim()} aria-label="Bericht versturen" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#17202b] text-white transition hover:bg-slate-700 disabled:opacity-50"><Send className="h-4 w-4 text-[#ffdc00]" /></button>
         </form>
       </section>
+
+      {showApplyConfirm && proposal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"
+          role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setShowApplyConfirm(false); }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="apply-confirm-title"
+            className="relative my-auto w-full max-w-xl overflow-hidden rounded-[28px] border border-white/70 bg-white shadow-[0_28px_90px_-20px_rgba(0,0,0,0.55)]"
+          >
+            <div className="relative overflow-hidden bg-[#17202b] px-6 pb-7 pt-6 text-white sm:px-8 sm:pt-8">
+              <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full border-[22px] border-white/5" />
+              <div className="pointer-events-none absolute -bottom-20 right-24 h-40 w-40 rounded-full bg-[#ffdc00]/10 blur-2xl" />
+              <button
+                type="button"
+                onClick={() => setShowApplyConfirm(false)}
+                className="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
+                aria-label="Venster sluiten"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="relative flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ffdc00] text-[#17202b] shadow-lg shadow-black/20">
+                  <Sparkles className="h-6 w-6" />
+                </span>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#ffdc00]">Laatste controle</p>
+                  <h2 id="apply-confirm-title" className="mt-1 text-xl font-black tracking-tight sm:text-2xl">AI-planning toepassen?</h2>
+                </div>
+              </div>
+              <p className="relative mt-5 max-w-md text-sm leading-relaxed text-slate-300">
+                Je staat op het punt om de gecontroleerde dagen naar de planning over te nemen. Neem nog even deze samenvatting door.
+              </p>
+            </div>
+
+            <div className="space-y-4 px-5 py-5 sm:px-8 sm:py-7">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center gap-2 text-slate-500"><CalendarCheck className="h-4 w-4" /><span className="text-[10px] font-extrabold uppercase tracking-wide">Geselecteerd</span></div>
+                  <p className="mt-2 text-2xl font-black tabular-nums text-slate-950">{approvedDates.length}<span className="ml-1 text-sm font-bold text-slate-400">dagen</span></p>
+                </div>
+                <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+                  <div className="flex items-center gap-2 text-orange-700"><AlertTriangle className="h-4 w-4" /><span className="text-[10px] font-extrabold uppercase tracking-wide">Aandachtspunt</span></div>
+                  <p className="mt-2 text-2xl font-black tabular-nums text-orange-950">{proposal.restDayWarnings.filter((warning) => approvedDates.includes(warning.date)).length}<span className="ml-1 text-sm font-bold text-orange-700">meldingen</span></p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-orange-200 bg-orange-50/80 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-orange-600" />
+                  <div>
+                    <p className="text-sm font-extrabold text-orange-950">Controleer de rustdagen</p>
+                    {proposal.restDayWarnings.some((warning) => approvedDates.includes(warning.date)) ? (
+                      <p className="mt-1 text-xs leading-relaxed text-orange-900">Er vallen rustdagwaarschuwingen op de geselecteerde dagen. Beoordeel of de rustdag moet verschuiven voordat je verdergaat.</p>
+                    ) : (
+                      <p className="mt-1 text-xs leading-relaxed text-orange-900">Er zijn geen rustdagwaarschuwingen op de geselecteerde dagen.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
+                  <div>
+                    <p className="text-sm font-extrabold text-emerald-950">Dit verandert er wel en niet</p>
+                    <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-emerald-900">
+                      <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />Alleen de aangevinkte dagen worden aangepast.</li>
+                      <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />Alleen de eerste keuzes worden vervangen.</li>
+                      <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />Tweede en derde keuzes blijven behouden.</li>
+                      <li className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />Teamleden zonder dienst krijgen X op geselecteerde dagen.</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-xs font-bold text-slate-700">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-slate-500" />
+                De planning wordt niet definitief gemaakt. Dat doe je later zelf.
+              </div>
+
+              <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => setShowApplyConfirm(false)} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+                  Terug naar controle
+                </button>
+                <button type="button" onClick={() => void confirmApplyProposal()} disabled={busy} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#17202b] px-5 py-3 text-sm font-extrabold text-[#ffdc00] shadow-lg shadow-slate-900/15 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">
+                  <CheckCircle2 className="h-4 w-4" />Ja, pas geselecteerde dagen toe
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 };
