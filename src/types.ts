@@ -69,6 +69,7 @@ export interface User {
   canEditPlanning: boolean;
   canPlannerMode: boolean;
   isAdmin: boolean;
+  deploymentPriority?: 'high' | 'normal' | 'low' | 'none';
   createdAt: string;
   updatedAt: string;
   lastLoginAt?: string;

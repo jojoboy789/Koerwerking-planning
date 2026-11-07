@@ -5,6 +5,7 @@ export interface AIPlannerMember {
     id: string;
     name: string;
     role?: string;
+    deploymentPriority?: "high" | "normal" | "low" | "none";
   };
   planning?: {
     days?: Record<number, string>;
@@ -32,19 +33,18 @@ export interface AIPlannerAssignment {
 
 export interface AIRestDayWarning {
   date: string;
-  day: number;
   memberId: string;
   memberName: string;
   assignedShift: Shift;
-  preference: "2e keuze" | "3e keuze";
+  preference: AIPlannerAssignment["preference"];
   message: string;
 }
 
 export interface AIPlannerResult {
   assignments: AIPlannerAssignment[];
-  restDayWarnings: AIRestDayWarning[];
   uncovered: Array<{ date: string; shift: Shift }>;
   skippedDates: Array<{ date: string; reason: string }>;
+  restDayWarnings: AIRestDayWarning[];
   stats: {
     assignments: number;
     firstChoices: number;
@@ -57,8 +57,21 @@ export interface AIPlannerResult {
 }
 
 const SHIFT_ORDER: Shift[] = ["V", "D", "L"];
-const WEIGHTS: Record<Shift, number> = { V: 100, D: 100, L: 100 };
 const CHOICE_WEIGHT = { first: 100, second: 65, third: 35, none: 0 };
+
+// Prioriteit beïnvloedt alleen de rangschikking van geschikte kandidaten.
+// Ze kan een dienstkeuze, X-uitsluiting of veiligheidsregel niet overrulen.
+const DEPLOYMENT_PRIORITY_WEIGHT: Record<NonNullable<AIPlannerMember["user"]["deploymentPriority"]>, number> = {
+  high: 28,
+  normal: 0,
+  low: -14,
+  none: 0,
+};
+
+function deploymentPriorityWeight(member: AIPlannerMember): number {
+  const priority = member.user.deploymentPriority || "normal";
+  return DEPLOYMENT_PRIORITY_WEIGHT[priority] ?? 0;
+}
 
 function dateKey(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -121,7 +134,7 @@ function preferenceFor(member: AIPlannerMember, day: number, shift: Shift) {
 
 /**
  * Creates a read-only proposal. It does not save or modify any planning data.
- * Existing finalised days are skipped. X is unavailable; R may be reconsidered via alternatives.
+ * Existing finalised days are skipped. X and R are treated as unavailable.
  */
 export function generateAIPlanningProposal(input: {
   members: AIPlannerMember[];
@@ -133,9 +146,9 @@ export function generateAIPlanningProposal(input: {
 }): AIPlannerResult {
   const { members, year, month, period, weekNumber, specialDays = [] } = input;
   const assignments: AIPlannerAssignment[] = [];
-  const restDayWarnings: AIPlannerResult["restDayWarnings"] = [];
   const uncovered: AIPlannerResult["uncovered"] = [];
   const skippedDates: AIPlannerResult["skippedDates"] = [];
+  const restDayWarnings: AIRestDayWarning[] = [];
   const assignedCount = new Map<string, number>();
   const assignedByShift = new Map<string, number>();
 
@@ -174,7 +187,7 @@ export function generateAIPlanningProposal(input: {
       const candidates = members
         .filter((member) => {
           const first = member.planning?.days?.[day] || "";
-          // X is een harde uitsluiting. R mag via tweede of derde keuze worden herbekeken.
+          // X is een harde uitsluiting. R kan alleen via tweede/derde keuze worden herbekeken.
           if (first === "X") return false;
           return !usedToday.has(member.user.id);
         })
@@ -182,11 +195,12 @@ export function generateAIPlanningProposal(input: {
           const preference = preferenceFor(member, day, shift);
           const total = assignedCount.get(member.user.id) || 0;
           const sameShift = assignedByShift.get(`${member.user.id}:${shift}`) || 0;
-          const fairnessPenalty = total * 12 + sameShift * 8;
+          const fairnessPenalty = total * 10 + sameShift * 6;
+          const priorityBonus = deploymentPriorityWeight(member);
           return {
             member,
             preference,
-            score: WEIGHTS[shift] * 0 + preference.weight - fairnessPenalty,
+            score: preference.weight + priorityBonus - fairnessPenalty,
           };
         })
         .sort((a, b) => b.score - a.score || a.member.user.name.localeCompare(b.member.user.name));
@@ -212,21 +226,14 @@ export function generateAIPlanningProposal(input: {
         preference: chosen.preference.label,
         score: chosen.score,
       });
-
-      // Een R als eerste keuze blijft een rustdagvoorkeur.
-      // Als de AI via keuze 2 of 3 toch een dienst toewijst, moet de planner dit expliciet beoordelen.
-      if (
-        chosen.member.planning?.days?.[day] === "R" &&
-        (chosen.preference.label === "2e keuze" || chosen.preference.label === "3e keuze")
-      ) {
+      if ((chosen.member.planning?.days?.[day] || "") === "R") {
         restDayWarnings.push({
           date: key,
-          day,
           memberId: chosen.member.user.id,
           memberName: chosen.member.user.name,
           assignedShift: shift,
           preference: chosen.preference.label,
-          message: `${chosen.member.user.name} heeft ${shift} toegewezen gekregen via de ${chosen.preference.label.toLowerCase()}, terwijl de eerste keuze een rustdag (R) is. Controleer of de rustdag verplaatst moet worden.`,
+          message: "Deze medewerker had een rustdag als eerste keuze. Controleer manueel of de rustdag verantwoord kan verschuiven.",
         });
       }
     }
@@ -243,16 +250,17 @@ export function generateAIPlanningProposal(input: {
 
   return {
     assignments,
-    restDayWarnings,
     uncovered,
     skippedDates,
+    restDayWarnings,
     stats,
     notes: [
       "Dit is een lokaal gegenereerd voorstel, geen opgeslagen planning.",
-      "Eerste, tweede en derde keuze worden alleen gelezen tijdens het genereren. Bij toepassen wordt alleen de eerste keuze vervangen.",
-      "X is een harde uitsluiting. Bij R mogen tweede en derde keuzes worden overwogen; voor elke toegewezen dienst op een R-dag wordt een waarschuwing voor de planner getoond.",
+      "Eerste, tweede en derde keuze worden alleen gelezen. Ze worden niet gewijzigd.",
+      "X is een harde uitsluiting. R kan alleen via een ingevulde tweede of derde keuze worden overwogen en geeft een waarschuwing.",
       "Per gewone werkdag wordt maximaal één V, één D en één L voorgesteld.",
       "Weekends, Belgische feestdagen en speciale kalenderdagen worden overgeslagen.",
+      "AI-inzetprioriteit beïnvloedt de rangschikking: High krijgt een duidelijke bonus, Normal en None zijn neutraal, Low krijgt een kleine minscore. Dit blijft ondergeschikt aan eerste keuze en harde regels.",
       "Definitieve dagen worden overgeslagen. Controleer de uitkomst altijd vóór manuele overname.",
     ],
   };

@@ -38,6 +38,7 @@ interface StoredUser {
   canEditPlanning: boolean;
   canPlannerMode: boolean;
   isAdmin: boolean;
+  deploymentPriority?: 'high' | 'normal' | 'low' | 'none';
   createdAt: string;
   updatedAt: string;
   lastLoginAt?: string;
@@ -2062,6 +2063,7 @@ app.get(
       canEditPlanning: Boolean(canEditPlanning),
       canPlannerMode: Boolean(canPlannerMode),
       isAdmin: Boolean(isAdmin),
+      deploymentPriority: 'normal',
       createdAt: now,
       updatedAt: now,
     };
@@ -2086,7 +2088,7 @@ app.get(
       return res.status(404).json({ error: 'Gebruiker niet gevonden.' });
     }
 
-    const { name, role, canViewOverview, canEditPlanning, canPlannerMode, isAdmin, isActive } = req.body;
+    const { name, role, canViewOverview, canEditPlanning, canPlannerMode, isAdmin, isActive, deploymentPriority } = req.body;
 
     if (name && typeof name === 'string') {
       db.users[userIndex].name = name.trim();
@@ -2113,6 +2115,14 @@ app.get(
       }
       db.users[userIndex].isAdmin = Boolean(isAdmin);
     }
+    if (deploymentPriority !== undefined) {
+      const allowedPriorities = ['high', 'normal', 'low', 'none'] as const;
+      if (!allowedPriorities.includes(deploymentPriority)) {
+        return res.status(400).json({ error: 'Ongeldige AI-inzetprioriteit.' });
+      }
+      db.users[userIndex].deploymentPriority = deploymentPriority;
+    }
+
     if (isActive !== undefined) {
       if (!isActive && db.users[userIndex].isAdmin) {
         const remainingAdmins = db.users.filter(u => u.isAdmin && u.id !== id && u.isActive);

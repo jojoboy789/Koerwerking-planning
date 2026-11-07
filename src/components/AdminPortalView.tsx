@@ -18,6 +18,9 @@ export const AdminPortalView: React.FC = () => {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isUsersMatrixExpanded, setIsUsersMatrixExpanded] = useState<boolean>(false);
+  const [showDeploymentPriorities, setShowDeploymentPriorities] = useState<boolean>(false);
+  const [deploymentSearch, setDeploymentSearch] = useState('');
+  const [savingPriorityUserId, setSavingPriorityUserId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSyncingFirebase, setIsSyncingFirebase] = useState<boolean>(false);
@@ -271,6 +274,39 @@ export const AdminPortalView: React.FC = () => {
     }
   };
 
+  const handleUpdateDeploymentPriority = async (
+    targetUser: User,
+    priority: NonNullable<User['deploymentPriority']>
+  ) => {
+    if (savingPriorityUserId) return;
+    setSavingPriorityUserId(targetUser.id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      await api.updateUser(targetUser.id, { deploymentPriority: priority });
+      setUsers((previous) => previous.map((item) =>
+        item.id === targetUser.id ? { ...item, deploymentPriority: priority } : item
+      ));
+      setSuccessMessage(`AI-inzetprioriteit voor ${targetUser.name} opgeslagen.`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'AI-inzetprioriteit kon niet worden opgeslagen.');
+    } finally {
+      setSavingPriorityUserId(null);
+    }
+  };
+
+  const deploymentPriorityUsers = useMemo(() => {
+    const query = deploymentSearch.trim().toLowerCase();
+    return users
+      .filter((item) => item.isActive)
+      // Alleen gewone teamleden tonen: admins en gebruikers met Planner Mode uitsluiten.
+      .filter((item) => !item.isAdmin && !item.canPlannerMode)
+      .filter((item) => !/planner|admin/i.test(item.role || ''))
+      .filter((item) => !query || item.name.toLowerCase().includes(query) || (item.role || '').toLowerCase().includes(query))
+      .sort((a, b) => a.name.localeCompare(b.name, 'nl'));
+  }, [users, deploymentSearch]);
+
   const handleToggleActive = async (targetUser: User) => {
     if (targetUser.id === currentAdmin?.id) {
       setErrorMessage('Je kunt je eigen beheerderaccount niet deactiveren.');
@@ -369,6 +405,7 @@ export const AdminPortalView: React.FC = () => {
         canPlannerMode: editingUser.canPlannerMode,
         isAdmin: editingUser.isAdmin,
         isActive: editingUser.isActive,
+        deploymentPriority: editingUser.deploymentPriority || 'normal',
       });
       setEditingUser(null);
       setSuccessMessage('Gebruiker succesvol bijgewerkt.');
@@ -616,7 +653,78 @@ export const AdminPortalView: React.FC = () => {
             <span>SYNC DATABASE</span>
           </button>
         </div>
+
+        {/* Snelle toegang AI-inzetprioriteiten */}
+        <button
+          type="button"
+          onClick={() => setShowDeploymentPriorities((visible) => !visible)}
+          aria-expanded={showDeploymentPriorities}
+          className={`p-5 rounded-3xl border shadow-xl font-sans text-left transition-all ${showDeploymentPriorities ? 'bg-cyan-50 border-cyan-300 ring-2 ring-cyan-100' : 'bg-white border-slate-200 hover:border-cyan-300 hover:bg-cyan-50/40'}`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-violet-50 border border-violet-200 text-violet-700"><Sparkles className="w-5 h-5" /></div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider font-mono">AI-inzetprioriteiten</h3>
+                <p className="text-xs text-slate-500 mt-1">Beheer wie de AI bij gelijke geschiktheid voorrang geeft.</p>
+              </div>
+            </div>
+            <span className="text-xs font-bold text-cyan-700">{showDeploymentPriorities ? 'SLUITEN −' : 'OPENEN +'}</span>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2 text-[10px] font-bold">
+            <span className="rounded-lg bg-blue-50 text-blue-700 px-2 py-1">Hoge prioriteit</span>
+            <span className="rounded-lg bg-emerald-50 text-emerald-700 px-2 py-1">Normaal</span>
+            <span className="rounded-lg bg-orange-50 text-orange-700 px-2 py-1">Lage prioriteit</span>
+            <span className="rounded-lg bg-slate-100 text-slate-600 px-2 py-1">Geen extra voorkeur</span>
+          </div>
+        </button>
       </div>
+
+      {showDeploymentPriorities && (
+        <section className="rounded-3xl border border-cyan-200 bg-white p-5 md:p-6 shadow-xl space-y-4 font-sans">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2"><Sparkles className="w-5 h-5 text-violet-600" /><h2 className="text-base font-extrabold text-slate-900">AI-inzetprioriteiten beheren</h2></div>
+              <p className="mt-1 text-xs text-slate-500 max-w-2xl">Alleen actieve teamleden worden getoond. Planners en admins zijn uitgesloten. Stel in hoe de AI een teamlid meeweegt wanneer meerdere medewerkers even geschikt zijn. Dit is een voorkeur, geen garantie op extra diensten.</p>
+            </div>
+            <div className="relative w-full sm:w-64 shrink-0">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input type="search" value={deploymentSearch} onChange={(event) => setDeploymentSearch(event.target.value)} placeholder="Zoek medewerker..." className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs text-slate-700 outline-none focus:border-cyan-500" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {deploymentPriorityUsers.map((member) => {
+              const priority = member.deploymentPriority || 'normal';
+              const priorityStyle = priority === 'high' ? 'border-blue-200 bg-blue-50/60' : priority === 'low' ? 'border-orange-200 bg-orange-50/50' : priority === 'none' ? 'border-slate-200 bg-slate-50' : 'border-emerald-200 bg-emerald-50/50';
+              return (
+                <div key={member.id} className={`rounded-2xl border p-4 space-y-3 ${priorityStyle}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{member.name}</p><p className="mt-0.5 text-[10px] text-slate-500">{member.role || 'Teamlid'}</p></div>
+                    
+                  </div>
+                  <div className="relative">
+                    <select
+                      aria-label={`AI-inzetprioriteit voor ${member.name}`}
+                      value={priority}
+                      disabled={savingPriorityUserId !== null}
+                      onChange={(event) => handleUpdateDeploymentPriority(member, event.target.value as NonNullable<User['deploymentPriority']>)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none focus:border-cyan-500 disabled:opacity-60"
+                    >
+                      <option value="high">🔵 Hoge prioriteit · vaker inzetten</option>
+                      <option value="normal">🟢 Normaal</option>
+                      <option value="low">🟠 Lage prioriteit · minder snel inzetten</option>
+                      <option value="none">⚪ Geen extra voorkeur</option>
+                    </select>
+                    {savingPriorityUserId === member.id && <Loader2 className="absolute right-3 top-3 w-4 h-4 animate-spin text-cyan-700" />}
+                  </div>
+                </div>
+              );
+            })}
+            {deploymentPriorityUsers.length === 0 && <p className="col-span-full rounded-xl bg-slate-50 p-5 text-center text-xs text-slate-500">Geen actieve teamleden gevonden.</p>}
+          </div>
+          <p className="text-[10px] text-slate-400">Wijzigingen worden onmiddellijk opgeslagen. Bestaande medewerkers zonder ingestelde voorkeur worden als Normaal weergegeven.</p>
+        </section>
+      )}
 
       {/* Speciale Dagen Module */}
       <section className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-xl space-y-4 font-sans">
