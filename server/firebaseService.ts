@@ -1,10 +1,13 @@
 import { initializeApp, FirebaseApp, getApps } from 'firebase/app';
+import crypto from 'crypto';
 import { getFirestore, Firestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import {
   initializeApp as initializeAdminApp,
   getApps as getAdminApps,
   applicationDefault,
 } from 'firebase-admin/app';
+import { getStorage as getAdminStorage } from 'firebase-admin/storage';
+import type { Bucket } from '@google-cloud/storage';
 import {
   getFirestore as getAdminFirestore,
   Firestore as AdminFirestore,
@@ -22,6 +25,7 @@ export const firebaseConfig = {
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let adminDb: AdminFirestore | null = null;
+let adminBucket: Bucket | null = null;
 let isConnected = false;
 
 export function initFirebase() {
@@ -45,6 +49,7 @@ export function initFirebase() {
           });
 
       adminDb = getAdminFirestore(adminApp);
+      adminBucket = getAdminStorage(adminApp).bucket(firebaseConfig.storageBucket);
       console.log('🔥 Firebase Admin SDK initialized.');
     }
   } catch (err) {
@@ -155,4 +160,35 @@ export async function updateScheduledTelegramRun(
     updatedAt: new Date().toISOString(),
     ...(error ? { error } : {}),
   }, { merge: true });
+}
+
+/**
+ * Bewaar de actuele OC Dagplanning als publiek downloadbare PDF.
+ * De Firebase download-token maakt de URL deelbaar zonder Storage-regels
+ * of publieke bucket-ACL's te versoepelen.
+ */
+export async function uploadPublicOCPlanningPdf(
+  pdf: Buffer
+): Promise<string> {
+  if (!adminBucket) {
+    throw new Error('Firebase Storage is niet geïnitialiseerd.');
+  }
+
+  const objectPath = `telegram/oc-dagplanning-${Date.now()}.pdf`;
+  const downloadToken = crypto.randomUUID();
+  const file = adminBucket.file(objectPath);
+
+  await file.save(pdf, {
+    resumable: false,
+    metadata: {
+      contentType: 'application/pdf',
+      cacheControl: 'public, max-age=60, must-revalidate',
+      metadata: {
+        firebaseStorageDownloadTokens: downloadToken,
+      },
+    },
+  });
+
+  const encodedPath = encodeURIComponent(objectPath);
+  return `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${encodedPath}?alt=media&token=${downloadToken}`;
 }
