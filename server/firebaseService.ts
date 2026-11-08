@@ -6,7 +6,8 @@ import {
   getApps as getAdminApps,
   applicationDefault,
 } from 'firebase-admin/app';
-import { getStorage as getAdminStorage, Bucket } from 'firebase-admin/storage';
+import { getStorage as getAdminStorage } from 'firebase-admin/storage';
+import type { Bucket } from '@google-cloud/storage';
 import {
   getFirestore as getAdminFirestore,
   Firestore as AdminFirestore,
