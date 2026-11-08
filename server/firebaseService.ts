@@ -1,13 +1,17 @@
+
 import { initializeApp, FirebaseApp, getApps } from 'firebase/app';
 import crypto from 'crypto';
 import { getFirestore, Firestore, doc, getDoc, setDoc } from 'firebase/firestore';
+
 import {
   initializeApp as initializeAdminApp,
   getApps as getAdminApps,
   applicationDefault,
+  cert,
 } from 'firebase-admin/app';
+
 import { getStorage as getAdminStorage } from 'firebase-admin/storage';
-import type { Bucket } from '@google-cloud/storage';
+
 import {
   getFirestore as getAdminFirestore,
   Firestore as AdminFirestore,
@@ -25,8 +29,47 @@ export const firebaseConfig = {
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let adminDb: AdminFirestore | null = null;
-let adminBucket: Bucket | null = null;
+let adminBucket: ReturnType<ReturnType<typeof getAdminStorage>['bucket']> | null = null;
 let isConnected = false;
+
+/**
+ * Haal Google-inloggegevens op.
+ *
+ * Voorkeur:
+ * 1. FIREBASE_SERVICE_ACCOUNT_JSON
+ * 2. GOOGLE_APPLICATION_CREDENTIALS
+ * 3. Google Cloud Application Default Credentials
+ */
+function getAdminCredential() {
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+  if (serviceAccountJson) {
+    try {
+      const serviceAccount = JSON.parse(serviceAccountJson);
+
+      if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount.client_email) {
+        throw new Error('Serviceaccount mist verplichte gegevens.');
+      }
+
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+
+      console.log('🔐 Firebase gebruikt serviceaccount uit omgevingsvariabele.');
+
+      return cert(serviceAccount);
+    } catch (error) {
+      console.error('❌ Ongeldige FIREBASE_SERVICE_ACCOUNT_JSON:', error);
+      throw error;
+    }
+  }
+
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.log('🔐 Firebase gebruikt GOOGLE_APPLICATION_CREDENTIALS.');
+  } else {
+    console.log('🔐 Firebase probeert Google Application Default Credentials.');
+  }
+
+  return applicationDefault();
+}
 
 export function initFirebase() {
   try {
@@ -37,20 +80,29 @@ export function initFirebase() {
 
       db = getFirestore(app);
       isConnected = true;
-      console.log('🔥 Firebase initialized successfully for project:', firebaseConfig.projectId);
+
+      console.log(
+        '🔥 Firebase initialized successfully for project:',
+        firebaseConfig.projectId
+      );
     }
 
     if (!adminDb) {
       const adminApp = getAdminApps().length
         ? getAdminApps()[0]
         : initializeAdminApp({
-            credential: applicationDefault(),
+            credential: getAdminCredential(),
             projectId: firebaseConfig.projectId,
           });
 
       adminDb = getAdminFirestore(adminApp);
-      adminBucket = getAdminStorage(adminApp).bucket(firebaseConfig.storageBucket);
+
+      adminBucket = getAdminStorage(adminApp).bucket(
+        firebaseConfig.storageBucket
+      );
+
       console.log('🔥 Firebase Admin SDK initialized.');
+      console.log('🔥 Firebase Storage bucket initialized.');
     }
   } catch (err) {
     console.error('⚠️ Firebase initialization error:', err);
@@ -68,6 +120,7 @@ export async function fetchRemoteDatabase(): Promise<any | null> {
   try {
     const docRef = doc(db, 'system', 'database');
     const snap = await getDoc(docRef);
+
     return snap.exists() ? snap.data() : null;
   } catch (err) {
     console.warn('Could not fetch from Firebase Firestore:', err);
@@ -80,11 +133,16 @@ export async function saveRemoteDatabase(data: any): Promise<boolean> {
 
   try {
     const docRef = doc(db, 'system', 'database');
-    await setDoc(docRef, {
-      ...data,
-      lastSyncAt: new Date().toISOString(),
-      projectId: firebaseConfig.projectId
-    }, { merge: true });
+
+    await setDoc(
+      docRef,
+      {
+        ...data,
+        lastSyncAt: new Date().toISOString(),
+        projectId: firebaseConfig.projectId
+      },
+      { merge: true }
+    );
 
     return true;
   } catch (err) {
@@ -97,7 +155,9 @@ export async function saveRemoteDatabase(data: any): Promise<boolean> {
  * Registreer en claim een geplande Telegram-run.
  * Een bestaande run met dezelfde ID wordt niet opnieuw geclaimd.
  */
-export async function claimScheduledTelegramRun(runId: string): Promise<boolean> {
+export async function claimScheduledTelegramRun(
+  runId: string
+): Promise<boolean> {
   if (!adminDb) {
     throw new Error('Firebase Admin Firestore is niet geïnitialiseerd.');
   }
@@ -116,6 +176,7 @@ export async function claimScheduledTelegramRun(runId: string): Promise<boolean>
 
       if (data?.status === 'claimed') {
         const claimedAt = Date.parse(data?.createdAt || '');
+
         const claimIsRecent =
           Number.isFinite(claimedAt) &&
           Date.now() - claimedAt < 10 * 60 * 1000;
@@ -155,17 +216,24 @@ export async function updateScheduledTelegramRun(
     throw new Error('Firebase Admin Firestore is niet geïnitialiseerd.');
   }
 
-  await adminDb.collection('scheduledTelegramRuns').doc(runId).set({
-    status,
-    updatedAt: new Date().toISOString(),
-    ...(error ? { error } : {}),
-  }, { merge: true });
+  await adminDb
+    .collection('scheduledTelegramRuns')
+    .doc(runId)
+    .set(
+      {
+        status,
+        updatedAt: new Date().toISOString(),
+        ...(error ? { error } : {}),
+      },
+      { merge: true }
+    );
 }
 
 /**
- * Bewaar de actuele OC Dagplanning als publiek downloadbare PDF.
- * De Firebase download-token maakt de URL deelbaar zonder Storage-regels
- * of publieke bucket-ACL's te versoepelen.
+ * Upload de actuele OC Dagplanning als downloadbare PDF.
+ *
+ * De Firebase download-token maakt de link deelbaar
+ * zonder publieke Storage-regels in te schakelen.
  */
 export async function uploadPublicOCPlanningPdf(
   pdf: Buffer
@@ -176,6 +244,7 @@ export async function uploadPublicOCPlanningPdf(
 
   const objectPath = `telegram/oc-dagplanning-${Date.now()}.pdf`;
   const downloadToken = crypto.randomUUID();
+
   const file = adminBucket.file(objectPath);
 
   await file.save(pdf, {
@@ -190,5 +259,6 @@ export async function uploadPublicOCPlanningPdf(
   });
 
   const encodedPath = encodeURIComponent(objectPath);
+
   return `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${encodedPath}?alt=media&token=${downloadToken}`;
 }

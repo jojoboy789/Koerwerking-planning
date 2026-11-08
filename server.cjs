@@ -26,14 +26,16 @@ var import_express = __toESM(require("express"), 1);
 var import_genai = require("@google/genai");
 var import_path = __toESM(require("path"), 1);
 var import_fs = __toESM(require("fs"), 1);
-var import_crypto = __toESM(require("crypto"), 1);
+var import_crypto2 = __toESM(require("crypto"), 1);
 var import_vite = require("vite");
 var import_dotenv = __toESM(require("dotenv"), 1);
 
 // server/firebaseService.ts
 var import_app = require("firebase/app");
+var import_crypto = __toESM(require("crypto"), 1);
 var import_firestore = require("firebase/firestore");
 var import_app2 = require("firebase-admin/app");
+var import_storage = require("firebase-admin/storage");
 var import_firestore2 = require("firebase-admin/firestore");
 var firebaseConfig = {
   apiKey: "AIzaSyCneVtJOGHwwoXhug4kqlUNo3EksQ-cFXQ",
@@ -46,6 +48,7 @@ var firebaseConfig = {
 var app = null;
 var db = null;
 var adminDb = null;
+var adminBucket = null;
 var isConnected = false;
 function initFirebase() {
   try {
@@ -61,6 +64,7 @@ function initFirebase() {
         projectId: firebaseConfig.projectId
       });
       adminDb = (0, import_firestore2.getFirestore)(adminApp);
+      adminBucket = (0, import_storage.getStorage)(adminApp).bucket(firebaseConfig.storageBucket);
       console.log("\u{1F525} Firebase Admin SDK initialized.");
     }
   } catch (err) {
@@ -140,9 +144,30 @@ async function updateScheduledTelegramRun(runId, status, error) {
     ...error ? { error } : {}
   }, { merge: true });
 }
+async function uploadPublicOCPlanningPdf(pdf) {
+  if (!adminBucket) {
+    throw new Error("Firebase Storage is niet ge\xEFnitialiseerd.");
+  }
+  const objectPath = `telegram/oc-dagplanning-${Date.now()}.pdf`;
+  const downloadToken = import_crypto.default.randomUUID();
+  const file = adminBucket.file(objectPath);
+  await file.save(pdf, {
+    resumable: false,
+    metadata: {
+      contentType: "application/pdf",
+      cacheControl: "public, max-age=60, must-revalidate",
+      metadata: {
+        firebaseStorageDownloadTokens: downloadToken
+      }
+    }
+  });
+  const encodedPath = encodeURIComponent(objectPath);
+  return `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${encodedPath}?alt=media&token=${downloadToken}`;
+}
 
 // server.ts
 var import_google_auth_library = require("google-auth-library");
+var import_jspdf = require("jspdf");
 import_dotenv.default.config({ path: [".env.local", ".env"] });
 var PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3e3;
 var HASH_SALT = process.env.ACCESS_CODE_SALT || "NEON_TOKYO_SALT_v1_99x#";
@@ -154,7 +179,7 @@ function normalizeAccessCode(code) {
 }
 function hashAccessCode(code) {
   const normalized = normalizeAccessCode(code);
-  return import_crypto.default.createHash("sha256").update(`${HASH_SALT}:${normalized}`).digest("hex");
+  return import_crypto2.default.createHash("sha256").update(`${HASH_SALT}:${normalized}`).digest("hex");
 }
 function getPossibleCodeVariants(code) {
   if (!code) return [];
@@ -623,7 +648,7 @@ async function startServer() {
     if (!user.isActive) {
       return res.status(403).json({ error: "Je account is momenteel gedeactiveerd." });
     }
-    const token = import_crypto.default.randomBytes(32).toString("hex");
+    const token = import_crypto2.default.randomBytes(32).toString("hex");
     db2.sessions[token] = { userId: user.id, createdAt: Date.now() };
     user.lastLoginAt = (/* @__PURE__ */ new Date()).toISOString();
     saveDatabase(db2);
@@ -818,6 +843,58 @@ async function startServer() {
       (_, code) => String.fromCodePoint(parseInt(code, 16))
     ).replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   }
+  async function createOCPlanningPdfDownloadUrl(slides) {
+    const pdf = new import_jspdf.jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 16;
+    const usableWidth = pageWidth - margin * 2;
+    let y = 18;
+    const addPageIfNeeded = (height) => {
+      if (y + height > pageHeight - 16) {
+        pdf.addPage();
+        y = 18;
+      }
+    };
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(17);
+    pdf.text("OC BUS GBR - DAGPLANNING", margin, y);
+    y += 9;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.text(
+      "Gegenereerd op " + new Intl.DateTimeFormat("nl-BE", {
+        timeZone: OC_PLANNING_TIME_ZONE,
+        dateStyle: "full",
+        timeStyle: "short"
+      }).format(/* @__PURE__ */ new Date()),
+      margin,
+      y
+    );
+    y += 10;
+    for (const slide of slides) {
+      const content = htmlToTelegramText(slide.html);
+      if (!content) continue;
+      addPageIfNeeded(16);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      const titleLines = pdf.splitTextToSize(slide.title, usableWidth);
+      pdf.text(titleLines, margin, y);
+      y += titleLines.length * 6 + 2;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9.5);
+      const safeContent = content.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "").replace(/[^\x09\x0A\x0D\x20-\xFF]/g, " ");
+      const lines = pdf.splitTextToSize(safeContent, usableWidth);
+      for (const line of lines) {
+        addPageIfNeeded(5);
+        pdf.text(line, margin, y);
+        y += 4.6;
+      }
+      y += 6;
+    }
+    const arrayBuffer = pdf.output("arraybuffer");
+    return uploadPublicOCPlanningPdf(Buffer.from(arrayBuffer));
+  }
   async function sendOCPlanningUpdateToTelegram(slides) {
     const changedSlides = slides.filter((slide) => slide.dated);
     if (changedSlides.length === 0) {
@@ -944,6 +1021,10 @@ ${escapeTelegramHtml(content)}
     if (messages.length === 0) {
       throw new Error("De OC Planning leverde geen inhoud op om te versturen.");
     }
+    const downloadUrl = await createOCPlanningPdfDownloadUrl(slides);
+    messages[messages.length - 1] += `
+
+\u{1F4E5} <a href="${downloadUrl}">Download OC Dagplanning (PDF)</a>`;
     for (const telegramMessage of messages) {
       const sent = await sendTelegramNotification(telegramMessage);
       if (!sent) {
@@ -1217,6 +1298,12 @@ ${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}`;
           return res.status(503).json({
             error: "Telegram is niet correct geconfigureerd op de server."
           });
+        }
+        const downloadUrl = await createOCPlanningPdfDownloadUrl(slides);
+        if (messages.length > 0) {
+          messages[messages.length - 1] += `
+
+\u{1F4E5} <a href="${downloadUrl}">Download OC Dagplanning (PDF)</a>`;
         }
         for (const telegramMessage of messages) {
           const telegramResponse = await fetch(

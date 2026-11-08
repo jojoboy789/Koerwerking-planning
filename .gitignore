@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Firebase geheime sleutels
+secrets/
+*.service-account.json
+firebase-service-account.json

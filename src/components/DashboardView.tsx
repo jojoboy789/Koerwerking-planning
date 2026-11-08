@@ -415,7 +415,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
           <div className="relative mt-5 text-[10px] font-extrabold uppercase tracking-[.18em] text-slate-700">OC BUS GBR</div>
           <h2 className="relative mt-1 text-2xl font-black text-slate-950">Dagplanning</h2>
-          <p className="relative mt-2 max-w-xs text-sm leading-relaxed text-slate-800">Open de dagplanning en mededelingen van OC BUS GBR.</p>
 
           <div className="relative mt-4 rounded-xl border border-white/60 bg-white/65 p-3.5">
             <p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-slate-700">Transport door Koer:</p>
@@ -457,7 +456,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       {/* Side rail */}
       <aside className="space-y-6">
         <Surface className="overflow-hidden">
-          <div className="bg-[#101923] px-5 py-5 text-white"><div className="flex items-center gap-2 text-yellow-300"><Bell size={17}/><span className="text-[10px] font-extrabold uppercase tracking-[.18em]">Meldingen & aandacht</span></div><h2 className="mt-2 text-xl font-black">Hou dit in de gaten</h2><p className="mt-1 text-sm text-slate-300">Praktische info voor je planning.</p></div>
+          <div className="bg-[#101923] px-5 py-5 text-white"><div className="flex items-center gap-2 text-yellow-300"><Bell size={17}/><span className="text-[10px] font-extrabold uppercase tracking-[.18em]">Meldingen & aandacht</span></div><h2 className="mt-2 text-xl font-black">Hou dit in de gaten</h2></div>
           <div className="space-y-3 p-4">
             <div className="flex gap-3 rounded-xl border border-slate-200 p-3.5"><span className="rounded-lg bg-amber-100 p-2 text-amber-800"><CalendarDays size={18}/></span><div><p className="text-sm font-extrabold text-slate-800">Maandplanning</p><p className="mt-1 text-xs leading-relaxed text-slate-500">{remaining>0?`Er zijn nog ${remaining} werkdagen niet ingevuld.`:'Alle werkdagen zijn ingevuld.'}</p></div></div>
             <div className="flex gap-3 rounded-xl border border-slate-200 p-3.5"><span className="rounded-lg bg-sky-100 p-2 text-sky-700"><CircleHelp size={18}/></span><div><p className="text-sm font-extrabold text-slate-800">Toegangsrechten</p><p className="mt-1 text-xs leading-relaxed text-slate-500">{canViewOverview?'Je hebt toegang tot het teamoverzicht.':'Teamoverzicht is niet beschikbaar voor jouw account.'} {canEditPlanning?'Planning aanpassen is toegestaan.':'Je kunt de planning niet aanpassen.'}</p></div></div>
