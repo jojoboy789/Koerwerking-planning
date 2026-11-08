@@ -1019,7 +1019,7 @@ async function createOCPlanningPdfDownloadUrl(
     pdf.setFontSize(9.5);
     const safeContent = content
       .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
-      .replace(/[^\\x09\\x0A\\x0D\\x20-\\xFF]/g, ' ');
+      .replace(/[^\x09\x0A\x0D\x20-\xFF]/g, ' ');
     const lines = pdf.splitTextToSize(safeContent, usableWidth);
 
     for (const line of lines) {
@@ -1201,7 +1201,7 @@ async function sendCurrentOCPlanningToTelegram(): Promise<void> {
 
   const downloadUrl = await createOCPlanningPdfDownloadUrl(slides);
   messages[messages.length - 1] +=
-    `\\n\\n📥 <a href="${downloadUrl}">Download OC Dagplanning (PDF)</a>`;
+    `\n\n📥 <a href="${downloadUrl}">Download OC Dagplanning (PDF)</a>`;
 
   for (const telegramMessage of messages) {
     const sent = await sendTelegramNotification(telegramMessage);
