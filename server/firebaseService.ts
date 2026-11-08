@@ -174,7 +174,7 @@ export async function uploadPublicOCPlanningPdf(
     throw new Error('Firebase Storage is niet geïnitialiseerd.');
   }
 
-  const objectPath = 'telegram/oc-dagplanning.pdf';
+  const objectPath = `telegram/oc-dagplanning-${Date.now()}.pdf`;
   const downloadToken = crypto.randomUUID();
   const file = adminBucket.file(objectPath);
 
