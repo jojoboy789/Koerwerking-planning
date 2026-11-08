@@ -178,14 +178,63 @@ const MainLayout: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
-        <div className="w-14 h-14 rounded-2xl bg-indigo-600 shadow-xl shadow-indigo-100 flex items-center justify-center text-white font-bold text-2xl animate-pulse">
-          M
+      <div className="relative min-h-screen overflow-hidden bg-[#111827] text-white flex items-center justify-center px-5 py-10">
+        {/* Subtiele achtergrondaccenten in de kleuren van Koerwerking-planning */}
+        <div className="pointer-events-none absolute -top-40 -left-32 h-96 w-96 rounded-full bg-[#ffdc00]/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-48 -right-32 h-[30rem] w-[30rem] rounded-full bg-sky-400/10 blur-3xl" />
+        <div className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:linear-gradient(rgba(255,255,255,.45)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.45)_1px,transparent_1px)] [background-size:42px_42px]" />
+
+        <div className="relative z-10 flex w-full max-w-md flex-col items-center text-center">
+          <div className="relative mb-7">
+            <div className="absolute -inset-6 rounded-[2.5rem] bg-[#ffdc00]/20 blur-2xl animate-pulse" />
+            <div className="relative flex h-40 w-40 items-center justify-center overflow-hidden rounded-[2rem] border border-white/15 bg-white/[0.08] p-2.5 shadow-2xl shadow-black/30 backdrop-blur-sm sm:h-48 sm:w-48">
+              <img
+                src="/koermannenbus.png"
+                alt="Koerwerking buslogo"
+                className="h-full w-full object-contain"
+              />
+            </div>
+            <span className="absolute -bottom-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full border-4 border-[#111827] bg-[#ffdc00] text-[#111827] shadow-lg">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </span>
+          </div>
+
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.32em] text-[#ffdc00] sm:text-xs">
+            Samen sterk op de koer
+          </p>
+          <h1 className="text-2xl font-black tracking-[0.12em] text-white sm:text-3xl">
+            KOERWERKING
+          </h1>
+          <p className="mt-1 text-sm font-semibold tracking-[0.34em] text-[#ffdc00] sm:text-base">
+            PLANNING
+          </p>
+
+          <div className="mt-10 w-full max-w-xs">
+            <div className="mb-3 flex items-center justify-center gap-2.5 text-sm font-medium text-slate-300">
+              <Loader2 className="h-4 w-4 animate-spin text-[#ffdc00]" />
+              <span>Systeem initialiseren...</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-full w-[38%] rounded-full bg-[#ffdc00] shadow-[0_0_14px_rgba(255,220,0,0.65)] animate-[loadingbar_1.8s_ease-in-out_infinite]" />
+            </div>
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-2 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
+            <span>Planning</span>
+            <span className="h-1 w-1 rounded-full bg-[#ffdc00]/70" />
+            <span>Team</span>
+            <span className="h-1 w-1 rounded-full bg-[#ffdc00]/70" />
+            <span>Organisatie</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
-          <Loader2 className="w-4 h-4 text-indigo-600 animate-spin" />
-          <span>Systeem initialiseren...</span>
-        </div>
+
+        <style>{`
+          @keyframes loadingbar {
+            0% { transform: translateX(-115%); }
+            50% { transform: translateX(95%); }
+            100% { transform: translateX(260%); }
+          }
+        `}</style>
       </div>
     );
   }
