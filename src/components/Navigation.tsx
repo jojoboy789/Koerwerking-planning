@@ -32,6 +32,7 @@ const USER_AVATARS: Record<string, string> = {
   Jordy: 'Jordyyyy.PNG',
   Bruno: 'Brunotje.PNG',
   Kurt: 'Kurtje.PNG',
+  Kristof: 'kristoff.png',
 };
 
 interface NavigationProps {
@@ -399,6 +400,20 @@ export const Navigation: React.FC<NavigationProps> = ({
               <span className="flex-1">Verander wachtwoord</span>
               <ChevronRight className="h-4 w-4 text-slate-600" />
             </button>
+
+            <a
+              href="https://www.buymeacoffee.com/jonasapp"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 flex min-h-[46px] w-full items-center justify-center rounded-xl transition-transform duration-200 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-[#BD5FFF] focus:ring-offset-2 focus:ring-offset-[#111827]"
+              aria-label="Trakteer Jonas op een Monster via Buy Me a Coffee"
+            >
+              <img
+                src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20Monster&emoji=%F0%9F%91%BE&slug=jonasapp&button_colour=BD5FFF&font_colour=ffffff&font_family=Lato&outline_colour=000000&coffee_colour=FFDD00"
+                alt="Buy me a Monster"
+                className="h-auto w-full max-w-[220px]"
+              />
+            </a>
 
             <div className="mt-2 grid grid-cols-2 gap-2">
               <a

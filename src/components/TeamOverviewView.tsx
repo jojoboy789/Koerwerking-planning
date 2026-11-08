@@ -45,6 +45,7 @@ const USER_AVATARS: Record<string, string> = {
   'Jordy': 'Jordyyyy.PNG',
   'Bruno': 'Brunotje.PNG',
   'Kurt': 'Kurtje.PNG',
+  'kristof': 'kristoff.png',
 };
 
 // Belgische wettelijke feestdagen (10), met Pasen berekend voor elk kalenderjaar.
