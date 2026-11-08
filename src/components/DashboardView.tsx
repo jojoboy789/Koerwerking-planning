@@ -362,24 +362,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     </header>
 
     {/* Snelle links: naast elkaar op grotere schermen, onder elkaar op mobiel */}
-    <div className="grid grid-cols-2 items-stretch gap-4">
+    <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 sm:gap-4">
     {/* Prominent Microsoft quick sign-in */}
     <a
       href="https://launcher.myapps.microsoft.com/api/signin/c528a6b1-26e8-4ab8-8db9-fcce4ace4358?tenantId=488b6c64-b0da-4b62-8bbd-8bbb63b5eb77"
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Snel aanmelden via Microsoft 365, opent in een nieuw tabblad"
-      className="group relative flex h-full min-h-[92px] items-center gap-4 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 via-white to-sky-50 px-4 py-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:px-6"
+      className="group relative flex min-h-[92px] flex-col items-stretch gap-3 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 via-white to-sky-50 px-4 py-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-row sm:items-center sm:gap-4 sm:px-6"
     >
       <span className="absolute inset-y-0 left-0 w-1.5 bg-[#2563eb]" />
-      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#2563eb] text-white shadow-sm transition-transform group-hover:scale-105">
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2563eb] text-white shadow-sm transition-transform group-hover:scale-105 sm:h-14 sm:w-14">
         <LogIn size={26}/>
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-base font-black text-slate-900 sm:text-lg">Snel aanmelden</span>
-        <span className="mt-1 block text-xs leading-relaxed text-slate-600 sm:text-sm">Open je Microsoft 365-omgeving van De Lijn met één klik.</span>
       </span>
-      <span className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-[#2563eb] px-3.5 py-3 text-xs font-extrabold text-white shadow-sm transition-colors group-hover:bg-blue-700 sm:px-5 sm:text-sm">
+      <span className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#2563eb] px-4 py-3 text-sm font-extrabold text-white shadow-sm transition-colors group-hover:bg-blue-700 sm:w-auto sm:px-5">
         Aanmelden <ExternalLink size={15}/>
       </span>
     </a>
@@ -390,19 +389,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Open De Lijn Selfservice in een nieuw tabblad"
-      className="group flex h-full min-h-[92px] items-center gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 sm:px-5"
+      className="group flex min-h-[92px] flex-col items-stretch gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 sm:flex-row sm:items-center sm:gap-4 sm:px-5"
     >
       <img
         src={SELFSERVICE_ICON}
         alt=""
         aria-hidden="true"
-        className="h-14 w-14 shrink-0 rounded-xl object-contain"
+        className="h-12 w-12 shrink-0 rounded-xl object-contain sm:h-14 sm:w-14"
       />
       <span className="min-w-0 flex-1">
         <span className="block text-base font-black text-slate-900">Selfservice</span>
-        <span className="mt-1 block text-xs leading-relaxed text-slate-500 sm:text-sm">Ga rechtstreeks naar De Lijn Selfservice.</span>
       </span>
-      <span className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-teal-700 px-3.5 py-3 text-xs font-extrabold text-white transition-colors group-hover:bg-teal-800 sm:px-5 sm:text-sm">
+      <span className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 py-3 text-sm font-extrabold text-white transition-colors group-hover:bg-teal-800 sm:w-auto sm:px-5">
         Openen <ExternalLink size={15}/>
       </span>
     </a>
