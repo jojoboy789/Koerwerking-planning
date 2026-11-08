@@ -1584,7 +1584,7 @@ app.get(
         const downloadUrl = await createOCPlanningPdfDownloadUrl(slides);
         if (messages.length > 0) {
           messages[messages.length - 1] +=
-            `\\n\\n📥 <a href="${downloadUrl}">Download OC Dagplanning (PDF)</a>`;
+            `\n\n📥 <a href="${downloadUrl}">Download OC Dagplanning (PDF)</a>`;
         }
 
         // Controleer elke verzending. Meld fouten terug aan de beheerder.
