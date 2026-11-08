@@ -190,10 +190,22 @@ export const Navigation: React.FC<NavigationProps> = ({
             </button>
 
             <div className="flex min-w-0 items-center gap-3">
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#ffdc00] text-slate-950 shadow-[0_5px_18px_rgba(255,220,0,0.18)]">
-                <BusFront className="h-5 w-5" strokeWidth={2.5} />
-                <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#111827] bg-emerald-400" />
-              </div>
+              <button
+              type="button"
+              onClick={() => setPhotoPreview({
+                src: '/koermannenbus.png',
+                alt: 'Koerwerking buslogo',
+              })}
+              className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#ffdc00] shadow-[0_5px_18px_rgba(255,220,0,0.18)] transition hover:scale-105 cursor-zoom-in"
+              aria-label="Bekijk Koerwerking logo in groot formaat"
+            >
+              <img
+                src="/koermannenbus.png"
+                alt="Koerwerking"
+                className="h-full w-full object-cover"
+              />
+              <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#111827] bg-emerald-400" />
+            </button>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="truncate text-sm font-black tracking-wide text-white sm:text-base">
@@ -281,9 +293,21 @@ export const Navigation: React.FC<NavigationProps> = ({
 
             <div className="relative flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ffdc00] text-slate-950 shadow-lg shadow-yellow-500/10">
-                  <BusFront className="h-6 w-6" strokeWidth={2.5} />
-                </div>
+                <button
+                    type="button"
+                    onClick={() => setPhotoPreview({
+                      src: '/koermannenbus.png',
+                      alt: 'Koerwerking buslogo',
+                    })}
+                    className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#ffdc00] shadow-lg shadow-yellow-500/10 transition hover:scale-105 cursor-zoom-in"
+                    aria-label="Bekijk Koerwerking logo in groot formaat"
+                  >
+                    <img
+                      src="/koermannenbus.png"
+                      alt="Koerwerking"
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
                 <div>
                   <p className="text-sm font-black tracking-[0.12em]">KOERWERKING</p>
                   <p className="mt-1 text-xs text-slate-400">Planning & teamomgeving</p>
@@ -472,7 +496,10 @@ export const Navigation: React.FC<NavigationProps> = ({
           <img
             src={photoPreview.src}
             alt={photoPreview.alt}
-            className="max-h-[85vh] max-w-[92vw] rounded-2xl object-contain shadow-2xl"
+            className="h-auto w-auto max-h-[90vh] max-w-[95vw] rounded-2xl object-contain shadow-2xl"
+            style={{
+              width: 'min(900px, 95vw)',
+            }}
             onClick={(event) => event.stopPropagation()}
           />
         </div>
