@@ -532,6 +532,21 @@ export const LoginPage: React.FC = () => {
         </div>
       </main>
 
+      {/* Buy Me a Coffee-knop, vast linksonder */}
+      <a
+        href="https://www.buymeacoffee.com/jonasapp"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] z-50 transition-transform duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffdc00] focus-visible:ring-offset-2 focus-visible:ring-offset-[#101a31]"
+        aria-label="Trakteer Jonas op een Monster via Buy Me a Coffee"
+      >
+        <img
+          src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20Monster&emoji=%F0%9F%91%BE&slug=jonasapp&button_colour=BD5FFF&font_colour=ffffff&font_family=Lato&outline_colour=000000&coffee_colour=FFDD00"
+          alt="Buy me a Monster"
+          className="h-auto w-[145px] sm:w-[175px]"
+        />
+      </a>
+
       {/* Footer */}
       <footer className="login-footer relative z-10 shrink-0 text-center">
         <p className="text-xs text-slate-400">
