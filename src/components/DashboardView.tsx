@@ -6,7 +6,7 @@ import { TelegramInvitationModal } from './TelegramInvitationModal';
 import {
   Activity, ArrowRight, Bell, BusFront, CalendarDays, CheckCircle2,
   CircleHelp, ClipboardList, Clock3, ExternalLink, Info, Layers3,
-  LockKeyhole, ShieldCheck, Sparkles, Users, CalendarCheck2, LogIn,
+  LockKeyhole, ShieldCheck, Sparkles, Users, CalendarCheck2,
 } from 'lucide-react';
 
 interface DashboardViewProps { onNavigate: (tab: string) => void; }
@@ -363,26 +363,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
     {/* Snelle links: naast elkaar op grotere schermen, onder elkaar op mobiel */}
     <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 sm:gap-4">
-    {/* Prominent Microsoft quick sign-in */}
-    <a
-      href="https://launcher.myapps.microsoft.com/api/signin/c528a6b1-26e8-4ab8-8db9-fcce4ace4358?tenantId=488b6c64-b0da-4b62-8bbd-8bbb63b5eb77"
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label="Snel aanmelden via Microsoft 365, opent in een nieuw tabblad"
-      className="group relative flex min-h-[92px] flex-col items-stretch gap-3 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 via-white to-sky-50 px-4 py-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-row sm:items-center sm:gap-4 sm:px-6"
-    >
-      <span className="absolute inset-y-0 left-0 w-1.5 bg-[#2563eb]" />
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2563eb] text-white shadow-sm transition-transform group-hover:scale-105 sm:h-14 sm:w-14">
-        <LogIn size={26}/>
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-base font-black text-slate-900 sm:text-lg">Snel aanmelden</span>
-      </span>
-      <span className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-[#2563eb] px-4 py-3 text-sm font-extrabold text-white shadow-sm transition-colors group-hover:bg-blue-700 sm:w-auto sm:px-5">
-        Aanmelden <ExternalLink size={15}/>
-      </span>
-    </a>
-
     {/* Directe toegang tot De Lijn Selfservice */}
     <a
       href="https://launcher.myapps.microsoft.com/api/signin/5dc71c29-1365-4e13-9d2e-250d00403cb5?tenantId=488b6c64-b0da-4b62-8bbd-8bbb63b5eb77"
