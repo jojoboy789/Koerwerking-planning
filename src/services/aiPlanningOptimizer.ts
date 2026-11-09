@@ -57,14 +57,13 @@ export interface AIPlannerResult {
 }
 
 const SHIFT_ORDER: Shift[] = ["V", "D", "L"];
+const WEIGHTS: Record<Shift, number> = { V: 100, D: 100, L: 100 };
 const CHOICE_WEIGHT = { first: 100, second: 65, third: 35, none: 0 };
 
-// Prioriteit beïnvloedt alleen de rangschikking van geschikte kandidaten.
-// Ze kan een dienstkeuze, X-uitsluiting of veiligheidsregel niet overrulen.
-const DEPLOYMENT_PRIORITY_WEIGHT: Record<NonNullable<AIPlannerMember["user"]["deploymentPriority"]>, number> = {
-  high: 28,
+const DEPLOYMENT_PRIORITY_WEIGHT: Record<"high" | "normal" | "low" | "none", number> = {
+  high: 18,
   normal: 0,
-  low: -14,
+  low: -9,
   none: 0,
 };
 
@@ -134,7 +133,7 @@ function preferenceFor(member: AIPlannerMember, day: number, shift: Shift) {
 
 /**
  * Creates a read-only proposal. It does not save or modify any planning data.
- * Existing finalised days are skipped. X and R are treated as unavailable.
+ * Existing finalised days are skipped. X is unavailable; R may be reconsidered via alternatives.
  */
 export function generateAIPlanningProposal(input: {
   members: AIPlannerMember[];
@@ -172,7 +171,7 @@ export function generateAIPlanningProposal(input: {
       continue;
     }
 
-    // If a finalised shift exists for this date, do not propose changes on that date.
+    // Een definitieve toewijzing op deze dag mag nooit door het voorstel worden gewijzigd.
     const finalisedForDay = members.some((member) =>
       Boolean(member.planning?.finalDays?.[day])
     );
@@ -181,60 +180,144 @@ export function generateAIPlanningProposal(input: {
       continue;
     }
 
-    const usedToday = new Set<string>();
+    /*
+     * Zoek de beste combinatie voor V, D en L in één keer.
+     * Dit voorkomt de oude greedy-fout waarbij de eerste keuze voor V
+     * iemand bezet houdt die de enige kandidaat voor D is, terwijl een
+     * andere medewerker V als tweede keuze kan doen.
+     *
+     * Prioriteit: (1) zoveel mogelijk diensten invullen,
+     * (2) voorkeuren respecteren, (3) admin-inzetprioriteit,
+     * (4) eerlijke spreiding over de maand.
+     */
+    type DailyCandidate = {
+      member: AIPlannerMember;
+      shift: Shift;
+      preference: ReturnType<typeof preferenceFor>;
+      score: number;
+    };
+
+    const candidatesByShift = new Map<Shift, DailyCandidate[]>();
 
     for (const shift of SHIFT_ORDER) {
-      const candidates = members
-        .filter((member) => {
-          const first = member.planning?.days?.[day] || "";
-          // X is een harde uitsluiting. R kan alleen via tweede/derde keuze worden herbekeken.
-          if (first === "X") return false;
-          return !usedToday.has(member.user.id);
-        })
-        .map((member) => {
-          const preference = preferenceFor(member, day, shift);
-          const total = assignedCount.get(member.user.id) || 0;
-          const sameShift = assignedByShift.get(`${member.user.id}:${shift}`) || 0;
-          const fairnessPenalty = total * 10 + sameShift * 6;
-          const priorityBonus = deploymentPriorityWeight(member);
-          return {
-            member,
-            preference,
-            score: preference.weight + priorityBonus - fairnessPenalty,
-          };
-        })
-        .sort((a, b) => b.score - a.score || a.member.user.name.localeCompare(b.member.user.name));
+      const candidates: DailyCandidate[] = [];
 
-      const chosen = candidates[0];
-      if (!chosen || chosen.preference.weight === 0) {
-        uncovered.push({ date: key, shift });
-        continue;
+      for (const member of members) {
+        const first = member.planning?.days?.[day] || "";
+
+        // X is altijd een harde uitsluiting.
+        if (first === "X") continue;
+
+        const preference = preferenceFor(member, day, shift);
+
+        // Geen dienst zonder expliciete 1e, 2e of 3e keuze.
+        if (preference.weight <= 0) continue;
+
+        const total = assignedCount.get(member.user.id) || 0;
+        const sameShift = assignedByShift.get(`${member.user.id}:${shift}`) || 0;
+        const fairnessPenalty = total * 7 + sameShift * 4;
+        const priorityBonus = deploymentPriorityWeight(member);
+
+        // Rustdag als eerste keuze is alleen toegestaan als de medewerker
+        // deze shift expliciet als tweede/derde keuze heeft opgegeven.
+        const restDayPenalty = first === "R" ? 12 : 0;
+
+        candidates.push({
+          member,
+          shift,
+          preference,
+          score: preference.weight + priorityBonus - fairnessPenalty - restDayPenalty,
+        });
       }
 
-      usedToday.add(chosen.member.user.id);
-      assignedCount.set(chosen.member.user.id, (assignedCount.get(chosen.member.user.id) || 0) + 1);
-      assignedByShift.set(
-        `${chosen.member.user.id}:${shift}`,
-        (assignedByShift.get(`${chosen.member.user.id}:${shift}`) || 0) + 1
+      candidates.sort((a, b) =>
+        b.score - a.score ||
+        a.member.user.name.localeCompare(b.member.user.name)
       );
+      candidatesByShift.set(shift, candidates);
+    }
+
+    let bestAssignments: DailyCandidate[] = [];
+    let bestFilled = -1;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    const searchCombinations = (
+      shiftIndex: number,
+      usedMemberIds: Set<string>,
+      chosen: DailyCandidate[],
+      score: number
+    ) => {
+      if (shiftIndex >= SHIFT_ORDER.length) {
+        const filled = chosen.length;
+        if (
+          filled > bestFilled ||
+          (filled === bestFilled && score > bestScore)
+        ) {
+          bestFilled = filled;
+          bestScore = score;
+          bestAssignments = [...chosen];
+        }
+        return;
+      }
+
+      const shift = SHIFT_ORDER[shiftIndex];
+      const candidates = candidatesByShift.get(shift) || [];
+
+      // Eerst alle geldige kandidaten proberen voor deze dienst.
+      for (const candidate of candidates) {
+        const memberId = candidate.member.user.id;
+        if (usedMemberIds.has(memberId)) continue;
+
+        usedMemberIds.add(memberId);
+        chosen.push(candidate);
+        searchCombinations(shiftIndex + 1, usedMemberIds, chosen, score + candidate.score);
+        chosen.pop();
+        usedMemberIds.delete(memberId);
+      }
+
+      // Ook onderzoeken of deze dienst open moet blijven om een betere
+      // combinatie voor de overige diensten te kunnen maken.
+      searchCombinations(shiftIndex + 1, usedMemberIds, chosen, score);
+    };
+
+    searchCombinations(0, new Set<string>(), [], 0);
+
+    const assignedShifts = new Set<Shift>();
+    for (const chosen of bestAssignments) {
+      assignedShifts.add(chosen.shift);
+      const memberId = chosen.member.user.id;
+
+      assignedCount.set(memberId, (assignedCount.get(memberId) || 0) + 1);
+      assignedByShift.set(
+        `${memberId}:${chosen.shift}`,
+        (assignedByShift.get(`${memberId}:${chosen.shift}`) || 0) + 1
+      );
+
       assignments.push({
         date: key,
         day,
-        memberId: chosen.member.user.id,
+        memberId,
         memberName: chosen.member.user.name,
-        shift,
+        shift: chosen.shift,
         preference: chosen.preference.label,
         score: chosen.score,
       });
+
       if ((chosen.member.planning?.days?.[day] || "") === "R") {
         restDayWarnings.push({
           date: key,
-          memberId: chosen.member.user.id,
+          memberId,
           memberName: chosen.member.user.name,
-          assignedShift: shift,
+          assignedShift: chosen.shift,
           preference: chosen.preference.label,
-          message: "Deze medewerker had een rustdag als eerste keuze. Controleer manueel of de rustdag verantwoord kan verschuiven.",
+          message: "Deze medewerker had een rustdag als eerste keuze. De dienst komt uit een expliciete tweede of derde keuze. Controleer manueel of de rustdag verantwoord kan verschuiven.",
         });
+      }
+    }
+
+    for (const shift of SHIFT_ORDER) {
+      if (!assignedShifts.has(shift)) {
+        uncovered.push({ date: key, shift });
       }
     }
   }
@@ -256,11 +339,11 @@ export function generateAIPlanningProposal(input: {
     stats,
     notes: [
       "Dit is een lokaal gegenereerd voorstel, geen opgeslagen planning.",
-      "Eerste, tweede en derde keuze worden alleen gelezen. Ze worden niet gewijzigd.",
-      "X is een harde uitsluiting. R kan alleen via een ingevulde tweede of derde keuze worden overwogen en geeft een waarschuwing.",
+      "Eerste, tweede en derde keuze worden alleen gelezen tijdens het genereren. Bij toepassen wordt alleen de eerste keuze vervangen.",
+      "X is een harde uitsluiting. R kan alleen via een expliciete tweede of derde keuze worden overwogen en geeft een waarschuwing.",
       "Per gewone werkdag wordt maximaal één V, één D en één L voorgesteld.",
       "Weekends, Belgische feestdagen en speciale kalenderdagen worden overgeslagen.",
-      "AI-inzetprioriteit beïnvloedt de rangschikking: High krijgt een duidelijke bonus, Normal en None zijn neutraal, Low krijgt een kleine minscore. Dit blijft ondergeschikt aan eerste keuze en harde regels.",
+      "Per dag wordt de combinatie V/D/L gezamenlijk geoptimaliseerd: eerst zoveel mogelijk diensten invullen, daarna voorkeur, admin-inzetprioriteit en eerlijke spreiding meewegen.",
       "Definitieve dagen worden overgeslagen. Controleer de uitkomst altijd vóór manuele overname.",
     ],
   };

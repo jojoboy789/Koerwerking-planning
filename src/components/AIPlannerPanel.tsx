@@ -138,17 +138,8 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
     if (!canUse || busy || members.length === 0) return;
     setBusy(true);
     try {
-      const membersWithPriority: AIPlannerMember[] = members.map((member) => ({
-        ...member,
-        user: {
-          ...member.user,
-          deploymentPriority: member.user.deploymentPriority || "normal",
-        },
-      }));
-
       const result = generateAIPlanningProposal({
-        members: membersWithPriority,
-        year, month, period,
+        members, year, month, period,
         weekNumber: period === "week" ? weekNumber : undefined,
         specialDays,
       });
@@ -411,6 +402,110 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
             <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900"><CheckCircle2 className="h-5 w-5" />Alle vereiste V-, D- en L-diensten konden worden ingevuld.</div>
           )}
 
+
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div><h3 className="text-base font-extrabold text-slate-900">Dag-, week- en maandoverzicht</h3><p className="mt-1 text-xs text-slate-500">Bekijk de voorgestelde bezetting op het detailniveau dat je nodig hebt.</p></div>
+              <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1">
+                {(["day", "week", "month"] as const).map((view) => <button key={view} type="button" onClick={() => setResultView(view)} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${resultView === view ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-900"}`}>{view === "day" ? "Dag" : view === "week" ? "Week" : "Maand"}</button>)}
+              </div>
+            </div>
+
+            {resultView === "day" && (
+              <label className="mt-4 block max-w-sm text-xs font-bold text-slate-600">Kies een dag
+                <select value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-900">
+                  {resultDates.map((date) => <option key={date} value={date}>{formatDate(date)}</option>)}
+                </select>
+              </label>
+            )}
+            {resultView === "week" && (
+              <div className="mt-4 flex items-center gap-2 text-xs text-slate-600"><CalendarRange className="h-4 w-4" />Week {weekNumber} · {visibleDates.length} dagen met resultaten</div>
+            )}
+            {resultView === "month" && <div className="mt-4 flex items-center gap-2 text-xs text-slate-600"><CalendarDays className="h-4 w-4" />{MONTHS[month - 1]} {year} · {visibleDates.length} dagen met resultaten</div>}
+
+            <div className="mt-4 space-y-3">
+              {visibleDates.map((date) => {
+                const totals = countForDate(date);
+                const assignments = proposal.assignments.filter((item) => item.date === date);
+                const uncovered = proposal.uncovered.filter((item) => item.date === date);
+                const dayRestWarnings = proposal.restDayWarnings.filter((warning) => warning.date === date);
+                return (
+                  <article
+                    key={date}
+                    className={`overflow-hidden rounded-xl border ${
+                      dayRestWarnings.length > 0
+                        ? "border-orange-300 ring-1 ring-orange-100"
+                        : "border-slate-200"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-4 py-3">
+                      <h4 className="text-sm font-extrabold capitalize text-slate-900">{formatDate(date)}</h4>
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-extrabold">
+                        {dayRestWarnings.length > 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-orange-100 px-2 py-1 text-orange-900">
+                            <AlertTriangle className="h-3 w-3" />
+                            {dayRestWarnings.length} rustdag{dayRestWarnings.length === 1 ? "" : "en"} controleren
+                          </span>
+                        )}
+                        <span className="rounded-md bg-emerald-100 px-2 py-1 text-emerald-800">V {totals.V}</span>
+                        <span className="rounded-md bg-amber-100 px-2 py-1 text-amber-800">D {totals.D}</span>
+                        <span className="rounded-md bg-indigo-100 px-2 py-1 text-indigo-800">L {totals.L}</span>
+                        {totals.open > 0 && <span className="rounded-md bg-rose-100 px-2 py-1 text-rose-800">Open {totals.open}</span>}
+                      </div>
+                    </div>
+                    {assignments.length ? (
+                      <div className="divide-y divide-slate-100">
+                        {assignments.map((item) => {
+                          const restWarning = dayRestWarnings.find((warning) => warning.memberId === item.memberId);
+                          return (
+                            <div
+                              key={`${item.memberId}-${item.shift}`}
+                              className={`flex flex-wrap items-center justify-between gap-2 px-4 py-3 ${
+                                restWarning ? "bg-orange-50/70" : ""
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-slate-900">{item.memberName}</p>
+                                <p className="text-[11px] text-slate-500">{item.preference}</p>
+                                {restWarning && (
+                                  <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-lg border border-orange-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-orange-900">
+                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                    Rustdag controleren
+                                    <span className="font-medium text-orange-800">
+                                      · Eerste keuze R, dienst via {restWarning.preference.toLowerCase()}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                              <span className={`flex h-9 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-black ${item.shift === "V" ? "bg-emerald-100 text-emerald-800" : item.shift === "D" ? "bg-amber-100 text-amber-800" : "bg-indigo-100 text-indigo-800"}`}>{item.shift}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : <p className="px-4 py-3 text-xs text-slate-500">Geen toewijzingen voor deze dag.</p>}
+                    {dayRestWarnings.length > 0 && (
+                      <div className="border-t border-orange-200 bg-orange-50 px-4 py-3 text-xs leading-relaxed text-orange-950">
+                        <strong>Rustdagcontrole nodig:</strong>{" "}
+                        {dayRestWarnings.map((warning) => `${warning.memberName} kreeg ${warning.assignedShift} via ${warning.preference.toLowerCase()}`).join("; ")}.
+                        Controleer of de oorspronkelijke rustdag kan verschuiven. De planner moet dit zelf beoordelen.
+                      </div>
+                    )}
+                    {uncovered.length > 0 && <div className="border-t border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-900">Open: {uncovered.map((item) => item.shift).join(", ")}</div>}
+                  </article>
+                );
+              })}
+              {visibleDates.length === 0 && <p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500">Geen resultaten voor deze weergave.</p>}
+            </div>
+          </div>
+
+          {proposal.skippedDates.length > 0 && (
+            <details className="rounded-2xl border border-slate-200 bg-white p-4">
+              <summary className="cursor-pointer text-sm font-bold text-slate-800">Overgeslagen dagen ({proposal.skippedDates.length})</summary>
+              <ul className="mt-3 space-y-1 text-xs text-slate-600">{proposal.skippedDates.map((item) => <li key={`${item.date}-${item.reason}`}>{formatDate(item.date)}: {item.reason}</li>)}</ul>
+            </details>
+          )}
+
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -446,73 +541,7 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
-              <div><h3 className="text-base font-extrabold text-slate-900">Dag-, week- en maandoverzicht</h3><p className="mt-1 text-xs text-slate-500">Bekijk de voorgestelde bezetting op het detailniveau dat je nodig hebt.</p></div>
-              <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1">
-                {(["day", "week", "month"] as const).map((view) => <button key={view} type="button" onClick={() => setResultView(view)} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${resultView === view ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-900"}`}>{view === "day" ? "Dag" : view === "week" ? "Week" : "Maand"}</button>)}
-              </div>
-            </div>
 
-            {resultView === "day" && (
-              <label className="mt-4 block max-w-sm text-xs font-bold text-slate-600">Kies een dag
-                <select value={selectedDay} onChange={(event) => setSelectedDay(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-900">
-                  {resultDates.map((date) => <option key={date} value={date}>{formatDate(date)}</option>)}
-                </select>
-              </label>
-            )}
-            {resultView === "week" && (
-              <div className="mt-4 flex items-center gap-2 text-xs text-slate-600"><CalendarRange className="h-4 w-4" />Week {weekNumber} · {visibleDates.length} dagen met resultaten</div>
-            )}
-            {resultView === "month" && <div className="mt-4 flex items-center gap-2 text-xs text-slate-600"><CalendarDays className="h-4 w-4" />{MONTHS[month - 1]} {year} · {visibleDates.length} dagen met resultaten</div>}
-
-            <div className="mt-4 space-y-3">
-              {visibleDates.map((date) => {
-                const totals = countForDate(date);
-                const assignments = proposal.assignments.filter((item) => item.date === date);
-                const uncovered = proposal.uncovered.filter((item) => item.date === date);
-                return (
-                  <article key={date} className="overflow-hidden rounded-xl border border-slate-200">
-                    <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-4 py-3">
-                      <h4 className="text-sm font-extrabold capitalize text-slate-900">{formatDate(date)}</h4>
-                      <div className="flex gap-1.5 text-[10px] font-extrabold">
-                        <span className="rounded-md bg-emerald-100 px-2 py-1 text-emerald-800">V {totals.V}</span>
-                        <span className="rounded-md bg-amber-100 px-2 py-1 text-amber-800">D {totals.D}</span>
-                        <span className="rounded-md bg-indigo-100 px-2 py-1 text-indigo-800">L {totals.L}</span>
-                        {totals.open > 0 && <span className="rounded-md bg-rose-100 px-2 py-1 text-rose-800">Open {totals.open}</span>}
-                      </div>
-                    </div>
-                    {assignments.length ? (
-                      <div className="divide-y divide-slate-100">
-                        {assignments.map((item) => (
-                          <div key={`${item.memberId}-${item.shift}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-                            <div><p className="text-sm font-bold text-slate-900">{item.memberName}</p><p className="text-[11px] text-slate-500">{item.preference}</p></div>
-                            <span className={`flex h-9 w-10 items-center justify-center rounded-lg text-sm font-black ${item.shift === "V" ? "bg-emerald-100 text-emerald-800" : item.shift === "D" ? "bg-amber-100 text-amber-800" : "bg-indigo-100 text-indigo-800"}`}>{item.shift}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : <p className="px-4 py-3 text-xs text-slate-500">Geen toewijzingen voor deze dag.</p>}
-                    {uncovered.length > 0 && <div className="border-t border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-900">Open: {uncovered.map((item) => item.shift).join(", ")}</div>}
-                  </article>
-                );
-              })}
-              {visibleDates.length === 0 && <p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500">Geen resultaten voor deze weergave.</p>}
-            </div>
-          </div>
-
-          {proposal.skippedDates.length > 0 && (
-            <details className="rounded-2xl border border-slate-200 bg-white p-4">
-              <summary className="cursor-pointer text-sm font-bold text-slate-800">Overgeslagen dagen ({proposal.skippedDates.length})</summary>
-              <ul className="mt-3 space-y-1 text-xs text-slate-600">{proposal.skippedDates.map((item) => <li key={`${item.date}-${item.reason}`}>{formatDate(item.date)}: {item.reason}</li>)}</ul>
-            </details>
-          )}
-
-          {proposal.notes.length > 0 && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <h3 className="text-sm font-extrabold text-slate-900">Opmerkingen van de AI</h3>
-              <ul className="mt-2 space-y-1 text-xs leading-relaxed text-slate-600">{proposal.notes.map((note) => <li key={note}>• {note}</li>)}</ul>
-            </div>
-          )}
 
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
             <h3 className="text-sm font-extrabold text-amber-950">4. Voorstel toepassen</h3>
@@ -521,6 +550,13 @@ export const AIPlannerPanel: React.FC<AIPlannerPanelProps> = ({
               <CheckCircle2 className="h-4 w-4" />{busy ? "Bezig met toepassen..." : "Ik heb gecontroleerd, pas AI-planning toe"}
             </button>
           </div>
+
+          {proposal.notes.length > 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h3 className="text-sm font-extrabold text-slate-900">Opmerkingen van de AI</h3>
+              <ul className="mt-2 space-y-1 text-xs leading-relaxed text-slate-600">{proposal.notes.map((note) => <li key={note}>• {note}</li>)}</ul>
+            </div>
+          )}
         </section>
       )}
 
