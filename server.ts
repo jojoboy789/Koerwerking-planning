@@ -1046,39 +1046,68 @@ async function createOCPlanningPdfDownloadUrl(
   return uploadPublicOCPlanningPdf(Buffer.from(arrayBuffer));
 }
 
+
+function extractTransportDoorKoerText(html: string): string {
+  // Zoek uitsluitend de HTML-paragraaf waarin de sectiekop staat.
+  // Zo komen andere opdrachten, mededelingen en dagplanning niet in Telegram terecht.
+  const paragraphs = html.match(/<p\b[^>]*>[\s\S]*?<\/p>/gi) || [];
+
+  const matchingParagraphs = paragraphs
+    .filter(paragraph => /Transport\s+door\s+Koer\s*:/i.test(htmlToTelegramText(paragraph)))
+    .map(paragraph => {
+      const text = htmlToTelegramText(paragraph);
+      return text
+        .replace(/^.*?Transport\s+door\s+Koer\s*:\s*/i, '')
+        .trim();
+    })
+    .filter(Boolean);
+
+  return matchingParagraphs.join('\n');
+}
+
 async function sendOCPlanningUpdateToTelegram(
   slides: Array<OCPlanningSlide & { html: string }>
 ): Promise<void> {
-  const changedSlides = slides.filter(slide => slide.dated);
+  const transportSections = slides
+    .map(slide => extractTransportDoorKoerText(slide.html))
+    .filter(Boolean);
 
-  if (changedSlides.length === 0) {
-    console.log('OC Planning gewijzigd, maar er zijn geen dagplanningsslides.');
+  // Een wijziging buiten "Transport door Koer" mag geen Telegram-bericht opleveren.
+  if (transportSections.length === 0) {
+    console.log('OC Planning gewijzigd; geen inhoudelijke wijziging gevonden bij Transport door Koer. Geen Telegram-bericht verstuurd.');
     return;
   }
 
   const heading = '🚌 <b>OC BUS GBR · DAGPLANNING GEWIJZIGD</b>\n\n';
+  const content = transportSections
+    .map(section => escapeTelegramHtml(section))
+    .join('\n\n');
+  const message = `${heading}<b>Transport door Koer:</b>\n${content}`;
 
-  let message = heading;
-
-  for (const slide of changedSlides) {
-    const content = htmlToTelegramText(slide.html);
-
-    const section =
-      `<b>${escapeTelegramHtml(slide.title)}</b>\n` +
-      `${escapeTelegramHtml(content || 'Geen tekstuele inhoud beschikbaar.')}\n\n`;
-
-    if ((message + section).length > 3500) {
-      const sent = await sendTelegramNotification(message.trim());
-      if (!sent) throw new Error('Telegram kon de wijzigingsmelding niet versturen.');
-      message = heading;
-    }
-
-    message += section;
+  // De inhoud van deze sectie is normaal kort. Toch blijft de Telegram-limiet bewaakt.
+  const maxLength = 3500;
+  if (message.length <= maxLength) {
+    const sent = await sendTelegramNotification(message);
+    if (!sent) throw new Error('Telegram kon de wijzigingsmelding niet versturen.');
+    return;
   }
 
-  if (message.trim() !== heading.trim()) {
-    const sent = await sendTelegramNotification(message.trim());
+  let remaining = content;
+  let firstMessage = true;
+  while (remaining.length > 0) {
+    const currentHeading = firstMessage
+      ? heading + '<b>Transport door Koer:</b>\n'
+      : heading + '<b>Transport door Koer (vervolg):</b>\n';
+    const available = maxLength - currentHeading.length;
+    let splitAt = remaining.lastIndexOf('\n', available);
+    if (splitAt < Math.floor(available * 0.5)) splitAt = available;
+
+    const chunk = remaining.slice(0, splitAt).trim();
+    const sent = await sendTelegramNotification(currentHeading + chunk);
     if (!sent) throw new Error('Telegram kon de wijzigingsmelding niet versturen.');
+
+    remaining = remaining.slice(splitAt).trim();
+    firstMessage = false;
   }
 }
 

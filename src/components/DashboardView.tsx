@@ -204,6 +204,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
   const quickActions=[
     {label:'Mijn planning',desc:'Bekijk of wijzig je diensten',icon:CalendarDays,tab:'planning',tone:'yellow'},
+    {label:'Koerdienst uitvoeren',desc:'Open de dagelijkse koerdienstfiche en download de PDF',icon:ClipboardList,tab:'koerdienst',tone:'yellow'},
     ...(canViewOverview?[{label:'Teamoverzicht',desc:'Bekijk de teambezetting',icon:Users,tab:'overview',tone:'green'}]:[]),
     {label:'OC planning',desc:'Dagplanning van OC BUS GBR',icon:BusFront,tab:'oc_planning',tone:'blue'},
     ...(isAdmin?[{label:'Beheerportaal',desc:'Gebruikers en toegangsrechten',icon:ShieldCheck,tab:'admin',tone:'violet'}]:[]),

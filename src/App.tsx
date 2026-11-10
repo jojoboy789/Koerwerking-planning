@@ -16,7 +16,7 @@ import { KoerdienstView } from './components/KoerdienstView';
 
 
 // Update-popup version: bump this value (e.g. to "v2") for the next major update.
-const UPDATE_POPUP_VERSION = 'v2.5';
+const UPDATE_POPUP_VERSION = 'v2.8.1';
 const UPDATE_POPUP_STORAGE_KEY = `koerwerking-update-popup-${UPDATE_POPUP_VERSION}`;
 
 const UpdateWelcomePopup: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -35,35 +35,42 @@ const UpdateWelcomePopup: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         aria-modal="true"
         aria-labelledby="update-popup-title"
       >
-      <div className="update-popup-ribbon">✨ KLEINE UPDATE • VERSIE 2.5</div>
+      <div className="update-popup-ribbon">✨ NIEUWE UPDATE • VERSIE 2.8.1</div>
 
-      <div className="update-popup-emoji" aria-hidden="true">🚀</div>
+      <div className="update-popup-emoji" aria-hidden="true">🚌</div>
 
-      <h2 id="update-popup-title">
-        Klein update, maar fijn! 
-        <p>
-          (voor de planners)🎉
-          </p>
-          <p>Lees zeker het bericht</p>
-      </h2>
-
+      <h2 id="update-popup-title">Klein update, maar fijn!</h2>
       <p className="update-popup-intro">
-       De Koerwerking-planning kreeg een kleine update!
-       </p>
-Daarom staat er tijdelijk een planning in april 2027, 
-<p>
-
-gelieve die te laten staan, </p>zodat de testen kunnen worden uitgevoerd,<p>
-</p> Dankjewel! 🙏
-<p>
+        Er zijn opnieuw enkele handige verbeteringen toegevoegd aan de Koerwerking-planning!
       </p>
+
+      <div className="update-popup-note">
+        <strong>🆕 Nieuw: Koerdienst uitvoeren</strong>
+        <p>
+          Vanaf nu vind je in het dashboard en de navigatie de nieuwe functie
+          <strong> ‘Koerdienst uitvoeren’</strong>. Daar staat de dagelijkse koerdienstfiche
+          met opdrachten uit OC Planning, zoals PUT, GLAZING en KEURING.
+          Je kunt er ook de wasbussen invullen, extra opdrachten toevoegen en de fiche
+          als PDF afdrukken.
+        </p>
+      </div>
+
+      <div className="update-popup-note">
+        <strong>📅 Belangrijk: testplanning april 2027</strong>
+        <p>
+          Er staat tijdelijk een planning klaar voor april 2027. Gelieve deze
+          <strong> te laten staan en niet te verwijderen of aan te passen</strong>.
+          Deze planning wordt gebruikt om nieuwe functies en testen uit te voeren.
+          Zodra de testen afgerond zijn, volgt meer informatie. Alvast bedankt! 🙏
+        </p>
+      </div>
 
       <div className="update-popup-note">
         <strong>💬 Heb je feedback of een leuk idee?</strong>
         <p>
           Een foutje gespot? Een ideetje? Of denk je dat Jonas nog wat werk nodig heeft? 🤣
-Laat het gerust weten! Jonas sleutelt met plezier verder aan de planning.
-Alle suggesties zijn welkom!
+          Laat het gerust weten! Jonas sleutelt met plezier verder aan de planning.
+          Alle suggesties zijn welkom!
         </p>
       </div>
 
@@ -78,7 +85,7 @@ Alle suggesties zijn welkom!
       </button>
 
       <div className="update-popup-footnote">
-        Kleine update, weer een stap vooruit! • Versie 2.5
+        Nieuwe koerdienstfiche, weer een stap vooruit! • Versie 2.8.1
       </div>
       </section>
       {celebrate && (

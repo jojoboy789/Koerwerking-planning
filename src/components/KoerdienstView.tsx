@@ -172,10 +172,10 @@ export const KoerdienstView: React.FC = () => {
   };
 
   const downloadPdf = () => {
-    // A5 liggend: één compacte, afdrukklare werkfiche.
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a5' });
+    // A4 staand: de fiche gebruikt exact de bovenste helft (A5 liggend).
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
+    const pageHeight = pdf.internal.pageSize.getHeight() / 2;
     const margin = 7;
     const gap = 6;
     const colWidth = (pageWidth - margin * 2 - gap) / 2;
@@ -273,7 +273,7 @@ export const KoerdienstView: React.FC = () => {
     const washRows = [
       { loop: '15.51', binnen: '9:38', buiten: '14:39' },
       { loop: '17.06', binnen: '9:46', buiten: '15:22' },
-      { loop: '18.28', binnen: '9:26', buiten: '15:12' },
+      { loop: '18.28', binnen: '9:58', buiten: '14:06' },
     ];
     let washBuses: string[] = ['', '', ''];
     try {
@@ -340,11 +340,11 @@ export const KoerdienstView: React.FC = () => {
     pdf.setFontSize(5.8);
     pdf.setTextColor(100, 116, 139);
     pdf.text('KOERWERKING · INTERNE KOERDIENSTFICHE', margin, pageHeight - 2);
-    pdf.text('A5 LIGGEND', pageWidth - margin, pageHeight - 2, { align: 'right' });
+    pdf.text('HEEEYYYY Gtrjs jonas', pageWidth - margin, pageHeight - 2, { align: 'right' });
 
     // Indien er uitzonderlijk veel opdrachten zijn, blijft alles leesbaar op extra A5-pagina's.
     // De normale dagfiche is ontworpen om op één A5-landscape blad te passen.
-    pdf.save(`Koerdienst-${date}-A5-liggend.pdf`);
+    pdf.save(`Koerdienst-${date}-A4-halfblad.pdf`);
   };
 
   const taskList = (items: TransportTask[], empty: string) => items.length ? (
@@ -418,7 +418,7 @@ export const KoerdienstView: React.FC = () => {
                   {[
                     { loop: '15.51', binnen: '9:38', buiten: '14:39' },
                     { loop: '17.06', binnen: '9:46', buiten: '15:22' },
-                    { loop: '18.28', binnen: '9:26', buiten: '15:12' },
+                    { loop: '18.28', binnen: '9:58', buiten: '14:06' },
                   ].map((row, index) => (
                     <tr key={row.loop} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}>
                       <td className="whitespace-nowrap px-4 py-3.5 font-extrabold text-[#17202b]">{row.loop}</td>
