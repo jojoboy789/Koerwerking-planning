@@ -65,7 +65,16 @@ interface StoredPlanning {
 
 interface StoredSpecialDay { date: string; type: 'replacementHoliday' | 'strike'; createdAt: string; createdBy: string; }
 
+interface KoerDienstRecord {
+  date: string;
+  wasbussen: string;
+  extra: Array<{ id: string; text: string }>;
+  updatedAt: string;
+  updatedBy: string;
+}
+
 interface DatabaseSchema {
+  koerDienstRecords?: KoerDienstRecord[];
   specialDays: StoredSpecialDay[];
   users: StoredUser[];
   plannings: StoredPlanning[];
@@ -159,6 +168,7 @@ function loadDatabase(): DatabaseSchema {
     }
     return {
   ...data,
+  koerDienstRecords: Array.isArray(data.koerDienstRecords) ? data.koerDienstRecords : [],
   specialDays: Array.isArray(data.specialDays) ? data.specialDays : [],
   maintenance: data.maintenance || {
     enabled: false,
@@ -364,6 +374,7 @@ function seedInitialDatabase(): DatabaseSchema {
   });
 
   return {
+  koerDienstRecords: [],
   users: initialUsers,
   specialDays: [],
   plannings: samplePlannings,
@@ -506,6 +517,7 @@ async function startServer() {
     if (remoteData && remoteData.users && remoteData.users.length > 0) {
       console.log('🔥 Loaded database state from Cloud Firestore successfully.');
       db = {
+  koerDienstRecords: Array.isArray((remoteData as any).koerDienstRecords) ? (remoteData as any).koerDienstRecords : db.koerDienstRecords || [],
   users: remoteData.users,
   specialDays: Array.isArray(remoteData.specialDays) ? remoteData.specialDays : db.specialDays || [],
   plannings: remoteData.plannings || [],
@@ -1379,6 +1391,57 @@ function startOCPlanningMonitor(): void {
     void check();
   }, 60_000);
 }
+
+// === KOERDIENST FICHE ===
+// Elke actieve, aangemelde gebruiker kan de fiche lezen en de manuele velden bijwerken.
+app.get(
+  '/api/koerdienst/:date',
+  authMiddleware,
+  (req: AuthenticatedRequest, res: Response) => {
+    const date = String(req.params.date || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'Ongeldige datum.' });
+    }
+    const record = (db.koerDienstRecords || []).find((item) => item.date === date);
+    return res.json({
+      record: record || { date, wasbussen: '', extra: [], updatedAt: null, updatedBy: null },
+    });
+  }
+);
+
+app.put(
+  '/api/koerdienst/:date',
+  authMiddleware,
+  (req: AuthenticatedRequest, res: Response) => {
+    const date = String(req.params.date || '');
+    const { wasbussen, extra } = req.body || {};
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'Ongeldige datum.' });
+    }
+    if (typeof wasbussen !== 'string' || wasbussen.length > 5000 || !Array.isArray(extra) || extra.length > 100) {
+      return res.status(400).json({ error: 'Ongeldige fichegegevens.' });
+    }
+    const safeExtra = extra
+      .filter((item: any) => item && typeof item.text === 'string')
+      .map((item: any, index: number) => ({
+        id: typeof item.id === 'string' ? item.id.slice(0, 80) : `extra-${index}`,
+        text: item.text.slice(0, 500),
+      }));
+    db.koerDienstRecords = db.koerDienstRecords || [];
+    const record: KoerDienstRecord = {
+      date,
+      wasbussen: wasbussen.slice(0, 5000),
+      extra: safeExtra,
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.user?.name || 'Gebruiker',
+    };
+    const existingIndex = db.koerDienstRecords.findIndex((item) => item.date === date);
+    if (existingIndex >= 0) db.koerDienstRecords[existingIndex] = record;
+    else db.koerDienstRecords.push(record);
+    saveDatabase(db);
+    return res.json({ success: true, record });
+  }
+);
 
 app.get(
   '/api/oc-planning',

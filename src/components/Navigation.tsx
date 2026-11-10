@@ -14,6 +14,7 @@ import {
   Send,
   KeyRound,
   BusFront,
+  ClipboardList,
   Clock3,
   ChevronRight,
   Sparkles,
@@ -127,6 +128,13 @@ export const Navigation: React.FC<NavigationProps> = ({
       show: Boolean(user),
       badge: 'LIVE',
       description: 'Operationele planning',
+    },
+    {
+      id: 'koerdienst',
+      label: 'Koerdienst uitvoeren',
+      icon: ClipboardList,
+      show: Boolean(user),
+      description: 'Dagelijkse koerdienstfiche',
     },
   ];
 

@@ -12,6 +12,7 @@ import { GeneralChatView } from './components/GeneralChatView';
 import { Loader2 } from 'lucide-react';
 import { CookieConsent } from './components/CookieConsent';
 import { OCPlanningView } from './components/OCPlanningView';
+import { KoerdienstView } from './components/KoerdienstView';
 
 
 // Update-popup version: bump this value (e.g. to "v2") for the next major update.
@@ -273,6 +274,7 @@ const MainLayout: React.FC = () => {
         {effectiveTab === 'admin' && isAdmin && <AdminPortalView />}
         {effectiveTab === 'chat' && (canPlannerMode || isAdmin) && <GeneralChatView />}
         {effectiveTab === 'oc_planning' && <OCPlanningView />}
+        {effectiveTab === 'koerdienst' && <KoerdienstView />}
       </main>
       <CookieConsent />
       {showUpdatePopup && <UpdateWelcomePopup onClose={closeUpdatePopup} />}
