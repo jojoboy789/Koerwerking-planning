@@ -2708,10 +2708,10 @@ for (const [key, value] of Object.entries(secondChoices || {})) {
     const monthName = monthNames[m - 1];
     let message = ''
     if(week){
-      message = `De planning voor ${monthName} ${y}, week ${week} is zojuist afgerond door ${req.user!.name}, koerdienst.capturedcode.com/FL-planning`;
+      message = `De planning voor ${monthName} ${y}, week ${week} is zojuist afgerond door ${req.user!.name}, koerwerking.capturedcode.com/FL-planning`;
     }
     else{
-      message = `De planning voor ${monthName} ${y} is zojuist afgerond door ${req.user!.name}, koerdienst.capturedcode.com/FL-planning`;
+      message = `De planning voor ${monthName} ${y} is zojuist afgerond door ${req.user!.name}, koerwerking.capturedcode.com/FL-planning`;
     }
     sendTelegramNotification(message);
 
