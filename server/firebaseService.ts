@@ -170,7 +170,8 @@ export async function claimScheduledTelegramRun(
     if (existing.exists) {
       const data = existing.data();
 
-      if (data?.status === 'sent') {
+      // Een expliciete blokkering mag nooit door een nieuwe claim worden overschreven.
+      if (data?.status === 'sent' || data?.status === 'blocked') {
         return false;
       }
 
@@ -228,6 +229,125 @@ export async function updateScheduledTelegramRun(
       { merge: true }
     );
 }
+
+
+
+export type TelegramScheduledTime = '04:50' | '12:30' | '21:00';
+
+export interface TelegramBlockedRun {
+  id: string;
+  date: string;
+  time: TelegramScheduledTime;
+  status: 'blocked';
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+const TELEGRAM_SCHEDULED_TIMES = new Set<TelegramScheduledTime>(['04:50', '12:30', '21:00']);
+
+function getTelegramRunId(date: string, time: TelegramScheduledTime): string {
+  return `${date}-${time.replace(':', '-')}`;
+}
+
+function isValidCalendarDate(date: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const [year, month, day] = date.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day;
+}
+
+function getBelgianLocalDateTimeKey(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Brussels',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}-${values.hour}-${values.minute}`;
+}
+
+export async function addBlockedTelegramRun(
+  date: string,
+  time: TelegramScheduledTime,
+  createdBy: string
+): Promise<void> {
+  if (!adminDb) throw new Error('Firebase Admin Firestore is niet geïnitialiseerd.');
+  if (!isValidCalendarDate(date) || !TELEGRAM_SCHEDULED_TIMES.has(time)) {
+    throw new Error('Kies een geldige datum en een geldig verzendmoment.');
+  }
+
+  const targetLocalKey = `${date}-${time.replace(':', '-')}`;
+  if (targetLocalKey <= getBelgianLocalDateTimeKey(new Date())) {
+    throw new Error('Dit verzendmoment is al voorbij. Kies een toekomstig moment.');
+  }
+
+  const runRef = adminDb.collection('scheduledTelegramRuns').doc(getTelegramRunId(date, time));
+  const now = new Date().toISOString();
+
+  await adminDb.runTransaction(async transaction => {
+    const existing = await transaction.get(runRef);
+    const status = existing.data()?.status;
+    if (status === 'sent') throw new Error('Dit verzendmoment is al verstuurd en kan niet meer worden geblokkeerd.');
+    if (status === 'claimed') throw new Error('De verzending is al gestart. Blokkeren is niet meer mogelijk.');
+    if (status === 'blocked') throw new Error('Dit verzendmoment is al geblokkeerd.');
+
+    transaction.set(runRef, {
+      status: 'blocked',
+      createdAt: now,
+      updatedAt: now,
+      createdBy: createdBy.slice(0, 120),
+    });
+  });
+}
+
+export async function listBlockedTelegramRuns(): Promise<TelegramBlockedRun[]> {
+  if (!adminDb) throw new Error('Firebase Admin Firestore is niet geïnitialiseerd.');
+  const snapshot = await adminDb.collection('scheduledTelegramRuns')
+    .where('status', '==', 'blocked')
+    .get();
+
+  return snapshot.docs.flatMap(document => {
+    const match = /^(\d{4}-\d{2}-\d{2})-(04-50|12-30|21-00)$/.exec(document.id);
+    if (!match) return [];
+    const data = document.data();
+    return [{
+      id: document.id,
+      date: match[1],
+      time: match[2].replace('-', ':') as TelegramScheduledTime,
+      status: 'blocked' as const,
+      createdAt: String(data.createdAt || ''),
+      updatedAt: String(data.updatedAt || ''),
+      createdBy: String(data.createdBy || 'Admin'),
+    }];
+  }).sort((a, b) => `${a.date}-${a.time}`.localeCompare(`${b.date}-${b.time}`));
+}
+
+export async function deleteBlockedTelegramRun(runId: string): Promise<void> {
+  if (!adminDb) throw new Error('Firebase Admin Firestore is niet geïnitialiseerd.');
+  const match = /^(\d{4}-\d{2}-\d{2})-(04-50|12-30|21-00)$/.exec(runId);
+  if (!match || !isValidCalendarDate(match[1])) throw new Error('Ongeldig verzendmoment.');
+
+  const targetLocalKey = `${match[1]}-${match[2]}`;
+  if (targetLocalKey <= getBelgianLocalDateTimeKey(new Date())) {
+    throw new Error('Een blokkering kan niet meer worden verwijderd zodra het verzendmoment bereikt is.');
+  }
+
+  const runRef = adminDb.collection('scheduledTelegramRuns').doc(runId);
+  await adminDb.runTransaction(async transaction => {
+    const snapshot = await transaction.get(runRef);
+    if (!snapshot.exists || snapshot.data()?.status !== 'blocked') {
+      throw new Error('Deze blokkering bestaat niet meer.');
+    }
+    if (targetLocalKey <= getBelgianLocalDateTimeKey(new Date())) {
+      throw new Error('Het verzendmoment is intussen bereikt.');
+    }
+    transaction.delete(runRef);
+  });
+}
+
 
 /**
  * Upload de actuele OC Dagplanning als downloadbare PDF.

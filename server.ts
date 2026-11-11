@@ -14,6 +14,9 @@ import {
   firebaseConfig,
   claimScheduledTelegramRun,
   updateScheduledTelegramRun,
+  addBlockedTelegramRun,
+  listBlockedTelegramRuns,
+  deleteBlockedTelegramRun,
   uploadPublicOCPlanningPdf,
 } from './server/firebaseService';
 
@@ -808,6 +811,61 @@ app.put(
   }
 );
 
+  // === TELEGRAM SCHEDULER BLOCKLIST (ADMIN ONLY) ===
+
+  app.get(
+    '/api/admin/telegram-scheduler/blocked',
+    authMiddleware,
+    requireAdminMiddleware,
+    async (_req: AuthenticatedRequest, res: Response) => {
+      try {
+        const runs = await listBlockedTelegramRuns();
+        return res.json({ success: true, runs });
+      } catch (error) {
+        console.error('[Telegram Scheduler] Blokkeringen laden mislukt:', error);
+        return res.status(500).json({ error: 'Blokkeringen konden niet worden geladen.' });
+      }
+    }
+  );
+
+  app.post(
+    '/api/admin/telegram-scheduler/blocked',
+    authMiddleware,
+    requireAdminMiddleware,
+    async (req: AuthenticatedRequest, res: Response) => {
+      try {
+        const date = typeof req.body?.date === 'string' ? req.body.date : '';
+        const time = req.body?.time;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+            !['04:50', '12:30', '21:00'].includes(time)) {
+          return res.status(400).json({ error: 'Kies een geldige datum en een geldig verzendmoment.' });
+        }
+        await addBlockedTelegramRun(date, time, req.user!.name);
+        const runs = await listBlockedTelegramRuns();
+        return res.json({ success: true, message: `${date} om ${time} is geblokkeerd.`, runs });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Blokkering toevoegen mislukt.';
+        return res.status(400).json({ error: message });
+      }
+    }
+  );
+
+  app.delete(
+    '/api/admin/telegram-scheduler/blocked/:runId',
+    authMiddleware,
+    requireAdminMiddleware,
+    async (req: AuthenticatedRequest, res: Response) => {
+      try {
+        await deleteBlockedTelegramRun(String(req.params.runId || ''));
+        const runs = await listBlockedTelegramRuns();
+        return res.json({ success: true, message: 'Blokkering verwijderd.', runs });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Blokkering verwijderen mislukt.';
+        return res.status(400).json({ error: message });
+      }
+    }
+  );
+
   // === OC PLANNING API ===
 
   // === GOOGLE CLOUD SCHEDULER AUTHENTICATION ===
@@ -1339,15 +1397,31 @@ function startOCPlanningScheduledUpdates(): void {
     const { dateKey, timeKey } = getBelgianDateTimeParts(new Date());
     if (!OC_PLANNING_DAILY_UPDATE_TIMES.has(timeKey)) return;
 
-    const runKey = `${dateKey}-${timeKey}`;
+    // Exact dezelfde Firestore-document-ID als de Cloud Scheduler-route.
+    const runKey = `${dateKey}-${timeKey.replace(':', '-')}`;
     if (lastOCPlanningScheduledRunKey === runKey || scheduledOCPlanningSendInProgress) return;
 
-    // Zet de sleutel pas vast na een geslaagde verzending. Bij een fout wordt
-    // opnieuw geprobeerd zolang de server nog in dezelfde minuut zit.
     scheduledOCPlanningSendInProgress = true;
     try {
-      await sendCurrentOCPlanningToTelegram();
-      lastOCPlanningScheduledRunKey = runKey;
+      const claimed = await claimScheduledTelegramRun(runKey);
+      if (!claimed) {
+        lastOCPlanningScheduledRunKey = runKey;
+        console.log(`[Scheduler] Verzending overgeslagen: ${runKey} is al verwerkt of geblokkeerd.`);
+        return;
+      }
+
+      try {
+        await sendCurrentOCPlanningToTelegram();
+        await updateScheduledTelegramRun(runKey, 'sent');
+        lastOCPlanningScheduledRunKey = runKey;
+      } catch (sendError) {
+        await updateScheduledTelegramRun(
+          runKey,
+          'failed',
+          sendError instanceof Error ? sendError.message : 'Onbekende fout'
+        );
+        throw sendError;
+      }
     } catch (error) {
       console.error(`Automatische OC Planning-update mislukt voor ${runKey}:`, error);
     } finally {

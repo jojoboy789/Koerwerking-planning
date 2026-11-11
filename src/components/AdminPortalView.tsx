@@ -4,6 +4,7 @@ import { User, AdminStats } from '../types';
 import { api } from '../services/api';
 import type { MaintenanceStatus, SpecialDay } from '../services/api';
 import { AdminPlanningModal } from './AdminPlanningModal';
+import { TelegramSchedulerControl } from './TelegramSchedulerControl';
 import {
   Users, UserPlus, Key, Edit3, Trash2, Calendar, Check, X, Shield,
   ShieldCheck, AlertCircle, CheckCircle2, Loader2, Sparkles, RefreshCw,
@@ -725,6 +726,9 @@ export const AdminPortalView: React.FC = () => {
           </div>
         </button>
       </div>
+
+      {/* Beheer van automatische Telegram-verzendmomenten */}
+      <TelegramSchedulerControl />
 
       {showDeploymentPriorities && (
         <section className="rounded-3xl border border-cyan-200 bg-white p-5 md:p-6 shadow-xl space-y-4 font-sans">

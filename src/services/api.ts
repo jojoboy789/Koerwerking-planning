@@ -10,6 +10,23 @@ export interface MaintenanceStatus {
   updatedBy: string | null;
 }
 
+export type TelegramScheduledTime = '04:50' | '12:30' | '21:00';
+
+export interface TelegramBlockedRun {
+  id: string;
+  date: string;
+  time: TelegramScheduledTime;
+  status: 'blocked';
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
+export interface TelegramBlockedRunsResponse {
+  success: boolean;
+  runs: TelegramBlockedRun[];
+}
+
 class ApiClient {
   private memoryToken: string | null = null;
 
@@ -308,6 +325,25 @@ async saveUserPlanningAsAdmin(
       }
     );
   }
+  // Telegram Scheduler Control: blokkeringen per datum en verzendmoment.
+  async getTelegramBlockedRuns() {
+    return this.request<TelegramBlockedRunsResponse>('/admin/telegram-scheduler/blocked');
+  }
+
+  async addTelegramBlockedRun(date: string, time: TelegramScheduledTime) {
+    return this.request<TelegramBlockedRunsResponse & { message: string }>(
+      '/admin/telegram-scheduler/blocked',
+      { method: 'POST', body: JSON.stringify({ date, time }) }
+    );
+  }
+
+  async deleteTelegramBlockedRun(runId: string) {
+    return this.request<TelegramBlockedRunsResponse & { message: string }>(
+      `/admin/telegram-scheduler/blocked/${encodeURIComponent(runId)}`,
+      { method: 'DELETE' }
+    );
+  }
+
   // Speciale kalenderdagen (vervangende feestdagen en stakingen)
   async getSpecialDays() {
     return this.request<{ specialDays: SpecialDay[] }>('/special-days');
