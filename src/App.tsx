@@ -142,11 +142,47 @@ const UpdateWelcomePopup: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
+// Alleen deze drie schermen krijgen een eigen, deelbare URL.
+const TAB_PATHS: Record<string, string> = {
+  final_planning: '/FL-planning',
+  oc_planning: '/OC-planning',
+  koerdienst: '/koerdienst',
+};
+
+const getTabFromPath = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  const path = window.location.pathname.replace(/\/+$/, '').toLowerCase();
+  const match = Object.entries(TAB_PATHS).find(([, route]) => route.toLowerCase() === path);
+  return match?.[0] ?? null;
+};
+
+const isDirectLinkTab = (tab: string): boolean => Boolean(TAB_PATHS[tab]);
+
 const MainLayout: React.FC = () => {
   const { user, isLoading, canViewOverview, canEditPlanning, isAdmin, canPlannerMode } = useAuth();
-  const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  const [currentTab, setCurrentTab] = useState<string>(() => getTabFromPath() ?? 'dashboard');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showUpdatePopup, setShowUpdatePopup] = useState(false);
+
+  const getDefaultTab = () => (!canEditPlanning && !isAdmin && canViewOverview ? 'overview' : 'dashboard');
+
+  // Houd de React-pagina en de adresbalk synchroon. Andere schermen blijven op de root-URL.
+  const navigateToTab = (tab: string) => {
+    setCurrentTab(tab);
+    const nextPath = TAB_PATHS[tab] ?? '/';
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({ tab }, '', nextPath);
+    }
+  };
+
+  // Ondersteunt rechtstreeks openen, vernieuwen en de terug/vooruit-knoppen van de browser.
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentTab(getTabFromPath() ?? getDefaultTab());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [canEditPlanning, canViewOverview, isAdmin]);
 
   // Show the welcome update only for signed-in users who haven't acknowledged this version.
   useEffect(() => {
@@ -176,10 +212,15 @@ const MainLayout: React.FC = () => {
   // - For all other Teamleden & Admins -> always first 'dashboard'
   React.useEffect(() => {
     if (user) {
-      if (!canEditPlanning && !isAdmin && canViewOverview) {
-        setCurrentTab('overview');
+      // Een rechtstreekse URL naar een van de drie deeplinks niet overschrijven na login.
+      if (isDirectLinkTab(getTabFromPath() ?? '')) {
+        setCurrentTab(getTabFromPath()!);
       } else {
-        setCurrentTab('dashboard');
+        const defaultTab = getDefaultTab();
+        setCurrentTab(defaultTab);
+        if (window.location.pathname !== '/') {
+          window.history.replaceState({ tab: defaultTab }, '', '/');
+        }
       }
     }
   }, [user?.id, canEditPlanning, canViewOverview, isAdmin]);
@@ -269,15 +310,15 @@ const MainLayout: React.FC = () => {
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
       <Navigation
         currentTab={effectiveTab}
-        onSelectTab={setCurrentTab}
+        onSelectTab={navigateToTab}
       />
 
       <main className="flex-1 overflow-x-hidden">
-        {effectiveTab === 'dashboard' && <DashboardView onNavigate={setCurrentTab} />}
+        {effectiveTab === 'dashboard' && <DashboardView onNavigate={navigateToTab} />}
         {effectiveTab === 'planning' && <MyPlanningView />}
         {effectiveTab === 'team_planning' && <TeamPlanningView />}
         {effectiveTab === 'final_planning' && <FinalPlanningView />}
-        {effectiveTab === 'overview' && canViewOverview && <TeamOverviewView onNavigateToTeamPlanning={() => setCurrentTab('team_planning')} />}
+        {effectiveTab === 'overview' && canViewOverview && <TeamOverviewView onNavigateToTeamPlanning={() => navigateToTab('team_planning')} />}
         {effectiveTab === 'admin' && isAdmin && <AdminPortalView />}
         {effectiveTab === 'chat' && (canPlannerMode || isAdmin) && <GeneralChatView />}
         {effectiveTab === 'oc_planning' && <OCPlanningView />}
