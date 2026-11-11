@@ -50,22 +50,51 @@ var db = null;
 var adminDb = null;
 var adminBucket = null;
 var isConnected = false;
+function getAdminCredential() {
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (serviceAccountJson) {
+    try {
+      const serviceAccount = JSON.parse(serviceAccountJson);
+      if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount.client_email) {
+        throw new Error("Serviceaccount mist verplichte gegevens.");
+      }
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+      console.log("\u{1F510} Firebase gebruikt serviceaccount uit omgevingsvariabele.");
+      return (0, import_app2.cert)(serviceAccount);
+    } catch (error) {
+      console.error("\u274C Ongeldige FIREBASE_SERVICE_ACCOUNT_JSON:", error);
+      throw error;
+    }
+  }
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.log("\u{1F510} Firebase gebruikt GOOGLE_APPLICATION_CREDENTIALS.");
+  } else {
+    console.log("\u{1F510} Firebase probeert Google Application Default Credentials.");
+  }
+  return (0, import_app2.applicationDefault)();
+}
 function initFirebase() {
   try {
     if (!app) {
       app = (0, import_app.getApps)().length ? (0, import_app.getApps)()[0] : (0, import_app.initializeApp)(firebaseConfig);
       db = (0, import_firestore.getFirestore)(app);
       isConnected = true;
-      console.log("\u{1F525} Firebase initialized successfully for project:", firebaseConfig.projectId);
+      console.log(
+        "\u{1F525} Firebase initialized successfully for project:",
+        firebaseConfig.projectId
+      );
     }
     if (!adminDb) {
       const adminApp = (0, import_app2.getApps)().length ? (0, import_app2.getApps)()[0] : (0, import_app2.initializeApp)({
-        credential: (0, import_app2.applicationDefault)(),
+        credential: getAdminCredential(),
         projectId: firebaseConfig.projectId
       });
       adminDb = (0, import_firestore2.getFirestore)(adminApp);
-      adminBucket = (0, import_storage.getStorage)(adminApp).bucket(firebaseConfig.storageBucket);
+      adminBucket = (0, import_storage.getStorage)(adminApp).bucket(
+        firebaseConfig.storageBucket
+      );
       console.log("\u{1F525} Firebase Admin SDK initialized.");
+      console.log("\u{1F525} Firebase Storage bucket initialized.");
     }
   } catch (err) {
     console.error("\u26A0\uFE0F Firebase initialization error:", err);
@@ -90,11 +119,15 @@ async function saveRemoteDatabase(data) {
   if (!db) return false;
   try {
     const docRef = (0, import_firestore.doc)(db, "system", "database");
-    await (0, import_firestore.setDoc)(docRef, {
-      ...data,
-      lastSyncAt: (/* @__PURE__ */ new Date()).toISOString(),
-      projectId: firebaseConfig.projectId
-    }, { merge: true });
+    await (0, import_firestore.setDoc)(
+      docRef,
+      {
+        ...data,
+        lastSyncAt: (/* @__PURE__ */ new Date()).toISOString(),
+        projectId: firebaseConfig.projectId
+      },
+      { merge: true }
+    );
     return true;
   } catch (err) {
     console.warn("Could not write to Firebase Firestore:", err);
@@ -110,7 +143,7 @@ async function claimScheduledTelegramRun(runId) {
     const existing = await transaction.get(runRef);
     if (existing.exists) {
       const data = existing.data();
-      if (data?.status === "sent") {
+      if (data?.status === "sent" || data?.status === "sent") {
         return false;
       }
       if (data?.status === "claimed") {
@@ -138,11 +171,100 @@ async function updateScheduledTelegramRun(runId, status, error) {
   if (!adminDb) {
     throw new Error("Firebase Admin Firestore is niet ge\xEFnitialiseerd.");
   }
-  await adminDb.collection("scheduledTelegramRuns").doc(runId).set({
-    status,
-    updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    ...error ? { error } : {}
-  }, { merge: true });
+  await adminDb.collection("scheduledTelegramRuns").doc(runId).set(
+    {
+      status,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      ...error ? { error } : {}
+    },
+    { merge: true }
+  );
+}
+var TELEGRAM_SCHEDULED_TIMES = /* @__PURE__ */ new Set(["04:50", "12:30", "21:00"]);
+function getTelegramRunId(date, time) {
+  return `${date}-${time.replace(":", "-")}`;
+}
+function isValidCalendarDate(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const [year, month, day] = date.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+}
+function getBelgianLocalDateTimeKey(date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Brussels",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}-${values.hour}-${values.minute}`;
+}
+async function addBlockedTelegramRun(date, time, createdBy) {
+  if (!adminDb) throw new Error("Firebase Admin Firestore is niet ge\xEFnitialiseerd.");
+  if (!isValidCalendarDate(date) || !TELEGRAM_SCHEDULED_TIMES.has(time)) {
+    throw new Error("Kies een geldige datum en een geldig verzendmoment.");
+  }
+  const targetLocalKey = `${date}-${time.replace(":", "-")}`;
+  if (targetLocalKey <= getBelgianLocalDateTimeKey(/* @__PURE__ */ new Date())) {
+    throw new Error("Dit verzendmoment is al voorbij. Kies een toekomstig moment.");
+  }
+  const runRef = adminDb.collection("scheduledTelegramRuns").doc(getTelegramRunId(date, time));
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  await adminDb.runTransaction(async (transaction) => {
+    const existing = await transaction.get(runRef);
+    const status = existing.data()?.status;
+    if (status === "sent") throw new Error("Dit verzendmoment is al verstuurd en kan niet meer worden geblokkeerd.");
+    if (status === "claimed") throw new Error("De verzending is al gestart. Blokkeren is niet meer mogelijk.");
+    if (status === "sent") throw new Error("Dit verzendmoment is al geblokkeerd.");
+    transaction.set(runRef, {
+      status: "sent",
+      createdAt: now,
+      updatedAt: now,
+      createdBy: createdBy.slice(0, 120)
+    });
+  });
+}
+async function listBlockedTelegramRuns() {
+  if (!adminDb) throw new Error("Firebase Admin Firestore is niet ge\xEFnitialiseerd.");
+  const snapshot = await adminDb.collection("scheduledTelegramRuns").where("createdBy", "==", "BOT").get();
+  return snapshot.docs.flatMap((document) => {
+    const match = /^(\d{4}-\d{2}-\d{2})-(04-50|12-30|21-00)$/.exec(document.id);
+    if (!match) return [];
+    const data = document.data();
+    return [{
+      id: document.id,
+      date: match[1],
+      time: match[2].replace("-", ":"),
+      status: "sent",
+      createdAt: String(data.createdAt || ""),
+      updatedAt: String(data.updatedAt || ""),
+      createdBy: String(data.createdBy || "Admin")
+    }];
+  }).sort((a, b) => `${a.date}-${a.time}`.localeCompare(`${b.date}-${b.time}`));
+}
+async function deleteBlockedTelegramRun(runId) {
+  if (!adminDb) throw new Error("Firebase Admin Firestore is niet ge\xEFnitialiseerd.");
+  const match = /^(\d{4}-\d{2}-\d{2})-(04-50|12-30|21-00)$/.exec(runId);
+  if (!match || !isValidCalendarDate(match[1])) throw new Error("Ongeldig verzendmoment.");
+  const targetLocalKey = `${match[1]}-${match[2]}`;
+  if (targetLocalKey <= getBelgianLocalDateTimeKey(/* @__PURE__ */ new Date())) {
+    throw new Error("Een blokkering kan niet meer worden verwijderd zodra het verzendmoment bereikt is.");
+  }
+  const runRef = adminDb.collection("scheduledTelegramRuns").doc(runId);
+  await adminDb.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(runRef);
+    if (!snapshot.exists || snapshot.data()?.status !== "sent") {
+      throw new Error("Deze blokkering bestaat niet meer.");
+    }
+    if (targetLocalKey <= getBelgianLocalDateTimeKey(/* @__PURE__ */ new Date())) {
+      throw new Error("Het verzendmoment is intussen bereikt.");
+    }
+    transaction.delete(runRef);
+  });
 }
 async function uploadPublicOCPlanningPdf(pdf) {
   if (!adminBucket) {
@@ -237,6 +359,7 @@ function loadDatabase() {
     }
     return {
       ...data,
+      koerDienstRecords: Array.isArray(data.koerDienstRecords) ? data.koerDienstRecords : [],
       specialDays: Array.isArray(data.specialDays) ? data.specialDays : [],
       maintenance: data.maintenance || {
         enabled: false,
@@ -430,6 +553,7 @@ function seedInitialDatabase() {
     });
   });
   return {
+    koerDienstRecords: [],
     users: initialUsers,
     specialDays: [],
     plannings: samplePlannings,
@@ -543,6 +667,7 @@ async function startServer() {
     if (remoteData && remoteData.users && remoteData.users.length > 0) {
       console.log("\u{1F525} Loaded database state from Cloud Firestore successfully.");
       db2 = {
+        koerDienstRecords: Array.isArray(remoteData.koerDienstRecords) ? remoteData.koerDienstRecords : db2.koerDienstRecords || [],
         users: remoteData.users,
         specialDays: Array.isArray(remoteData.specialDays) ? remoteData.specialDays : db2.specialDays || [],
         plannings: remoteData.plannings || [],
@@ -754,6 +879,55 @@ async function startServer() {
       });
     }
   );
+  app2.get(
+    "/api/admin/telegram-scheduler/blocked",
+    authMiddleware,
+    requireAdminMiddleware,
+    async (_req, res) => {
+      try {
+        const runs = await listBlockedTelegramRuns();
+        return res.json({ success: true, runs });
+      } catch (error) {
+        console.error("[Telegram Scheduler] Blokkeringen laden mislukt:", error);
+        return res.status(500).json({ error: "Blokkeringen konden niet worden geladen." });
+      }
+    }
+  );
+  app2.post(
+    "/api/admin/telegram-scheduler/blocked",
+    authMiddleware,
+    requireAdminMiddleware,
+    async (req, res) => {
+      try {
+        const date = typeof req.body?.date === "string" ? req.body.date : "";
+        const time = req.body?.time;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !["04:50", "12:30", "21:00"].includes(time)) {
+          return res.status(400).json({ error: "Kies een geldige datum en een geldig verzendmoment." });
+        }
+        await addBlockedTelegramRun(date, time, req.user.name);
+        const runs = await listBlockedTelegramRuns();
+        return res.json({ success: true, message: `${date} om ${time} is geblokkeerd.`, runs });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Blokkering toevoegen mislukt.";
+        return res.status(400).json({ error: message });
+      }
+    }
+  );
+  app2.delete(
+    "/api/admin/telegram-scheduler/blocked/:runId",
+    authMiddleware,
+    requireAdminMiddleware,
+    async (req, res) => {
+      try {
+        await deleteBlockedTelegramRun(String(req.params.runId || ""));
+        const runs = await listBlockedTelegramRuns();
+        return res.json({ success: true, message: "Blokkering verwijderd.", runs });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Blokkering verwijderen mislukt.";
+        return res.status(400).json({ error: message });
+      }
+    }
+  );
   const schedulerAuthClient = new import_google_auth_library.OAuth2Client();
   async function verifySchedulerRequest(req) {
     const authHeader = req.headers.authorization;
@@ -895,30 +1069,42 @@ async function startServer() {
     const arrayBuffer = pdf.output("arraybuffer");
     return uploadPublicOCPlanningPdf(Buffer.from(arrayBuffer));
   }
+  function extractTransportDoorKoerText(html) {
+    const paragraphs = html.match(/<p\b[^>]*>[\s\S]*?<\/p>/gi) || [];
+    const matchingParagraphs = paragraphs.filter((paragraph) => /Transport\s+door\s+Koer\s*:/i.test(htmlToTelegramText(paragraph))).map((paragraph) => {
+      const text = htmlToTelegramText(paragraph);
+      return text.replace(/^.*?Transport\s+door\s+Koer\s*:\s*/i, "").trim();
+    }).filter(Boolean);
+    return matchingParagraphs.join("\n");
+  }
   async function sendOCPlanningUpdateToTelegram(slides) {
-    const changedSlides = slides.filter((slide) => slide.dated);
-    if (changedSlides.length === 0) {
-      console.log("OC Planning gewijzigd, maar er zijn geen dagplanningsslides.");
+    const transportSections = slides.map((slide) => extractTransportDoorKoerText(slide.html)).filter(Boolean);
+    if (transportSections.length === 0) {
+      console.log("OC Planning gewijzigd; geen inhoudelijke wijziging gevonden bij Transport door Koer. Geen Telegram-bericht verstuurd.");
       return;
     }
     const heading = "\u{1F68C} <b>OC BUS GBR \xB7 DAGPLANNING GEWIJZIGD</b>\n\n";
-    let message = heading;
-    for (const slide of changedSlides) {
-      const content = htmlToTelegramText(slide.html);
-      const section = `<b>${escapeTelegramHtml(slide.title)}</b>
-${escapeTelegramHtml(content || "Geen tekstuele inhoud beschikbaar.")}
-
-`;
-      if ((message + section).length > 3500) {
-        const sent = await sendTelegramNotification(message.trim());
-        if (!sent) throw new Error("Telegram kon de wijzigingsmelding niet versturen.");
-        message = heading;
-      }
-      message += section;
-    }
-    if (message.trim() !== heading.trim()) {
-      const sent = await sendTelegramNotification(message.trim());
+    const content = transportSections.map((section) => escapeTelegramHtml(section)).join("\n\n");
+    const message = `${heading}<b>Transport door Koer:</b>
+${content}`;
+    const maxLength = 3500;
+    if (message.length <= maxLength) {
+      const sent = await sendTelegramNotification(message);
       if (!sent) throw new Error("Telegram kon de wijzigingsmelding niet versturen.");
+      return;
+    }
+    let remaining = content;
+    let firstMessage = true;
+    while (remaining.length > 0) {
+      const currentHeading = firstMessage ? heading + "<b>Transport door Koer:</b>\n" : heading + "<b>Transport door Koer (vervolg):</b>\n";
+      const available = maxLength - currentHeading.length;
+      let splitAt = remaining.lastIndexOf("\n", available);
+      if (splitAt < Math.floor(available * 0.5)) splitAt = available;
+      const chunk = remaining.slice(0, splitAt).trim();
+      const sent = await sendTelegramNotification(currentHeading + chunk);
+      if (!sent) throw new Error("Telegram kon de wijzigingsmelding niet versturen.");
+      remaining = remaining.slice(splitAt).trim();
+      firstMessage = false;
     }
   }
   const OC_PLANNING_DAILY_UPDATE_TIMES = /* @__PURE__ */ new Set(["04:50", "12:30", "21:00"]);
@@ -1099,12 +1285,28 @@ ${escapeTelegramHtml(content)}
     const checkSchedule = async () => {
       const { dateKey, timeKey } = getBelgianDateTimeParts(/* @__PURE__ */ new Date());
       if (!OC_PLANNING_DAILY_UPDATE_TIMES.has(timeKey)) return;
-      const runKey = `${dateKey}-${timeKey}`;
+      const runKey = `${dateKey}-${timeKey.replace(":", "-")}`;
       if (lastOCPlanningScheduledRunKey === runKey || scheduledOCPlanningSendInProgress) return;
       scheduledOCPlanningSendInProgress = true;
       try {
-        await sendCurrentOCPlanningToTelegram();
-        lastOCPlanningScheduledRunKey = runKey;
+        const claimed = await claimScheduledTelegramRun(runKey);
+        if (!claimed) {
+          lastOCPlanningScheduledRunKey = runKey;
+          console.log(`[Scheduler] Verzending overgeslagen: ${runKey} is al verwerkt of geblokkeerd.`);
+          return;
+        }
+        try {
+          await sendCurrentOCPlanningToTelegram();
+          await updateScheduledTelegramRun(runKey, "sent");
+          lastOCPlanningScheduledRunKey = runKey;
+        } catch (sendError) {
+          await updateScheduledTelegramRun(
+            runKey,
+            "failed",
+            sendError instanceof Error ? sendError.message : "Onbekende fout"
+          );
+          throw sendError;
+        }
       } catch (error) {
         console.error(`Automatische OC Planning-update mislukt voor ${runKey}:`, error);
       } finally {
@@ -1161,6 +1363,51 @@ ${escapeTelegramHtml(content)}
       void check();
     }, 6e4);
   }
+  app2.get(
+    "/api/koerdienst/:date",
+    authMiddleware,
+    (req, res) => {
+      const date = String(req.params.date || "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: "Ongeldige datum." });
+      }
+      const record = (db2.koerDienstRecords || []).find((item) => item.date === date);
+      return res.json({
+        record: record || { date, wasbussen: "", extra: [], updatedAt: null, updatedBy: null }
+      });
+    }
+  );
+  app2.put(
+    "/api/koerdienst/:date",
+    authMiddleware,
+    (req, res) => {
+      const date = String(req.params.date || "");
+      const { wasbussen, extra } = req.body || {};
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: "Ongeldige datum." });
+      }
+      if (typeof wasbussen !== "string" || wasbussen.length > 5e3 || !Array.isArray(extra) || extra.length > 100) {
+        return res.status(400).json({ error: "Ongeldige fichegegevens." });
+      }
+      const safeExtra = extra.filter((item) => item && typeof item.text === "string").map((item, index) => ({
+        id: typeof item.id === "string" ? item.id.slice(0, 80) : `extra-${index}`,
+        text: item.text.slice(0, 500)
+      }));
+      db2.koerDienstRecords = db2.koerDienstRecords || [];
+      const record = {
+        date,
+        wasbussen: wasbussen.slice(0, 5e3),
+        extra: safeExtra,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        updatedBy: req.user?.name || "Gebruiker"
+      };
+      const existingIndex = db2.koerDienstRecords.findIndex((item) => item.date === date);
+      if (existingIndex >= 0) db2.koerDienstRecords[existingIndex] = record;
+      else db2.koerDienstRecords.push(record);
+      saveDatabase(db2);
+      return res.json({ success: true, record });
+    }
+  );
   app2.get(
     "/api/oc-planning",
     authMiddleware,

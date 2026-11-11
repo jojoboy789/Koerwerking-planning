@@ -1,0 +1,868 @@
+/* JARVIS ULTIMATE COMMAND CENTER */
+.jarvis-shell {
+  --j-bg: #050b14;
+  --j-panel: rgba(10, 23, 38, .88);
+  --j-line: rgba(61, 203, 239, .22);
+  --j-cyan: #55e5ff;
+  --j-muted: #8ca7b8;
+  position: relative;
+  isolation: isolate;
+  max-width: 1800px !important;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: clamp(12px, 2vw, 30px) !important;
+  color: #d8edf7 !important;
+  background:
+    radial-gradient(ellipse at 50% -18%, rgba(0, 171, 220, .16), transparent 48%),
+    radial-gradient(ellipse at 100% 55%, rgba(0, 92, 150, .11), transparent 38%),
+    linear-gradient(145deg, #050b14 0%, #081321 52%, #050a12 100%) !important;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif !important;
+}
+.jarvis-shell::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .16;
+  background-image: linear-gradient(rgba(64,190,225,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(64,190,225,.12) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, black, transparent 82%);
+}
+.jarvis-shell .bg-white, .jarvis-shell .bg-white\/90, .jarvis-shell .bg-slate-50,
+.jarvis-shell .bg-slate-50\/60 {
+  background: var(--j-panel) !important;
+  color: #d8edf7 !important;
+}
+.jarvis-shell .border-slate-200, .jarvis-shell .border-cyan-200 {
+  border-color: var(--j-line) !important;
+}
+.jarvis-shell .text-slate-900, .jarvis-shell .text-slate-800, .jarvis-shell .text-slate-700 { color: #e2f5fc !important; }
+.jarvis-shell .text-slate-600, .jarvis-shell .text-slate-500 { color: var(--j-muted) !important; }
+.jarvis-shell input, .jarvis-shell select, .jarvis-shell textarea {
+  background-color: rgba(3, 12, 22, .88) !important;
+  color: #e4f7ff !important;
+  border-color: rgba(75, 193, 226, .25) !important;
+}
+.jarvis-shell table thead { background: rgba(18, 43, 62, .95) !important; }
+.jarvis-shell tbody tr:hover { background: rgba(22, 105, 135, .12) !important; }
+.jarvis-shell .shadow-xl, .jarvis-shell .shadow-2xl {
+  box-shadow: 0 18px 55px rgba(0,0,0,.28), inset 0 1px 0 rgba(140,230,255,.035) !important;
+}
+.jarvis-shell button { transition: transform .2s ease, border-color .2s ease, filter .2s ease; }
+.jarvis-shell button:not(:disabled):active { transform: translateY(1px) scale(.99); }
+.jarvis-shell button:focus-visible, .jarvis-shell input:focus-visible, .jarvis-shell select:focus-visible {
+  outline: 2px solid var(--j-cyan); outline-offset: 3px;
+}
+.jarvis-hero {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(210px, .65fr);
+  align-items: center; gap: 18px; min-height: 285px; overflow: hidden;
+  padding: clamp(22px, 3vw, 38px); margin-bottom: 22px;
+  border: 1px solid rgba(77, 214, 245, .32); border-radius: 28px;
+  background: linear-gradient(112deg, rgba(8,24,40,.98), rgba(8,31,49,.92) 58%, rgba(12,22,37,.96));
+  box-shadow: 0 22px 65px rgba(0,0,0,.34), inset 0 0 45px rgba(0,173,220,.055);
+}
+.jarvis-hero-grid { position:absolute; inset:0; opacity:.2; pointer-events:none; background:linear-gradient(90deg,transparent 49.8%,rgba(81,206,238,.22) 50%,transparent 50.2%),linear-gradient(transparent 49.8%,rgba(81,206,238,.16) 50%,transparent 50.2%); background-size:54px 54px; mask-image:linear-gradient(90deg,black,transparent); }
+.jarvis-hero-scanline { position:absolute; inset:0 auto 0 -30%; width:30%; pointer-events:none; background:linear-gradient(90deg,transparent,rgba(66,214,255,.07),transparent); animation:jarvis-scan 8s linear infinite; }
+@keyframes jarvis-scan { to { transform:translateX(470%); } }
+.jarvis-hero-copy { position:relative; z-index:2; }
+.jarvis-eyebrow { display:flex; align-items:center; gap:9px; color:#73dff4; font:700 10px/1.2 ui-monospace,monospace; letter-spacing:.2em; }
+.jarvis-live-dot { width:7px; height:7px; border-radius:50%; background:#4fffc2; box-shadow:0 0 13px #4fffc2; animation:jarvis-pulse 1.7s infinite; }
+@keyframes jarvis-pulse { 50% { opacity:.35; box-shadow:0 0 3px #4fffc2; } }
+.jarvis-hero h1 { margin:17px 0 8px; color:#f0fbff; font-size:clamp(30px,4vw,52px); line-height:.98; font-weight:900; letter-spacing:-.055em; }
+.jarvis-hero h1 span { color:#5bdcf6; text-shadow:0 0 24px rgba(55,208,245,.35); }
+.jarvis-welcome { color:#9bb8c8; font-size:13px; max-width:600px; }
+.jarvis-status-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:22px; }
+.jarvis-status-chip { display:inline-flex; align-items:center; gap:7px; padding:8px 10px; border:1px solid rgba(91,199,228,.22); border-radius:999px; background:rgba(5,17,29,.72); color:#a9c6d4; font:700 9px ui-monospace,monospace; letter-spacing:.08em; }
+.jarvis-status-chip.is-good { color:#75f3c2; border-color:rgba(70,230,171,.28); }
+.jarvis-status-chip.is-warning { color:#ffc56f; border-color:rgba(255,179,75,.32); }
+.jarvis-reactor-wrap { position:relative; width:min(100%,260px); aspect-ratio:1; justify-self:center; }
+.jarvis-reactor-wrap canvas { position:absolute!important; inset:0; }
+.jarvis-reactor-halo { position:absolute; inset:15%; border-radius:50%; background:#08bfe8; filter:blur(48px); opacity:.16; animation:jarvis-halo 4s ease-in-out infinite; }
+@keyframes jarvis-halo { 50% { opacity:.3; transform:scale(1.14); } }
+.jarvis-reactor-caption { position:absolute; bottom:2px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:5px; white-space:nowrap; color:#8eeeff; font:700 8px ui-monospace,monospace; letter-spacing:.14em; }
+.jarvis-metrics { grid-column:1/-1; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; position:relative; z-index:2; }
+.jarvis-metric { display:grid; grid-template-columns:auto 1fr; column-gap:9px; align-items:center; padding:11px 13px; border:1px solid rgba(82,193,225,.17); border-radius:15px; background:rgba(3,14,25,.62); }
+.jarvis-metric-icon { grid-row:span 2; display:grid; place-items:center; width:32px; height:32px; border-radius:10px; background:rgba(45,202,239,.1); color:#66e4ff; }
+.jarvis-metric-icon.green { color:#6cf0b6; background:rgba(65,225,160,.09); }
+.jarvis-metric-icon.gold { color:#ffc56d; background:rgba(255,180,65,.1); }
+.jarvis-metric-label { color:#7798aa; font:700 8px ui-monospace,monospace; letter-spacing:.1em; }
+.jarvis-metric strong { color:#e8faff; font:800 20px ui-monospace,monospace; }
+.jarvis-shell > .bg-white, .jarvis-shell > section, .jarvis-shell > .space-y-3 { position:relative; }
+@media (max-width:760px) {
+  .jarvis-hero { grid-template-columns:1fr; padding:22px 18px 18px; gap:4px; }
+  .jarvis-reactor-wrap { width:190px; margin:0 auto -5px; }
+  .jarvis-metrics { gap:6px; }
+  .jarvis-metric { padding:9px 7px; column-gap:6px; }
+  .jarvis-metric-icon { width:27px; height:27px; }
+  .jarvis-metric-label { font-size:7px; letter-spacing:.04em; }
+  .jarvis-metric strong { font-size:17px; }
+  .jarvis-status-chip { font-size:8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-shell *, .jarvis-shell *::before, .jarvis-shell *::after { animation-duration:.01ms!important; animation-iteration-count:1!important; scroll-behavior:auto!important; }
+}
+
+
+/* ==========================================================
+   JARVIS ULTIMATE 2.0 · PREMIUM COMMAND DECK
+   Overrides are scoped to .jarvis-shell to avoid affecting
+   the rest of the Koerwerking application.
+   ========================================================== */
+
+.jarvis-shell {
+  --j-bg: #050b14;
+  --j-panel: rgba(8, 21, 35, .88);
+  --j-panel-strong: rgba(7, 17, 29, .96);
+  --j-line: rgba(65, 202, 237, .22);
+  --j-line-bright: rgba(73, 219, 255, .42);
+  --j-cyan: #55e5ff;
+  --j-muted: #91aebe;
+  --j-text: #e5f7ff;
+  color: var(--j-text) !important;
+  background-color: transparent !important;
+}
+
+/* Main page atmosphere */
+.jarvis-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .22;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(0, 190, 255, .10), transparent 25%),
+    radial-gradient(circle at 88% 72%, rgba(0, 105, 190, .10), transparent 28%);
+}
+
+/* Convert the remaining white gradient admin banner to a HUD panel. */
+.jarvis-shell .bg-gradient-to-r {
+  background:
+    linear-gradient(112deg, rgba(8, 24, 40, .98), rgba(8, 31, 49, .94) 58%, rgba(10, 24, 40, .98)) !important;
+  border-color: rgba(77, 214, 245, .28) !important;
+  color: var(--j-text) !important;
+}
+.jarvis-shell .bg-gradient-to-br {
+  background: linear-gradient(135deg, rgba(20, 34, 45, .96), rgba(7, 19, 31, .96)) !important;
+}
+
+/* Panel surfaces */
+.jarvis-shell .bg-white,
+.jarvis-shell .bg-white\/90,
+.jarvis-shell .bg-slate-50,
+.jarvis-shell .bg-slate-50\/60,
+.jarvis-shell .bg-slate-100 {
+  background-color: rgba(8, 22, 36, .90) !important;
+  color: var(--j-text) !important;
+}
+.jarvis-shell .bg-white\/80,
+.jarvis-shell .bg-slate-50\/40 {
+  background-color: rgba(8, 22, 36, .72) !important;
+}
+.jarvis-shell .border-slate-100,
+.jarvis-shell .border-slate-200,
+.jarvis-shell .border-cyan-100,
+.jarvis-shell .border-cyan-200 {
+  border-color: rgba(66, 190, 225, .20) !important;
+}
+.jarvis-shell .text-slate-950,
+.jarvis-shell .text-slate-900,
+.jarvis-shell .text-slate-800,
+.jarvis-shell .text-slate-700 {
+  color: #e4f6fd !important;
+}
+.jarvis-shell .text-slate-600,
+.jarvis-shell .text-slate-500,
+.jarvis-shell .text-slate-400 {
+  color: #91aebe !important;
+}
+
+/* Every admin card gets a subtle glass edge and depth. */
+.jarvis-shell .rounded-3xl,
+.jarvis-shell .rounded-2xl {
+  box-shadow:
+    0 16px 42px rgba(0, 0, 0, .22),
+    inset 0 1px 0 rgba(174, 237, 255, .035);
+}
+.jarvis-shell .rounded-3xl.border,
+.jarvis-shell section.rounded-3xl,
+.jarvis-shell > div > .rounded-3xl {
+  border-color: rgba(69, 193, 226, .20) !important;
+}
+.jarvis-shell .shadow-xl,
+.jarvis-shell .shadow-2xl {
+  box-shadow:
+    0 18px 55px rgba(0, 0, 0, .34),
+    0 0 0 1px rgba(78, 204, 235, .025),
+    inset 0 1px 0 rgba(140, 230, 255, .045) !important;
+}
+
+/* Inputs and select controls */
+.jarvis-shell input,
+.jarvis-shell select,
+.jarvis-shell textarea {
+  color: #e7f8ff !important;
+  background: rgba(3, 12, 22, .92) !important;
+  border-color: rgba(75, 193, 226, .27) !important;
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, .22);
+}
+.jarvis-shell input::placeholder,
+.jarvis-shell textarea::placeholder {
+  color: #6f8da0 !important;
+}
+.jarvis-shell option {
+  background: #081725;
+  color: #e7f8ff;
+}
+
+/* Tables: command-grid rather than spreadsheet-white. */
+.jarvis-shell table {
+  color: #d9edf7;
+}
+.jarvis-shell table thead,
+.jarvis-shell table thead tr {
+  background: rgba(13, 34, 51, .98) !important;
+}
+.jarvis-shell table th {
+  color: #83cfe2 !important;
+  border-color: rgba(70, 190, 225, .18) !important;
+}
+.jarvis-shell table td {
+  border-color: rgba(70, 190, 225, .12) !important;
+}
+.jarvis-shell tbody tr {
+  background: rgba(5, 16, 28, .34);
+}
+.jarvis-shell tbody tr:hover {
+  background: rgba(22, 105, 135, .16) !important;
+}
+
+/* Cyan and blue buttons become controlled energy accents. */
+.jarvis-shell button {
+  transition:
+    transform .2s ease,
+    border-color .2s ease,
+    background-color .2s ease,
+    box-shadow .2s ease,
+    filter .2s ease;
+}
+.jarvis-shell button:not(:disabled):hover {
+  filter: brightness(1.10);
+}
+.jarvis-shell button:not(:disabled):active {
+  transform: translateY(1px) scale(.99);
+}
+.jarvis-shell button:focus-visible,
+.jarvis-shell input:focus-visible,
+.jarvis-shell select:focus-visible {
+  outline: 2px solid var(--j-cyan);
+  outline-offset: 3px;
+}
+.jarvis-shell .bg-cyan-500,
+.jarvis-shell .bg-cyan-600 {
+  box-shadow: 0 0 22px rgba(0, 190, 240, .18);
+}
+
+/* Maintenance, Telegram and Firestore control cards. */
+.jarvis-shell .grid > div[class*="rounded-3xl"],
+.jarvis-shell .grid > button[class*="rounded-3xl"] {
+  position: relative;
+  overflow: hidden;
+  background-color: rgba(8, 22, 36, .91) !important;
+  border-color: rgba(66, 190, 225, .20) !important;
+}
+.jarvis-shell .grid > div[class*="rounded-3xl"]::before,
+.jarvis-shell .grid > button[class*="rounded-3xl"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(91, 226, 255, .48), transparent);
+  opacity: .8;
+}
+.jarvis-shell .grid > button[class*="rounded-3xl"]:hover {
+  border-color: rgba(73, 219, 255, .48) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .32), 0 0 24px rgba(0, 190, 240, .08) !important;
+}
+
+/* Modals */
+.jarvis-shell .fixed.inset-0 {
+  background: rgba(1, 7, 14, .82) !important;
+  backdrop-filter: blur(18px);
+}
+.jarvis-shell .fixed.inset-0 > div {
+  background: linear-gradient(145deg, rgba(10, 27, 43, .99), rgba(5, 15, 27, .99)) !important;
+  border: 1px solid rgba(73, 205, 239, .30) !important;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, .62), 0 0 35px rgba(0, 174, 220, .08) !important;
+}
+
+/* Status colors retain meaning while fitting the dark deck. */
+.jarvis-shell .text-emerald-700 { color: #6cf0bd !important; }
+.jarvis-shell .text-cyan-700 { color: #65e2ff !important; }
+.jarvis-shell .text-amber-700 { color: #ffd078 !important; }
+.jarvis-shell .text-rose-400,
+.jarvis-shell .text-rose-500 { color: #ff8d9c !important; }
+
+/* Hero reactor: extra orbital instrumentation around the 3D core. */
+.jarvis-reactor-wrap {
+  isolation: isolate;
+  filter: drop-shadow(0 0 22px rgba(20, 194, 238, .12));
+}
+.jarvis-reactor-orbit {
+  position: absolute;
+  z-index: 1;
+  inset: 17%;
+  border: 1px solid rgba(93, 220, 255, .32);
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 18px rgba(28, 192, 235, .08), inset 0 0 18px rgba(28, 192, 235, .05);
+}
+.jarvis-reactor-orbit-one {
+  transform: rotateX(68deg) rotateZ(-24deg);
+  animation: jarvis-orbit-a 16s linear infinite;
+}
+.jarvis-reactor-orbit-two {
+  inset: 9% 24%;
+  border-color: rgba(115, 239, 255, .24);
+  transform: rotateY(68deg) rotateZ(35deg);
+  animation: jarvis-orbit-b 21s linear infinite;
+}
+.jarvis-reactor-crosshair {
+  position: absolute;
+  z-index: 0;
+  inset: 3%;
+  border: 1px dashed rgba(86, 203, 234, .14);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.jarvis-reactor-crosshair::before,
+.jarvis-reactor-crosshair::after {
+  content: "";
+  position: absolute;
+  background: rgba(89, 208, 238, .18);
+}
+.jarvis-reactor-crosshair::before {
+  width: 130%;
+  height: 1px;
+  left: -15%;
+  top: 50%;
+}
+.jarvis-reactor-crosshair::after {
+  height: 130%;
+  width: 1px;
+  top: -15%;
+  left: 50%;
+}
+@keyframes jarvis-orbit-a { to { transform: rotateX(68deg) rotateZ(336deg); } }
+@keyframes jarvis-orbit-b { to { transform: rotateY(68deg) rotateZ(-325deg); } }
+
+/* Improve top-level vertical rhythm and prevent awkward desktop stretching. */
+.jarvis-shell {
+  gap: clamp(14px, 1.5vw, 22px) !important;
+}
+.jarvis-shell > .jarvis-hero {
+  margin-bottom: 2px;
+}
+.jarvis-shell .font-mono {
+  letter-spacing: .015em;
+}
+
+/* Responsive controls and tables. */
+@media (max-width: 760px) {
+  .jarvis-shell {
+    padding: 12px !important;
+    gap: 14px !important;
+  }
+  .jarvis-shell .grid.grid-cols-1.md\:grid-cols-3 {
+    gap: 10px !important;
+  }
+  .jarvis-shell .rounded-3xl {
+    border-radius: 20px !important;
+  }
+  .jarvis-shell .p-5 {
+    padding: 16px !important;
+  }
+  .jarvis-shell .p-6,
+  .jarvis-shell .md\\:p-6 {
+    padding: 17px !important;
+  }
+  .jarvis-shell .jarvis-hero h1 {
+    font-size: clamp(32px, 10vw, 44px);
+  }
+  .jarvis-shell .jarvis-status-row {
+    gap: 6px;
+  }
+  .jarvis-shell .jarvis-status-chip {
+    padding: 7px 8px;
+    font-size: 8px;
+  }
+  .jarvis-shell .jarvis-metrics {
+    grid-template-columns: 1fr;
+  }
+  .jarvis-shell .jarvis-metric {
+    grid-template-columns: auto 1fr auto;
+  }
+  .jarvis-shell .jarvis-metric strong {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+  .jarvis-shell .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  .jarvis-shell .fixed.inset-0 {
+    align-items: flex-start !important;
+    overflow-y: auto;
+    padding-top: max(16px, env(safe-area-inset-top)) !important;
+    padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-shell *,
+  .jarvis-shell *::before,
+  .jarvis-shell *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+
+
+/* ==========================================================
+   JARVIS 2.1 · COLOR BALANCE PATCH
+   Softer cyan surfaces, readable selected controls, no
+   washed-out grey/cream scheduler rows.
+   ========================================================== */
+
+/* A slightly richer cyan palette with calmer background glow. */
+.jarvis-shell {
+  --j-cyan: #62e8ff;
+  --j-muted: #9bb7c7;
+  --j-line: rgba(75, 190, 224, .24);
+}
+
+/* Scheduler selection controls: keep the selected state dark,
+   with a clear cyan border and legible foreground. */
+.jarvis-shell button.bg-white,
+.jarvis-shell button[class~="bg-white"],
+.jarvis-shell button[class*="bg-white/"],
+.jarvis-shell button[class*="bg-cyan-50"],
+.jarvis-shell button[class*="bg-sky-50"] {
+  color: #dff8ff !important;
+  background: linear-gradient(135deg, rgba(10, 58, 78, .96), rgba(8, 35, 54, .98)) !important;
+  border-color: rgba(76, 220, 255, .62) !important;
+}
+.jarvis-shell button.bg-white svg,
+.jarvis-shell button[class*="bg-white"] svg,
+.jarvis-shell button[class*="bg-cyan-50"] svg,
+.jarvis-shell button[class*="bg-sky-50"] svg {
+  color: #70eaff !important;
+}
+.jarvis-shell button.bg-white *,
+.jarvis-shell button[class*="bg-white"] *,
+.jarvis-shell button[class*="bg-cyan-50"] *,
+.jarvis-shell button[class*="bg-sky-50"] * {
+  color: inherit;
+}
+
+/* Scheduler blocked-moment rows: replace pale grey/yellow with
+   deep navy glass and a warm amber status accent. */
+.jarvis-shell [class*="bg-amber-50"],
+.jarvis-shell [class*="bg-yellow-50"],
+.jarvis-shell [class*="bg-orange-50"] {
+  background-color: rgba(49, 38, 20, .58) !important;
+  color: #ffe4ad !important;
+  border-color: rgba(244, 183, 76, .34) !important;
+}
+.jarvis-shell [class*="bg-amber-100"],
+.jarvis-shell [class*="bg-yellow-100"] {
+  background-color: rgba(75, 53, 20, .62) !important;
+  color: #ffe3a6 !important;
+}
+.jarvis-shell [class*="text-amber-"],
+.jarvis-shell [class*="text-yellow-"] {
+  color: #ffd27d !important;
+}
+
+/* Keep the scheduler's secondary copy readable on dark rows. */
+.jarvis-shell [class*="text-slate-400"],
+.jarvis-shell [class*="text-slate-500"],
+.jarvis-shell [class*="text-gray-400"],
+.jarvis-shell [class*="text-gray-500"] {
+  color: #9bb5c4 !important;
+}
+
+/* Date/time fields should match the rest of the command deck. */
+.jarvis-shell input[type="date"],
+.jarvis-shell input[type="time"],
+.jarvis-shell input[type="datetime-local"] {
+  color-scheme: dark;
+  background: rgba(5, 19, 32, .96) !important;
+  color: #e7f8ff !important;
+  border: 1px solid rgba(75, 193, 226, .30) !important;
+}
+.jarvis-shell input[type="date"]::-webkit-calendar-picker-indicator,
+.jarvis-shell input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(.82) sepia(.2) saturate(2) hue-rotate(155deg);
+  opacity: .9;
+}
+
+/* Keep positive status green, but less fluorescent. */
+.jarvis-shell [class*="bg-emerald-50"] {
+  background-color: rgba(10, 62, 53, .72) !important;
+  border-color: rgba(67, 220, 165, .28) !important;
+}
+.jarvis-shell [class*="text-emerald-700"],
+.jarvis-shell [class*="text-green-700"] {
+  color: #72edc0 !important;
+}
+
+/* Make the active choice visibly selected without a white flash. */
+.jarvis-shell button[aria-pressed="true"],
+.jarvis-shell button[aria-selected="true"] {
+  background: linear-gradient(135deg, rgba(0, 139, 180, .34), rgba(5, 55, 79, .96)) !important;
+  color: #e9fbff !important;
+  border-color: rgba(85, 225, 255, .72) !important;
+  box-shadow: inset 0 0 0 1px rgba(85, 225, 255, .12), 0 0 18px rgba(0, 185, 230, .10) !important;
+}
+
+/* More restrained card glow: premium rather than neon-heavy. */
+.jarvis-shell .rounded-3xl,
+.jarvis-shell .rounded-2xl {
+  box-shadow:
+    0 14px 38px rgba(0, 0, 0, .24),
+    inset 0 1px 0 rgba(174, 237, 255, .045);
+}
+
+
+
+/* ==========================================================
+   JARVIS 2.2 · CONTRAST & LEGIBILITY FIX
+   Targeted fixes for priority chips, icon tiles and labels.
+   ========================================================== */
+
+/* AI priority legend chips: each state gets a dark, readable
+   surface with a saturated foreground instead of pale-on-pale. */
+.jarvis-shell .bg-blue-50,
+.jarvis-shell .bg-blue-100 {
+  background: rgba(16, 52, 105, .82) !important;
+  border-color: rgba(88, 157, 255, .38) !important;
+}
+.jarvis-shell .text-blue-700,
+.jarvis-shell .text-blue-600 {
+  color: #9bc5ff !important;
+}
+.jarvis-shell .bg-emerald-50,
+.jarvis-shell .bg-green-50 {
+  background: rgba(7, 67, 54, .86) !important;
+  border-color: rgba(69, 222, 169, .34) !important;
+}
+.jarvis-shell .text-emerald-700,
+.jarvis-shell .text-green-700 {
+  color: #72f0c2 !important;
+}
+.jarvis-shell .bg-orange-50,
+.jarvis-shell .bg-orange-100 {
+  background: rgba(91, 48, 15, .86) !important;
+  border-color: rgba(255, 171, 85, .38) !important;
+}
+.jarvis-shell .text-orange-700,
+.jarvis-shell .text-orange-600 {
+  color: #ffc184 !important;
+}
+.jarvis-shell .bg-violet-50,
+.jarvis-shell .bg-purple-50 {
+  background: rgba(55, 35, 91, .78) !important;
+  border-color: rgba(177, 143, 255, .34) !important;
+}
+.jarvis-shell .text-violet-700,
+.jarvis-shell .text-purple-700 {
+  color: #c6adff !important;
+}
+
+/* The "no extra preference" neutral chip must not disappear
+   into the dark card. */
+.jarvis-shell .bg-slate-100,
+.jarvis-shell .bg-gray-100 {
+  background: rgba(45, 65, 82, .78) !important;
+  border-color: rgba(142, 176, 195, .30) !important;
+}
+.jarvis-shell .text-slate-600,
+.jarvis-shell .text-gray-600 {
+  color: #c0d3df !important;
+}
+
+/* Ensure text inside colored badges inherits the corrected
+   high-contrast foreground. */
+.jarvis-shell span[class*="bg-blue-50"],
+.jarvis-shell span[class*="bg-blue-100"] { color: #a9ceff !important; }
+.jarvis-shell span[class*="bg-emerald-50"],
+.jarvis-shell span[class*="bg-green-50"] { color: #83f2c9 !important; }
+.jarvis-shell span[class*="bg-orange-50"],
+.jarvis-shell span[class*="bg-orange-100"] { color: #ffd09b !important; }
+.jarvis-shell span[class*="bg-slate-100"],
+.jarvis-shell span[class*="bg-gray-100"] { color: #d2e2eb !important; }
+
+/* Icon tiles should be tinted, not almost white. */
+.jarvis-shell .bg-cyan-50,
+.jarvis-shell .bg-sky-50 {
+  background: rgba(5, 72, 94, .72) !important;
+  border-color: rgba(74, 218, 255, .30) !important;
+}
+.jarvis-shell .text-cyan-700,
+.jarvis-shell .text-sky-700 {
+  color: #70eaff !important;
+}
+
+/* Ensure secondary labels stay readable in all control cards. */
+.jarvis-shell .text-slate-400,
+.jarvis-shell .text-gray-400 {
+  color: #a4bdcb !important;
+}
+.jarvis-shell .text-slate-500,
+.jarvis-shell .text-gray-500 {
+  color: #9bb7c7 !important;
+}
+
+/* Preserve accessible contrast for disabled/loading buttons. */
+.jarvis-shell button:disabled {
+  opacity: .62;
+  filter: saturate(.78);
+}
+
+
+
+/* ==========================================================
+   JARVIS WELCOME · ADMIN BOOT SEQUENCE
+   ========================================================== */
+.jarvis-welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(0, 166, 218, .15), transparent 44%),
+    rgba(1, 7, 14, .86);
+  backdrop-filter: blur(18px) saturate(125%);
+  animation: jarvis-welcome-fade .35s ease both;
+}
+.jarvis-welcome-modal {
+  position: relative;
+  isolation: isolate;
+  width: min(100%, 660px);
+  overflow: hidden;
+  padding: clamp(26px, 5vw, 48px);
+  text-align: center;
+  border: 1px solid rgba(91, 220, 255, .42);
+  border-radius: 28px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(0, 185, 232, .15), transparent 48%),
+    linear-gradient(145deg, rgba(9, 28, 45, .99), rgba(3, 12, 23, .99));
+  box-shadow:
+    0 35px 110px rgba(0, 0, 0, .72),
+    0 0 70px rgba(0, 184, 230, .12),
+    inset 0 1px 0 rgba(195, 245, 255, .10);
+  animation: jarvis-welcome-rise .55s cubic-bezier(.2,.8,.2,1) both;
+}
+.jarvis-welcome-grid {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: .22;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(75, 195, 228, .12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(75, 195, 228, .12) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: radial-gradient(ellipse at center, black, transparent 78%);
+}
+.jarvis-welcome-scan {
+  position: absolute;
+  z-index: -1;
+  inset: -20% auto -20% -45%;
+  width: 35%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(79, 224, 255, .08), transparent);
+  transform: skewX(-18deg);
+  animation: jarvis-welcome-scan 5.5s ease-in-out infinite;
+}
+.jarvis-welcome-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(112, 190, 215, .22);
+  border-radius: 12px;
+  color: #9ab8c8;
+  background: rgba(5, 18, 30, .78);
+  cursor: pointer;
+}
+.jarvis-welcome-close:hover {
+  color: #e9fbff;
+  border-color: rgba(87, 221, 255, .55);
+}
+.jarvis-welcome-emblem {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  margin: 0 auto 25px;
+}
+.jarvis-welcome-emblem-ring,
+.jarvis-welcome-emblem-core {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+.jarvis-welcome-emblem-ring {
+  inset: 2px;
+  border: 1px solid rgba(85, 224, 255, .62);
+  box-shadow: 0 0 22px rgba(0, 190, 240, .12), inset 0 0 22px rgba(0, 190, 240, .08);
+  animation: jarvis-welcome-rotate 16s linear infinite;
+}
+.jarvis-welcome-emblem-ring::before,
+.jarvis-welcome-emblem-ring::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #8bf1ff;
+  box-shadow: 0 0 13px #46dfff;
+}
+.jarvis-welcome-emblem-ring::before { top: 8px; left: 18px; }
+.jarvis-welcome-emblem-ring::after { right: 9px; bottom: 24px; width: 5px; height: 5px; }
+.jarvis-welcome-emblem-core {
+  inset: 17px;
+  color: #9af2ff;
+  border: 1px solid rgba(84, 218, 255, .46);
+  background: radial-gradient(circle, rgba(34, 185, 224, .24), rgba(5, 29, 47, .96) 72%);
+  box-shadow: 0 0 30px rgba(0, 190, 240, .2), inset 0 0 18px rgba(0, 190, 240, .18);
+}
+.jarvis-welcome-emblem-pulse {
+  position: absolute;
+  inset: -5px;
+  border: 1px solid rgba(91, 221, 255, .18);
+  border-radius: 50%;
+  animation: jarvis-welcome-pulse 2.4s ease-out infinite;
+}
+.jarvis-welcome-eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #79dff4;
+  font: 800 10px/1.2 ui-monospace, monospace;
+  letter-spacing: .22em;
+}
+.jarvis-welcome-modal h2 {
+  margin: 17px 0 10px;
+  color: #effbff;
+  font-size: clamp(25px, 5vw, 39px);
+  line-height: 1.08;
+  font-weight: 900;
+  letter-spacing: -.045em;
+}
+.jarvis-welcome-modal h2 span {
+  display: block;
+  margin-top: 7px;
+  color: #5bdcf6;
+  font-size: .72em;
+  overflow-wrap: anywhere;
+  text-shadow: 0 0 24px rgba(55, 208, 245, .28);
+}
+.jarvis-welcome-message {
+  max-width: 470px;
+  margin: 0 auto;
+  color: #9db9c8;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.jarvis-welcome-status {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin: 27px 0 20px;
+}
+.jarvis-welcome-status-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 8px;
+  border: 1px solid rgba(75, 190, 224, .19);
+  border-radius: 15px;
+  background: rgba(3, 15, 27, .72);
+  color: #75e8ff;
+}
+.jarvis-welcome-status-item span {
+  color: #89a9ba;
+  font: 800 8px ui-monospace, monospace;
+  letter-spacing: .1em;
+}
+.jarvis-welcome-status-item strong {
+  color: #dff7ff;
+  font: 800 10px ui-monospace, monospace;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.jarvis-welcome-status-item strong.is-good { color: #75efc1; }
+.jarvis-welcome-status-item strong.is-warning { color: #ffd17b; }
+.jarvis-welcome-launch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 16px;
+  border: 1px solid rgba(95, 230, 255, .56);
+  border-radius: 14px;
+  color: #03121d;
+  background: linear-gradient(100deg, #6cecff, #20b9ed 58%, #3284ff);
+  box-shadow: 0 8px 30px rgba(0, 174, 230, .22), inset 0 1px 0 rgba(255,255,255,.45);
+  font: 900 11px ui-monospace, monospace;
+  letter-spacing: .09em;
+  cursor: pointer;
+}
+.jarvis-welcome-launch:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 10px 38px rgba(0, 190, 245, .32);
+}
+.jarvis-welcome-launch span { margin-left: auto; font-size: 17px; }
+.jarvis-welcome-footnote {
+  margin: 17px 0 0;
+  color: #58788a;
+  font: 700 8px ui-monospace, monospace;
+  letter-spacing: .18em;
+}
+@keyframes jarvis-welcome-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes jarvis-welcome-rise { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes jarvis-welcome-rotate { to { transform: rotate(360deg); } }
+@keyframes jarvis-welcome-pulse { 0% { transform: scale(.88); opacity: .65; } 100% { transform: scale(1.2); opacity: 0; } }
+@keyframes jarvis-welcome-scan { 0%, 100% { transform: translateX(0) skewX(-18deg); opacity: 0; } 20%, 70% { opacity: 1; } 55% { transform: translateX(470%) skewX(-18deg); } }
+@media (max-width: 520px) {
+  .jarvis-welcome-overlay { padding: 13px; }
+  .jarvis-welcome-modal { padding: 28px 18px 22px; border-radius: 22px; }
+  .jarvis-welcome-emblem { width: 82px; height: 82px; margin-bottom: 19px; }
+  .jarvis-welcome-status { gap: 6px; margin: 21px 0 16px; }
+  .jarvis-welcome-status-item { padding: 11px 5px; }
+  .jarvis-welcome-status-item span { font-size: 7px; }
+  .jarvis-welcome-status-item strong { font-size: 8px; }
+  .jarvis-welcome-launch { font-size: 9px; letter-spacing: .04em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-welcome-overlay,
+  .jarvis-welcome-modal,
+  .jarvis-welcome-emblem-ring,
+  .jarvis-welcome-emblem-pulse,
+  .jarvis-welcome-scan {
+    animation: none !important;
+  }
+}

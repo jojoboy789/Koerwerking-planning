@@ -5,11 +5,13 @@ import { api } from '../services/api';
 import type { MaintenanceStatus, SpecialDay } from '../services/api';
 import { AdminPlanningModal } from './AdminPlanningModal';
 import { TelegramSchedulerControl } from './TelegramSchedulerControl';
+import { JarvisCommandHeader } from './jarvis/JarvisCommandHeader';
+import './jarvis/jarvis-command-center.css';
 import {
   Users, UserPlus, Key, Edit3, Trash2, Calendar, Check, X, Shield,
   ShieldCheck, AlertCircle, CheckCircle2, Loader2, Sparkles, RefreshCw,
   Copy, CheckCheck, Save, Cloud, Database, Send, BusFront, Power,
-  Search, Terminal, Activity, Server, Cpu, Filter, Radio
+  Search, Terminal, Activity, Server, Cpu, Filter, Radio, Zap
 } from 'lucide-react';
 
 export const AdminPortalView: React.FC = () => {
@@ -18,6 +20,7 @@ export const AdminPortalView: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [showJarvisWelcome, setShowJarvisWelcome] = useState<boolean>(false);
   const [isUsersMatrixExpanded, setIsUsersMatrixExpanded] = useState<boolean>(false);
   const [showDeploymentPriorities, setShowDeploymentPriorities] = useState<boolean>(false);
   const [showTelegramScheduler, setShowTelegramScheduler] = useState<boolean>(false);
@@ -213,6 +216,15 @@ export const AdminPortalView: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Toon de JARVIS-begroeting telkens wanneer de adminomgeving geopend wordt.
+  useEffect(() => {
+    if (currentAdmin?.id) {
+      setShowJarvisWelcome(true);
+    }
+  }, [currentAdmin?.id]);
+
+  const closeJarvisWelcome = () => setShowJarvisWelcome(false);
 
   const handleOpenCreateModal = async () => {
     setNewName('');
@@ -493,7 +505,85 @@ export const AdminPortalView: React.FC = () => {
   }, [users, searchQuery, roleFilter]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-mono selection:bg-cyan-500 selection:text-white p-4 md:p-8 space-y-6 max-w-[1600px] mx-auto w-full pb-24">
+    <div className="jarvis-shell min-h-screen text-slate-100 selection:bg-cyan-500 selection:text-white space-y-6 w-full pb-24">
+      {showJarvisWelcome && (
+        <div className="jarvis-welcome-overlay" role="presentation">
+          <section
+            className="jarvis-welcome-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="jarvis-welcome-title"
+            aria-describedby="jarvis-welcome-description"
+          >
+            <div className="jarvis-welcome-grid" />
+            <div className="jarvis-welcome-scan" />
+            <button
+              type="button"
+              className="jarvis-welcome-close"
+              onClick={closeJarvisWelcome}
+              aria-label="Begroeting sluiten"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="jarvis-welcome-emblem" aria-hidden="true">
+              <span className="jarvis-welcome-emblem-ring" />
+              <span className="jarvis-welcome-emblem-core">
+                <Cpu size={31} />
+              </span>
+              <span className="jarvis-welcome-emblem-pulse" />
+            </div>
+
+            <div className="jarvis-welcome-eyebrow">
+              <span className="jarvis-live-dot" />
+              KOERWERKING // JARVIS AI
+            </div>
+            <h2 id="jarvis-welcome-title">
+              WELKOM TERUG<span>{currentAdmin?.name ? `, ${currentAdmin.name}` : ''}</span>
+            </h2>
+            <p id="jarvis-welcome-description" className="jarvis-welcome-message">
+              Alle systemen staan klaar. De commandocentrale is beschikbaar voor jouw beheeropdrachten.
+            </p>
+
+            <div className="jarvis-welcome-status">
+              <div className="jarvis-welcome-status-item">
+                <ShieldCheck size={16} />
+                <span>ONDERHOUD</span>
+                <strong className={maintenanceStatus?.enabled ? 'is-warning' : 'is-good'}>
+                  {maintenanceStatus ? (maintenanceStatus.enabled ? 'ACTIEF' : 'NORMAAL') : 'CONTROLEREN'}
+                </strong>
+              </div>
+              <div className="jarvis-welcome-status-item">
+                <Database size={16} />
+                <span>FIRESTORE</span>
+                <strong className={firebaseStatus?.connected ? 'is-good' : 'is-warning'}>
+                  {firebaseStatus ? (firebaseStatus.connected ? 'VERBONDEN' : 'NIET VERBONDEN') : 'CONTROLEREN'}
+                </strong>
+              </div>
+              <div className="jarvis-welcome-status-item">
+                <Activity size={16} />
+                <span>TEAMLEDEN</span>
+                <strong>{stats ? stats.totalUsers : '…'}</strong>
+              </div>
+            </div>
+
+            <button type="button" className="jarvis-welcome-launch" onClick={closeJarvisWelcome}>
+              <Zap size={17} />
+              START JARVIS COMMAND CENTER
+              <span aria-hidden="true">↗</span>
+            </button>
+            <p className="jarvis-welcome-footnote">SECURE ADMIN SESSION · KOERWERKING GBR</p>
+          </section>
+        </div>
+      )}
+
+      <JarvisCommandHeader
+        adminName={currentAdmin?.name}
+        stats={stats}
+        firebaseConnected={firebaseStatus?.connected ?? null}
+        maintenance={maintenanceStatus}
+        loading={isLoading}
+      />
       {/* Top ICT Telemetry Bar */}
       <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-4 text-xs">
         <div className="flex items-center gap-6 flex-wrap">
