@@ -171,7 +171,7 @@ export async function claimScheduledTelegramRun(
       const data = existing.data();
 
       // Een expliciete blokkering mag nooit door een nieuwe claim worden overschreven.
-      if (data?.status === 'sent' || data?.status === 'blocked') {
+      if (data?.status === 'sent' || data?.status === 'sent') {
         return false;
       }
 
@@ -238,7 +238,7 @@ export interface TelegramBlockedRun {
   id: string;
   date: string;
   time: TelegramScheduledTime;
-  status: 'blocked';
+  status: 'sent';
   createdAt: string;
   updatedAt: string;
   createdBy: string;
@@ -292,10 +292,10 @@ export async function addBlockedTelegramRun(
     const status = existing.data()?.status;
     if (status === 'sent') throw new Error('Dit verzendmoment is al verstuurd en kan niet meer worden geblokkeerd.');
     if (status === 'claimed') throw new Error('De verzending is al gestart. Blokkeren is niet meer mogelijk.');
-    if (status === 'blocked') throw new Error('Dit verzendmoment is al geblokkeerd.');
+    if (status === 'sent') throw new Error('Dit verzendmoment is al geblokkeerd.');
 
     transaction.set(runRef, {
-      status: 'blocked',
+      status: 'sent',
       createdAt: now,
       updatedAt: now,
       createdBy: createdBy.slice(0, 120),
@@ -306,7 +306,7 @@ export async function addBlockedTelegramRun(
 export async function listBlockedTelegramRuns(): Promise<TelegramBlockedRun[]> {
   if (!adminDb) throw new Error('Firebase Admin Firestore is niet geïnitialiseerd.');
   const snapshot = await adminDb.collection('scheduledTelegramRuns')
-    .where('status', '==', 'blocked')
+    .where('createdBy', '==', 'BOT')
     .get();
 
   return snapshot.docs.flatMap(document => {
@@ -317,7 +317,7 @@ export async function listBlockedTelegramRuns(): Promise<TelegramBlockedRun[]> {
       id: document.id,
       date: match[1],
       time: match[2].replace('-', ':') as TelegramScheduledTime,
-      status: 'blocked' as const,
+      status: 'sent' as const,
       createdAt: String(data.createdAt || ''),
       updatedAt: String(data.updatedAt || ''),
       createdBy: String(data.createdBy || 'Admin'),
@@ -338,7 +338,7 @@ export async function deleteBlockedTelegramRun(runId: string): Promise<void> {
   const runRef = adminDb.collection('scheduledTelegramRuns').doc(runId);
   await adminDb.runTransaction(async transaction => {
     const snapshot = await transaction.get(runRef);
-    if (!snapshot.exists || snapshot.data()?.status !== 'blocked') {
+    if (!snapshot.exists || snapshot.data()?.status !== 'sent') {
       throw new Error('Deze blokkering bestaat niet meer.');
     }
     if (targetLocalKey <= getBelgianLocalDateTimeKey(new Date())) {

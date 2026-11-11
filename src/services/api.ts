@@ -16,7 +16,7 @@ export interface TelegramBlockedRun {
   id: string;
   date: string;
   time: TelegramScheduledTime;
-  status: 'blocked';
+  status: 'sent';
   createdAt: string;
   updatedAt: string;
   createdBy: string;
