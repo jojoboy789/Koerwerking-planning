@@ -20,6 +20,9 @@ export const AdminPortalView: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isUsersMatrixExpanded, setIsUsersMatrixExpanded] = useState<boolean>(false);
   const [showDeploymentPriorities, setShowDeploymentPriorities] = useState<boolean>(false);
+  const [showTelegramScheduler, setShowTelegramScheduler] = useState<boolean>(false);
+  const [showLastLogins, setShowLastLogins] = useState<boolean>(false);
+  const [showSpecialCalendarDays, setShowSpecialCalendarDays] = useState<boolean>(false);
   const [deploymentSearch, setDeploymentSearch] = useState('');
   const [savingPriorityUserId, setSavingPriorityUserId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -725,10 +728,46 @@ export const AdminPortalView: React.FC = () => {
             <span className="rounded-lg bg-slate-100 text-slate-600 px-2 py-1">Geen extra voorkeur</span>
           </div>
         </button>
+
+        {/* Telegram Scheduler Control: uitklapbare beheerkaart */}
+        <button
+          type="button"
+          onClick={() => setShowTelegramScheduler((visible) => !visible)}
+          aria-expanded={showTelegramScheduler}
+          aria-controls="telegram-scheduler-content"
+          className={`p-5 rounded-3xl border shadow-xl font-sans text-left transition-all ${
+            showTelegramScheduler
+              ? 'bg-cyan-50 border-cyan-300 ring-2 ring-cyan-100'
+              : 'bg-white border-slate-200 hover:border-cyan-300 hover:bg-cyan-50/40'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 shrink-0">
+                <Radio className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider font-mono">
+                  Telegram Scheduler Control
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Beheer geplande Telegram-verzendmomenten en handmatige stops.
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-bold text-cyan-700 whitespace-nowrap">
+              {showTelegramScheduler ? 'SLUITEN −' : 'OPENEN +'}
+            </span>
+          </div>
+        </button>
       </div>
 
-      {/* Beheer van automatische Telegram-verzendmomenten */}
-      <TelegramSchedulerControl />
+      {/* Telegram Scheduler Control verschijnt wanneer de kaart wordt geopend */}
+      {showTelegramScheduler && (
+        <section id="telegram-scheduler-content" className="rounded-3xl border border-cyan-200 bg-white p-3 md:p-5 shadow-xl">
+          <TelegramSchedulerControl />
+        </section>
+      )}
 
       {showDeploymentPriorities && (
         <section className="rounded-3xl border border-cyan-200 bg-white p-5 md:p-6 shadow-xl space-y-4 font-sans">
@@ -776,8 +815,42 @@ export const AdminPortalView: React.FC = () => {
         </section>
       )}
 
-      {/* Laatste aanmeldingen */}
-      <section className="rounded-3xl border border-cyan-200 bg-white p-5 shadow-xl md:p-6 font-sans space-y-4">
+      {/* Laatste aanmeldingen: inklapbaar zoals AI-inzetprioriteiten */}
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => setShowLastLogins((visible) => !visible)}
+          aria-expanded={showLastLogins}
+          aria-controls="last-logins-content"
+          className={`w-full p-5 rounded-3xl border shadow-xl font-sans text-left transition-all ${
+            showLastLogins
+              ? 'bg-cyan-50 border-cyan-300 ring-2 ring-cyan-100'
+              : 'bg-white border-slate-200 hover:border-cyan-300 hover:bg-cyan-50/40'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-cyan-700 shrink-0">
+                <Activity className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 font-mono">
+                  Laatste aanmeldingen
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Bekijk wanneer gebruikers zich voor het laatst hebben aangemeld.
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-bold text-cyan-700 whitespace-nowrap">
+              {showLastLogins ? 'SLUITEN −' : 'OPENEN +'}
+            </span>
+          </div>
+        </button>
+        {showLastLogins && (
+          <div id="last-logins-content">
+            <section className="rounded-3xl border border-cyan-200 bg-white p-5 shadow-xl md:p-6 font-sans space-y-4">
+
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-2.5 text-cyan-700">
@@ -854,10 +927,46 @@ export const AdminPortalView: React.FC = () => {
         <p className="text-[10px] leading-relaxed text-slate-400">
           De weergegeven datum komt uit <code>lastLoginAt</code> van de gebruikersgegevens. Als deze waarde niet door de backend wordt meegestuurd of bijgewerkt bij het inloggen, verschijnt ‘Nog niet geregistreerd’.
         </p>
-      </section>
+            </section>
+          </div>
+        )}
+      </div>
 
-      {/* Speciale Dagen Module */}
-      <section className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-xl space-y-4 font-sans">
+      {/* Speciale Kalenderdagen: inklapbaar zoals de andere beheersecties */}
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => setShowSpecialCalendarDays((visible) => !visible)}
+          aria-expanded={showSpecialCalendarDays}
+          aria-controls="special-calendar-days-content"
+          className={`w-full p-5 rounded-3xl border shadow-xl font-sans text-left transition-all ${
+            showSpecialCalendarDays
+              ? 'bg-cyan-50 border-cyan-300 ring-2 ring-cyan-100'
+              : 'bg-white border-slate-200 hover:border-cyan-300 hover:bg-cyan-50/40'
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 shrink-0">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider font-mono">
+                  Speciale Kalenderdagen
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Beheer stakingsdagen en vervangende feestdagen.
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-bold text-cyan-700 whitespace-nowrap">
+              {showSpecialCalendarDays ? 'SLUITEN −' : 'OPENEN +'}
+            </span>
+          </div>
+        </button>
+        {showSpecialCalendarDays && (
+          <div id="special-calendar-days-content">
+            <section className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-xl space-y-4 font-sans">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-700">
@@ -928,7 +1037,10 @@ export const AdminPortalView: React.FC = () => {
             ))}
           </div>
         )}
-      </section>
+            </section>
+          </div>
+        )}
+      </div>
 
       {/* Main Users Management 2.0 Table Section */}
       <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xl space-y-4">
