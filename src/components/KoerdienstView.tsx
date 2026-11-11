@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 type OCSlide = { id: string; title: string; dated: boolean; html: string; updated_at?: string };
 type ExtraItem = { id: string; text: string };
@@ -88,6 +89,7 @@ const Card: React.FC<{ title: string; subtitle: string; icon: React.ElementType;
 );
 
 export const KoerdienstView: React.FC = () => {
+  const { user } = useAuth();
   const [date, setDate] = useState(localDateValue);
   const [slides, setSlides] = useState<OCSlide[]>([]);
   const [record, setRecord] = useState<KoerDienstRecord>({ date: localDateValue(), wasbussen: '', extra: [] });
@@ -172,16 +174,26 @@ export const KoerdienstView: React.FC = () => {
   };
 
   const downloadPdf = () => {
-    // A4 staand: de fiche gebruikt exact de bovenste helft (A5 liggend).
+    const generatedAt = new Date();
+    const userData = (user || {}) as unknown as Record<string, unknown>;
+    const creatorName = String(
+      userData.name || userData.fullName || userData.displayName ||
+      userData.username || userData.firstName || userData.email || 'Onbekende gebruiker'
+    );
+    const generatedTime = generatedAt.toLocaleTimeString('nl-BE', {
+      hour: '2-digit', minute: '2-digit'
+    });
+    // A4 staand: de fiche wordt uitsluitend in de bovenste helft geplaatst.
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight() / 2;
+    const pageHeight = pdf.internal.pageSize.getHeight();
     const margin = 7;
     const gap = 6;
     const colWidth = (pageWidth - margin * 2 - gap) / 2;
     const leftX = margin;
     const rightX = margin + colWidth + gap;
-    const bottom = pageHeight - 6;
+    const halfPageHeight = pageHeight / 2;
+    const bottom = halfPageHeight - 6;
 
     const header = () => {
       pdf.setFillColor(23, 32, 43);
@@ -195,10 +207,19 @@ export const KoerdienstView: React.FC = () => {
       pdf.setTextColor(255, 255, 255);
       pdf.setFontSize(15);
       pdf.text('KOERDIENST UITVOEREN', margin + 8, 17.2);
+      // Maker en aanmaaktijd staan boven de werkdatum rechts in de header.
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(6.2);
+      pdf.setTextColor(255, 220, 0);
+      pdf.text(`AANGEMAAKT DOOR: ${creatorName}`, pageWidth - margin - 4, 10.5, {
+        align: 'right', maxWidth: pageWidth * 0.48
+      });
       pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7);
+      pdf.setFontSize(6.5);
       pdf.setTextColor(225, 231, 239);
-      pdf.text(dateLabel(date), pageWidth - margin - 4, 15, { align: 'right' });
+      pdf.text(`${dateLabel(date)}  ·  ${generatedTime}`, pageWidth - margin - 4, 16.5, {
+        align: 'right', maxWidth: pageWidth * 0.48
+      });
     };
 
     const section = (x: number, y: number, width: number, title: string) => {
@@ -333,18 +354,17 @@ export const KoerdienstView: React.FC = () => {
     if (!extraIndex) rightY = compactRow(rightX, rightY, colWidth, '', 'Geen extra opdrachten', 0);
     rightY = writingLines(rightX, rightY + 1, colWidth, 4, 'VRIJE EXTRA OPDRACHTEN / NOTITIES');
 
-    // Kleine footer op hetzelfde A5-blad.
+    // Footer en scheidingslijn blijven binnen de bovenste helft van A4.
     pdf.setDrawColor(226, 232, 240);
-    pdf.line(margin, pageHeight - 4.5, pageWidth - margin, pageHeight - 4.5);
+    pdf.line(margin, halfPageHeight - 4.5, pageWidth - margin, halfPageHeight - 4.5);
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(5.8);
     pdf.setTextColor(100, 116, 139);
-    pdf.text('KOERWERKING · INTERNE KOERDIENSTFICHE', margin, pageHeight - 2);
-    pdf.text('HEEEYYYY Gtrjs jonas', pageWidth - margin, pageHeight - 2, { align: 'right' });
+    pdf.text('KOERWERKING · INTERNE KOERDIENSTFICHE', margin, halfPageHeight - 2);
+    pdf.text('A4 STAAND · HALVE PAGINA', pageWidth - margin, halfPageHeight - 2, { align: 'right' });
 
-    // Indien er uitzonderlijk veel opdrachten zijn, blijft alles leesbaar op extra A5-pagina's.
-    // De normale dagfiche is ontworpen om op één A5-landscape blad te passen.
-    pdf.save(`Koerdienst-${date}-A4-halfblad.pdf`);
+    // De volledige onderste helft van het A4-blad blijft leeg.
+    pdf.save(`Koerdienst OC Bus-${date}.pdf`);
   };
 
   const taskList = (items: TransportTask[], empty: string) => items.length ? (
