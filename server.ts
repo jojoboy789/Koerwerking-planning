@@ -908,6 +908,7 @@ async function verifySchedulerRequest(req: Request): Promise<boolean> {
 }
 
 const OC_PLANNING_BASE_URL = 'https://oc-gbr.meta-technics.be';
+const OC_PLANNING_APP_URL = 'https://koerwerking.capturedcode.com/OC-planning';
 // === OC PLANNING TELEGRAM MONITOR ===
 
 interface OCPlanningSlide {
@@ -1136,7 +1137,9 @@ async function sendOCPlanningUpdateToTelegram(
     return;
   }
 
-  const heading = '🚌 <b>OC BUS GBR · DAGPLANNING GEWIJZIGD</b>\n\n';
+  const heading =
+    '🚌 <b>OC BUS GBR · DAGPLANNING GEWIJZIGD</b>\n' +
+    `🔗 <a href="${OC_PLANNING_APP_URL}">Open OC planning</a>\n\n`;
   const content = transportSections
     .map(section => escapeTelegramHtml(section))
     .join('\n\n');
@@ -1227,6 +1230,7 @@ async function sendCurrentOCPlanningToTelegram(): Promise<void> {
 
   const heading =
     `🚌 <b>OC BUS GBR</b>\n` +
+    `🔗 <a href="${OC_PLANNING_APP_URL}">Open OC planning</a>\n` +
     `━━━━━━━━━━━━━━━━━━\n` +
     `📅 ${escapeTelegramHtml(dateLabel)}\n` +
     `🕒 Update om ${timeLabel}\n` +
@@ -1694,7 +1698,9 @@ app.get(
         );
 
         // Maak leesbare Telegram-berichten van alle slides.
-        const heading = '🚌 <b>OC BUS GBR · ACTUELE DAGPLANNING</b>\n\n';
+        const heading =
+          '🚌 <b>OC BUS GBR · ACTUELE DAGPLANNING</b>\n' +
+          `🔗 <a href="${OC_PLANNING_APP_URL}">Open OC planning</a>\n\n`;
         const sections = slides.map((slide) => {
           const category = slide.dated ? 'Dagplanning' : 'Mededeling';
           const content = htmlToTelegramText(slide.html);
@@ -2702,10 +2708,10 @@ for (const [key, value] of Object.entries(secondChoices || {})) {
     const monthName = monthNames[m - 1];
     let message = ''
     if(week){
-      message = `De planning voor ${monthName} ${y}, week ${week} is zojuist afgerond door ${req.user!.name}.`;
+      message = `De planning voor ${monthName} ${y}, week ${week} is zojuist afgerond door ${req.user!.name}, koerdienst.capturedcode.com/FL-planning`;
     }
     else{
-      message = `De planning voor ${monthName} ${y} is zojuist afgerond door ${req.user!.name}.`;
+      message = `De planning voor ${monthName} ${y} is zojuist afgerond door ${req.user!.name}, koerdienst.capturedcode.com/FL-planning`;
     }
     sendTelegramNotification(message);
 
