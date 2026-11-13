@@ -306,7 +306,7 @@ export async function addBlockedTelegramRun(
 export async function listBlockedTelegramRuns(): Promise<TelegramBlockedRun[]> {
   if (!adminDb) throw new Error('Firebase Admin Firestore is niet geïnitialiseerd.');
   const snapshot = await adminDb.collection('scheduledTelegramRuns')
-    .where('createdBy', '==', 'BOT')
+    .where('createdBy', '==', 'JONAS ADMIN')
     .get();
 
   return snapshot.docs.flatMap(document => {
